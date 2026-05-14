@@ -2,8 +2,17 @@ const path = require('path');
 const fs = require('fs');
 
 // 1. Determine Brand Name
-// Priority: npm_config_brand (CLI: --brand=xxx) > BRAND (Environment Variable) > 'openkosmos' (Default)
-const brandName =  process.env.BRAND || 'openkosmos';
+// Priority: BRAND (env var) > npm_config_brand (npm CLI: --brand=xxx, set in .npmrc, etc.) > 'openkosmos'
+//
+// Notes:
+//   - npm exposes any `npm config` value (or `--brand=xxx` CLI flag, or `brand=xxx`
+//     line in .npmrc) as the env var `npm_config_brand`. This works cross-platform
+//     (Windows pwsh, cmd, bash, zsh) without needing shell variable expansion in
+//     package.json scripts.
+//   - The previous `cross-env BRAND=$npm_config_brand` indirection in npm scripts
+//     did NOT work on Windows because neither cmd.exe nor pwsh expands `$VAR`
+//     using POSIX shell rules; we now read npm_config_brand directly here.
+const brandName = process.env.BRAND || process.env.npm_config_brand || 'openkosmos';
 
 const repoRoot = path.resolve(__dirname, '..');
 const brandDir = path.join(repoRoot, 'brands', brandName);
