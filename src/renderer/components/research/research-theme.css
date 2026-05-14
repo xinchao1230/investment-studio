@@ -75,3 +75,18 @@
 
 [data-theme="research"] .rw-pane-right :where(input, textarea) { font-size: 13px; }
 [data-theme="research"] .rw-pane-right { min-width: 320px; }
+
+/* Research-pane compact ChatView overrides.
+   Scoped to [data-theme="research"] so the regular /agent page is untouched.
+   Keep selectors shallow — deeper restyling waits until ChatView exposes
+   stable per-element hooks (data-role attrs or BEM classes). */
+[data-theme="research"] .chat-view--compact {
+  font-size: 13.5px;
+}
+[data-theme="research"] .chat-view--compact textarea,
+[data-theme="research"] .chat-view--compact input {
+  font-size: 13px;
+}
+/* TODO(research-compact): once ChatView exposes hooks like
+   [data-role="user-bubble"], [data-role="assistant-message"], [data-role="tool-call"],
+   restyle message bubbles + tool-call chips here. */

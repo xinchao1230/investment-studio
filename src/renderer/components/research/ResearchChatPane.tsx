@@ -24,7 +24,7 @@ export const ResearchChatPane: React.FC<ResearchChatPaneProps> = ({ activeFileAb
         <span className="text-[11px] text-[var(--rw-text-3)]">投研助手</span>
       </header>
       <div className="flex-1 min-h-0 overflow-hidden">
-        <ChatView />
+        <ChatView mode="compact" />
       </div>
     </aside>
   );

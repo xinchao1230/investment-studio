@@ -36,7 +36,11 @@ import {
 import { profileDataManager } from '../../lib/userData';
 import { AgentContextType } from '../../types/agentContextTypes';
 
-const ChatView: React.FC = memo(() => {
+export interface ChatViewProps {
+  mode?: 'full' | 'compact';
+}
+
+const ChatView: React.FC<ChatViewProps> = memo(({ mode = 'full' }) => {
   // 🔥 DEBUG: Log when ChatView renders
   console.log('[ChatView] 🚀 ChatView component rendering');
   
@@ -1216,7 +1220,7 @@ const ChatView: React.FC = memo(() => {
   );
 
   return (
-    <div className={`chat-view ${isMinimalMode ? 'minimal-mode' : ''}`}>
+    <div className={`chat-view ${isMinimalMode ? 'minimal-mode' : ''}${mode === 'compact' ? ' chat-view--compact' : ''}`}>
       <div className="chat-view-layout">
         {/* Chat Area */}
         <div className="chat-area">
