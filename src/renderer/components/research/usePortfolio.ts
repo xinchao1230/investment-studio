@@ -20,8 +20,11 @@ export function usePortfolio(): PortfolioHook {
         'portfolio_list_targets',
         {},
       );
-      if (result && Array.isArray(result.targets)) {
-        setTargets(result.targets);
+      if (result && result.success && result.data) {
+        const parsed = typeof result.data === 'string' ? JSON.parse(result.data) : result.data;
+        if (Array.isArray(parsed)) {
+          setTargets(parsed);
+        }
       }
     } catch (err) {
       console.error('[usePortfolio] Failed to list targets:', err);
@@ -51,7 +54,11 @@ export function usePortfolio(): PortfolioHook {
         'portfolio_get_target_files',
         { stock_code: code },
       );
-      return result?.files ?? [];
+      if (result && result.success && result.data) {
+        const parsed = typeof result.data === 'string' ? JSON.parse(result.data) : result.data;
+        return Array.isArray(parsed) ? parsed : [];
+      }
+      return [];
     } catch (err) {
       console.error('[usePortfolio] Failed to get target files:', err);
       return [];
