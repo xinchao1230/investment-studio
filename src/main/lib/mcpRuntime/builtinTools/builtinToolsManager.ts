@@ -173,6 +173,7 @@ export class BuiltinToolsManager {
       this.tools.set('portfolio_init_target', PortfolioTools.getInitTargetDefinition());
       this.tools.set('portfolio_list_targets', PortfolioTools.getListTargetsDefinition());
       this.tools.set('portfolio_get_target_files', PortfolioTools.getGetTargetFilesDefinition());
+      this.tools.set('portfolio_delete_target', PortfolioTools.getDeleteTargetDefinition());
       this.tools.set('portfolio_get_tracking_status', PortfolioTools.getGetTrackingStatusDefinition());
       this.tools.set('portfolio_update_key_drivers', PortfolioTools.getUpdateKeyDriversDefinition());
       this.tools.set('portfolio_append_note', PortfolioTools.getAppendNoteDefinition());
@@ -462,6 +463,8 @@ export class BuiltinToolsManager {
         result = await PortfolioTools.executeListTargets();
       } else if (name === 'portfolio_get_target_files') {
         result = await PortfolioTools.executeGetTargetFiles(args);
+      } else if (name === 'portfolio_delete_target') {
+        result = await PortfolioTools.executeDeleteTarget(args);
       } else if (name === 'portfolio_get_tracking_status') {
         result = await PortfolioTools.executeGetTrackingStatus();
       } else if (name === 'portfolio_update_key_drivers') {

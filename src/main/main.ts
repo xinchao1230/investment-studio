@@ -4583,6 +4583,152 @@ class ElectronApp {
         return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
       }
     });
+
+    // ===============================
+    // Research workspace: Target ↔ Chat binding (researchChat:*)
+    // See docs/research-target-chat-binding.md
+    // All sessions are stored under the user's primary-agent chat config; the
+    // `targetCode` field on each ChatSession scopes them to a specific target.
+    // ===============================
+
+    // Resolve the chat_id used by the Research workspace (= primary agent's chat).
+    // Returns null if no current user, no profile, or no chats exist.
+    const resolveResearchChatId = async (): Promise<string | null> => {
+      if (!this.currentUserAlias) return null;
+      const pcManager = await getProfileCacheManager();
+      const profile = pcManager.getCachedProfile(this.currentUserAlias) as any;
+      if (!profile || !Array.isArray(profile.chats) || profile.chats.length === 0) return null;
+      const primaryAgentName = profile.primaryAgent || 'Kobi';
+      const primary = profile.chats.find((c: any) => c?.agent?.name === primaryAgentName);
+      return primary?.chat_id || profile.chats[0]?.chat_id || null;
+    };
+
+    // List chat sessions bound to the given target (null = global research scope).
+    // Returns the parent chat container id + metadata list (sorted desc by last_updated).
+    ipcMain.handle('researchChat:listByTarget', async (_event, targetCode: string | null) => {
+      try {
+        if (!this.currentUserAlias) return { success: false, error: 'No current user session' };
+        const chatId = await resolveResearchChatId();
+        if (!chatId) return { success: true, data: { chatId: null, sessions: [] } };
+        const pcManager = await getProfileCacheManager();
+        const all = await pcManager.getChatSessionsAsync(this.currentUserAlias, chatId);
+        const filtered = all.filter((s: any) => {
+          const sc = s.targetCode === undefined ? null : s.targetCode;
+          return sc === targetCode;
+        });
+        return { success: true, data: { chatId, sessions: filtered } };
+      } catch (error) {
+        return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+      }
+    });
+
+    // Create a new chat session bound to a target (or global if targetCode === null).
+    // Returns the new chatSessionId.
+    ipcMain.handle('researchChat:create', async (
+      _event,
+      targetCode: string | null,
+      opts?: { title?: string; targetDir?: string }
+    ) => {
+      try {
+        if (!this.currentUserAlias) return { success: false, error: 'No current user session' };
+        const chatId = await resolveResearchChatId();
+        if (!chatId) return { success: false, error: 'No chat config found for current user' };
+
+        const { ChatSessionUtils } = await import('./lib/userDataADO/types/profile');
+        const sessionId = ChatSessionUtils.generateChatSessionId();
+        const nowIso = new Date().toISOString();
+        const title = (opts?.title?.trim()) || 'New chat';
+
+        const sessionMeta = {
+          chatSession_id: sessionId,
+          last_updated: nowIso,
+          title,
+          targetCode,
+          ...(opts?.targetDir ? { targetDir: opts.targetDir } : {}),
+        };
+        const sessionFile = {
+          chatSession_id: sessionId,
+          last_updated: nowIso,
+          title,
+          chat_history: [],
+          context_history: [],
+          targetCode,
+          ...(opts?.targetDir ? { targetDir: opts.targetDir } : {}),
+        };
+
+        const pcManager = await getProfileCacheManager();
+        const ok = await pcManager.addChatSession(this.currentUserAlias, chatId, sessionMeta as any, sessionFile as any);
+        if (!ok) return { success: false, error: 'Failed to add chat session' };
+        return { success: true, data: { chatId, chatSessionId: sessionId } };
+      } catch (error) {
+        return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+      }
+    });
+
+    // Delete a chat session by id (removes from index + deletes session file).
+    ipcMain.handle('researchChat:delete', async (_event, chatSessionId: string) => {
+      try {
+        if (!this.currentUserAlias) return { success: false, error: 'No current user session' };
+        const chatId = await resolveResearchChatId();
+        if (!chatId) return { success: false, error: 'No chat config found for current user' };
+        const pcManager = await getProfileCacheManager();
+        const ok = await pcManager.deleteChatSession(this.currentUserAlias, chatId, chatSessionId);
+        return ok ? { success: true } : { success: false, error: 'Failed to delete chat session' };
+      } catch (error) {
+        return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+      }
+    });
+
+    // Rename a chat session (updates title in both index and session file).
+    ipcMain.handle('researchChat:rename', async (_event, chatSessionId: string, title: string) => {
+      try {
+        if (!this.currentUserAlias) return { success: false, error: 'No current user session' };
+        const trimmed = (title || '').trim();
+        if (!trimmed) return { success: false, error: 'Title cannot be empty' };
+        const chatId = await resolveResearchChatId();
+        if (!chatId) return { success: false, error: 'No chat config found for current user' };
+
+        const pcManager = await getProfileCacheManager();
+        const file = await pcManager.getChatSessionFile(this.currentUserAlias, chatId, chatSessionId);
+        if (!file) return { success: false, error: 'Chat session file not found' };
+        const nowIso = new Date().toISOString();
+        const updatedFile = { ...file, title: trimmed, last_updated: nowIso };
+        const ok = await pcManager.updateChatSession(
+          this.currentUserAlias,
+          chatId,
+          chatSessionId,
+          { title: trimmed, last_updated: nowIso },
+          updatedFile as any,
+        );
+        return ok ? { success: true } : { success: false, error: 'Failed to rename chat session' };
+      } catch (error) {
+        return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+      }
+    });
+
+    // Record the most-recently-active chat session for a target.
+    ipcMain.handle('researchChat:setLastActive', async (_event, targetCode: string | null, chatSessionId: string) => {
+      try {
+        if (!this.currentUserAlias) return { success: false, error: 'No current user session' };
+        const pcManager = await getProfileCacheManager();
+        const ok = await pcManager.setLastActiveChatByTarget(this.currentUserAlias, targetCode, chatSessionId);
+        return ok ? { success: true } : { success: false, error: 'Failed to set last active chat' };
+      } catch (error) {
+        return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+      }
+    });
+
+    // Get the most-recently-active chat session id for a target.
+    ipcMain.handle('researchChat:getLastActive', async (_event, targetCode: string | null) => {
+      try {
+        if (!this.currentUserAlias) return { success: false, error: 'No current user session' };
+        const pcManager = await getProfileCacheManager();
+        const sessionId = pcManager.getLastActiveChatByTarget(this.currentUserAlias, targetCode);
+        return { success: true, data: sessionId };
+      } catch (error) {
+        return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+      }
+    });
   }
 
   /**

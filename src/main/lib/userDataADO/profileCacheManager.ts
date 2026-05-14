@@ -24,7 +24,8 @@ import {
   DEFAULT_ZERO_STATES,
   isProfileV2,
   ChatSessionUtils,
-  isBuiltinAgent
+  isBuiltinAgent,
+  RESEARCH_GLOBAL_TARGET_KEY
 } from './types/profile';
 import { ChatSessionFile, ChatSessionFileOps } from './chatSessionFileOps';
 import { getDefaultWorkspacePath, getDefaultAgentWorkspacePath, ensureWorkspaceExists, removeChatSessionsDirectory, removeDefaultWorkspaceDirectory, isDefaultWorkspacePath, moveContentsToDirectory } from './pathUtils';
@@ -2733,6 +2734,72 @@ export class ProfileCacheManager {
       }
       return true;
     } catch (error) {
+      return false;
+    }
+  }
+
+  /**
+   * ========================================
+   * Research workspace: lastActiveChatByTarget
+   * Tracks the most recently opened chat session per target so the UI can
+   * auto-restore the correct chat when re-selecting a target.
+   * ========================================
+   */
+
+  /**
+   * Get the most-recently-active chat session id for a research target.
+   * @param alias User alias
+   * @param targetCode Target code, or `null` for the global research scope
+   * @returns chatSession_id or `null` if none recorded
+   */
+  getLastActiveChatByTarget(alias: string, targetCode: string | null): string | null {
+    try {
+      const profile = this.cache.get(alias);
+      if (!profile || !isProfileV2(profile)) return null;
+      const map = profile.lastActiveChatByTarget;
+      if (!map) return null;
+      const key = targetCode ?? RESEARCH_GLOBAL_TARGET_KEY;
+      return map[key] ?? null;
+    } catch (error) {
+      logger.error('[ProfileCacheManager] Failed to get lastActiveChatByTarget', 'getLastActiveChatByTarget', {
+        alias,
+        targetCode,
+        error: error instanceof Error ? error.message : String(error)
+      });
+      return null;
+    }
+  }
+
+  /**
+   * Set the most-recently-active chat session id for a research target.
+   * Persists to profile.json.
+   * @param alias User alias
+   * @param targetCode Target code, or `null` for the global research scope
+   * @param chatSessionId chatSession_id to record
+   */
+  async setLastActiveChatByTarget(alias: string, targetCode: string | null, chatSessionId: string): Promise<boolean> {
+    try {
+      let profile = this.cache.get(alias);
+      if (!profile) {
+        const fileProfile = await this.readProfileFromFile(alias);
+        if (!fileProfile) return false;
+        profile = fileProfile;
+      }
+      if (!isProfileV2(profile)) return false;
+
+      const key = targetCode ?? RESEARCH_GLOBAL_TARGET_KEY;
+      const next = { ...(profile.lastActiveChatByTarget || {}), [key]: chatSessionId };
+      profile.lastActiveChatByTarget = next;
+      this.cache.set(alias, profile);
+      await this.notifyProfileDataManager(alias, true);
+      return await this.writeProfileToFile(alias, profile);
+    } catch (error) {
+      logger.error('[ProfileCacheManager] Failed to set lastActiveChatByTarget', 'setLastActiveChatByTarget', {
+        alias,
+        targetCode,
+        chatSessionId,
+        error: error instanceof Error ? error.message : String(error)
+      });
       return false;
     }
   }

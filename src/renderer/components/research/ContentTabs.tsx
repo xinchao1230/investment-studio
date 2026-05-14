@@ -12,6 +12,8 @@ export interface Tab {
   type: 'markdown' | 'spreadsheet';
   sheetData?: any;
   mtime?: number;
+  /** Optional breadcrumb prefix shown before the filename (e.g. "携程集团.HK"). */
+  pathPrefix?: string;
 }
 
 interface ContentTabsProps {
@@ -111,8 +113,16 @@ export const ContentTabs: React.FC<ContentTabsProps> = ({
       {/* Document header */}
       {activeTab && (
         <div className="flex items-center justify-between h-8 px-4 rw-divider text-[12.5px] text-[var(--rw-text-2)] bg-[var(--rw-bg)]">
-          <span>
-            {basename} · 最近更新 {formatTime(activeTab.mtime)}
+          <span className="truncate">
+            {activeTab.pathPrefix && (
+              <>
+                <span className="text-[var(--rw-text)] font-medium">{activeTab.pathPrefix}</span>
+                <span className="mx-1.5 text-[var(--rw-text-3)]">›</span>
+              </>
+            )}
+            <span className="text-[var(--rw-text)]">{basename}</span>
+            <span className="mx-1.5 text-[var(--rw-text-3)]">·</span>
+            最近更新 {formatTime(activeTab.mtime)}
           </span>
           <div className="flex items-center">
             <button

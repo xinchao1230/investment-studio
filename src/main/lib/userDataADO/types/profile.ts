@@ -124,6 +124,12 @@ export interface ModelConfig {
 
 
 /**
+ * Sentinel key used in `lastActiveChatByTarget` to mark a global (non-target) research chat.
+ * Reserved for future "Global" research scope; today only target-bound chats use real codes.
+ */
+export const RESEARCH_GLOBAL_TARGET_KEY = '__global__';
+
+/**
  * ChatSession config (V2)
  */
 export interface ChatSession {
@@ -133,6 +139,19 @@ export interface ChatSession {
   last_updated: string;
   /** ChatSession title */
   title: string;
+  /**
+   * Research workspace target binding.
+   * - `string`: bound to a specific target (e.g. stock code "603993").
+   * - `null`: explicitly global research scope (reserved; no UI today).
+   * - `undefined` / missing: legacy / non-research chat session.
+   */
+  targetCode?: string | null;
+  /**
+   * Cached target directory name (e.g. "海底捞_603993") relative to workspace root.
+   * Avoids a profile lookup on every cwd resolution.
+   * Only meaningful when `targetCode` is a string.
+   */
+  targetDir?: string;
 }
 
 /**
@@ -288,6 +307,13 @@ export interface ProfileV2 {
   voiceInputSettings?: VoiceInputSettings;
   /** Browser Control settings config */
   browserControl?: BrowserControlSettings;
+  /**
+   * Research workspace: most-recently-active chat session id per target.
+   * Key: target code (or `RESEARCH_GLOBAL_TARGET_KEY` for global scope).
+   * Value: chatSession_id last opened for that target.
+   * Used to auto-restore the right chat when re-selecting a target.
+   */
+  lastActiveChatByTarget?: Record<string, string>;
 }
 
 /**

@@ -1259,6 +1259,26 @@ export interface ElectronAPI {
     respondNativeServerDownloadConfirm: (requestId: string, confirmed: boolean) => Promise<{ success: boolean; error?: string }>;
   };
 
+  // Research workspace: Target ↔ Chat binding (see docs/research-target-chat-binding.md)
+  researchChat?: {
+    listByTarget: (targetCode: string | null) => Promise<{
+      success: boolean;
+      data?: {
+        chatId: string | null;
+        sessions: Array<{ chatSession_id: string; last_updated: string; title: string; targetCode?: string | null; targetDir?: string }>;
+      };
+      error?: string;
+    }>;
+    create: (
+      targetCode: string | null,
+      opts?: { title?: string; targetDir?: string },
+    ) => Promise<{ success: boolean; data?: { chatId: string; chatSessionId: string }; error?: string }>;
+    delete: (chatSessionId: string) => Promise<{ success: boolean; error?: string }>;
+    rename: (chatSessionId: string, title: string) => Promise<{ success: boolean; error?: string }>;
+    setLastActive: (targetCode: string | null, chatSessionId: string) => Promise<{ success: boolean; error?: string }>;
+    getLastActive: (targetCode: string | null) => Promise<{ success: boolean; data?: string | null; error?: string }>;
+  };
+
   // Generic event listening methods for main window IPC events
   on: (channel: string, callback: (data: any) => void) => () => void;
   off: (channel: string, callback: (data: any) => void) => void;
@@ -2222,6 +2242,22 @@ export const electronAPI: ElectronAPI = {
     },
     respondNativeServerDownloadConfirm: (requestId: string, confirmed: boolean) =>
       ipcRenderer.invoke('browserControl:respondNativeServerDownloadConfirm', requestId, confirmed),
+  },
+
+  // Research workspace: Target ↔ Chat binding
+  researchChat: {
+    listByTarget: (targetCode: string | null) =>
+      ipcRenderer.invoke('researchChat:listByTarget', targetCode),
+    create: (targetCode: string | null, opts?: { title?: string; targetDir?: string }) =>
+      ipcRenderer.invoke('researchChat:create', targetCode, opts),
+    delete: (chatSessionId: string) =>
+      ipcRenderer.invoke('researchChat:delete', chatSessionId),
+    rename: (chatSessionId: string, title: string) =>
+      ipcRenderer.invoke('researchChat:rename', chatSessionId, title),
+    setLastActive: (targetCode: string | null, chatSessionId: string) =>
+      ipcRenderer.invoke('researchChat:setLastActive', targetCode, chatSessionId),
+    getLastActive: (targetCode: string | null) =>
+      ipcRenderer.invoke('researchChat:getLastActive', targetCode),
   },
 
   // Generic event listening methods for main window IPC events

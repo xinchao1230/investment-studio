@@ -526,8 +526,30 @@ export class AgentChat {
               sections.push(`- Path schema: \`@chat-session:{relative_path}\` → \`${chatSessionFilesPath}/{relative_path}\``);
             }
 
-            // Command Execution cwd
-            const primaryCwd = hasChatSessionFiles ? chatSessionFilesPath : (hasKnowledgeBase ? knowledgeBasePath : '');
+            // === Research Target Scope (set when this chat is bound to a target) ===
+            // When ChatSession is bound to a research target, narrow the working
+            // directory to that target's folder under the knowledge base. The
+            // research workspace UI binds chats to targets via `targetCode`/`targetDir`.
+            const targetCode = this.currentChatSession?.targetCode;
+            const targetDir = this.currentChatSession?.targetDir;
+            const hasTargetScope = !!(targetCode && targetDir && hasKnowledgeBase);
+            let targetAbsDir = '';
+            let targetName = '';
+            if (hasTargetScope) {
+              const sep = (knowledgeBasePath as string).includes('\\') ? '\\' : '/';
+              targetAbsDir = `${knowledgeBasePath}${sep}${targetDir}`;
+              // Dir name pattern: `${name}_${stockCode}` (see portfolioTools.ts).
+              const lastUnderscore = (targetDir as string).lastIndexOf('_');
+              targetName = lastUnderscore > 0 ? (targetDir as string).slice(0, lastUnderscore) : (targetDir as string);
+              sections.push(`\n**Research Target:** ${targetName} (${targetCode})`);
+              sections.push(`- Target Directory: \`${targetAbsDir}\``);
+              sections.push(`- All file/command operations for this conversation should default to this directory.`);
+            }
+
+            // Command Execution cwd — narrowed to target dir when bound, else session/KB.
+            const primaryCwd = hasTargetScope
+              ? targetAbsDir
+              : (hasChatSessionFiles ? chatSessionFilesPath : (hasKnowledgeBase ? knowledgeBasePath : ''));
             sections.push(`\n**Command Execution:**`);
             sections.push(`- Your working directory is \`${primaryCwd}\`. Pass the correct 'cwd' parameter when using execute_command.`);
             sections.push(`- To run commands outside this directory, prepend \`cd {target_dir} &&\` before the command.`);
@@ -786,11 +808,20 @@ export class AgentChat {
       const { profileCacheManager } = require('../userDataADO/profileCacheManager');
       
       // 1. Check if the session already exists
-      const sessionMetadata = {
+      const sessionMetadata: any = {
         chatSession_id: this.currentChatSession.chatSession_id,
         last_updated: new Date().toISOString(),
         title: this.currentChatSession.title
       };
+      // 🔥 Preserve research-workspace target binding fields in the index
+      // (otherwise saveChatSession would silently strip them and listByTarget
+      //  would no longer match this session for its bound target).
+      if ((this.currentChatSession as any).targetCode !== undefined) {
+        sessionMetadata.targetCode = (this.currentChatSession as any).targetCode;
+      }
+      if ((this.currentChatSession as any).targetDir !== undefined) {
+        sessionMetadata.targetDir = (this.currentChatSession as any).targetDir;
+      }
       
       // Update ChatSession timestamp
       this.currentChatSession.last_updated = sessionMetadata.last_updated;

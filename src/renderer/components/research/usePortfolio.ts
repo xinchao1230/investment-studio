@@ -12,6 +12,7 @@ interface PortfolioHook {
   loading: boolean;
   refresh: () => Promise<void>;
   initTarget: (code: string, name: string) => Promise<{ success: boolean; error?: string }>;
+  deleteTarget: (code: string) => Promise<{ success: boolean; error?: string }>;
   getTargetFiles: (code: string) => Promise<TargetFile[]>;
 }
 
@@ -120,9 +121,33 @@ export function usePortfolio(): PortfolioHook {
     }
   }, []);
 
+  const deleteTarget = useCallback(
+    async (code: string): Promise<{ success: boolean; error?: string }> => {
+      try {
+        const result = await window.electronAPI.builtinTools.execute('portfolio_delete_target', {
+          stock_code: code,
+        });
+        console.log('[usePortfolio] portfolio_delete_target result:', result);
+        if (!result || !result.success) {
+          const error = (result && result.error) || 'Unknown error';
+          console.error('[usePortfolio] delete_target failed:', error);
+          await refresh();
+          return { success: false, error };
+        }
+        await refresh();
+        return { success: true };
+      } catch (err: any) {
+        const msg = err?.message ?? String(err);
+        console.error('[usePortfolio] Failed to delete target:', err);
+        return { success: false, error: msg };
+      }
+    },
+    [refresh],
+  );
+
   useEffect(() => {
     refresh();
   }, [refresh]);
 
-  return { targets, loading, refresh, initTarget, getTargetFiles };
+  return { targets, loading, refresh, initTarget, deleteTarget, getTargetFiles };
 }

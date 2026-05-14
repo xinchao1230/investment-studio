@@ -44,6 +44,15 @@ export interface ChatSessionFile {
   chat_history: Message[];
   /** Context history for LLM processing (corresponds to agentChat.ts contextHistory) */
   context_history: Message[];
+  /**
+   * Research workspace target binding (mirrors ChatSession metadata).
+   * - `string`: bound to a specific target.
+   * - `null`: explicitly global research scope.
+   * - `undefined`: legacy / non-research chat.
+   */
+  targetCode?: string | null;
+  /** Cached target directory name (e.g. "海底捞_603993"). */
+  targetDir?: string;
 }
 
 /**
