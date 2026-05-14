@@ -1,5 +1,6 @@
 import React from 'react';
 import { X } from 'lucide-react';
+import { UniverSheet } from './UniverSheet';
 
 export interface Tab {
   id: string;
@@ -7,6 +8,7 @@ export interface Tab {
   filePath: string;
   content: string;
   type: 'markdown' | 'spreadsheet';
+  sheetData?: any;
 }
 
 interface ContentTabsProps {
@@ -63,9 +65,13 @@ export const ContentTabs: React.FC<ContentTabsProps> = ({
       {/* Content area */}
       <div className="flex-1 overflow-auto p-4">
         {activeTab ? (
-          <pre className="text-sm text-gray-700 whitespace-pre-wrap font-mono">
-            {activeTab.content}
-          </pre>
+          activeTab.type === 'spreadsheet' && activeTab.sheetData ? (
+            <UniverSheet data={activeTab.sheetData} />
+          ) : (
+            <pre className="text-sm text-gray-700 whitespace-pre-wrap font-mono">
+              {activeTab.content}
+            </pre>
+          )
         ) : null}
       </div>
     </div>

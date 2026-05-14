@@ -24,6 +24,7 @@ import * as path from 'path';
 import * as fs from 'fs';
 
 // Browser Control configuration and status check
+import { ExcelService } from './lib/excelService';
 import { BROWSER_CONFIG, COMBINED_SCRIPTS } from './lib/browserControl/browserConfig';
 import { checkBrowserControlEnabled } from './lib/browserControl/browserControlStatus';
 import { browserControlHttpServer } from './lib/browserControl/browserControlHttpServer';
@@ -317,7 +318,28 @@ class ElectronApp {
       return app.getPath('userData');
     });
 
-    // 🆕 AppConfig IPC handlers — uniformly managed by AppCacheManager for app.json
+    // Excel/CSV file reading and writing for Investment Studio
+    ipcMain.handle('excel:readFile', async (_event, filePath: string) => {
+      try {
+        if (filePath.endsWith('.csv')) {
+          return { success: true, data: await ExcelService.readCsv(filePath) };
+        }
+        return { success: true, data: await ExcelService.readXlsx(filePath) };
+      } catch (err: any) {
+        return { success: false, error: err.message };
+      }
+    });
+
+    ipcMain.handle('excel:saveFile', async (_event, filePath: string, data: any) => {
+      try {
+        await ExcelService.saveXlsx(filePath, data);
+        return { success: true };
+      } catch (err: any) {
+        return { success: false, error: err.message };
+      }
+    });
+
+    // AppConfig IPC handlers — uniformly managed by AppCacheManager for app.json
     ipcMain.handle('app:getAppConfig', async () => {
       try {
         const manager = await getAppCacheManager();
