@@ -89,7 +89,12 @@ export const ResearchPage: React.FC = () => {
         <TargetListSidebar
           targets={targets}
           selectedCode={selectedCode}
-          onSelect={handleSelectTarget}
+          expandedCodes={new Set()}
+          filesByCode={{}}
+          activeFileAbsPath={null}
+          onSelectTarget={handleSelectTarget}
+          onToggleExpand={() => {}}
+          onOpenFile={() => {}}
           onAddTarget={handleAddTarget}
         />
         {showAddForm && (
