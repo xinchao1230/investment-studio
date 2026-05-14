@@ -23,13 +23,22 @@ export const UniverSheet: React.FC<UniverSheetProps> = ({ data }) => {
         const { UniverFormulaEnginePlugin } = await import('@univerjs/engine-formula');
         const { UniverSheetsFormulaPlugin } = await import('@univerjs/sheets-formula');
 
-        // Import styles - ignore type errors for CSS modules
-        try {
-          await import(/* webpackIgnore: true */ '@univerjs/design/lib/index.css');
-          await import(/* webpackIgnore: true */ '@univerjs/ui/lib/index.css');
-          await import(/* webpackIgnore: true */ '@univerjs/sheets-ui/lib/index.css');
-        } catch {
-          // CSS import may fail depending on bundler config
+        // Load styles via link elements to avoid TS module resolution issues
+        const cssUrls = [
+          '@univerjs/design/lib/index.css',
+          '@univerjs/ui/lib/index.css',
+          '@univerjs/sheets-ui/lib/index.css',
+        ];
+        for (const cssUrl of cssUrls) {
+          try {
+            const resolved = require.resolve(cssUrl);
+            const link = document.createElement('link');
+            link.rel = 'stylesheet';
+            link.href = resolved;
+            document.head.appendChild(link);
+          } catch {
+            // CSS loading is best-effort
+          }
         }
 
         univer = new Univer({ locale: LocaleType.ZH_CN });
