@@ -1,5 +1,6 @@
 import React, { useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { MessageSquare, LayoutDashboard } from 'lucide-react';
 import { useLayout } from './LayoutProvider';
 import { AuthData } from '../../types/authTypes';
 import NavigationSection from './NavigationSection';
@@ -37,6 +38,10 @@ const LeftNavigation: React.FC<LeftNavigationProps> = ({
   openMenuChatSessionId,
 }) => {
   const { leftPanelCollapsed } = useLayout();
+  const location = useLocation();
+  const navigate = useNavigate();
+  const isChat = location.pathname.startsWith('/agent');
+  const isResearch = location.pathname.startsWith('/research');
 
   const navigationClasses = [
     'left-navigation',
@@ -51,6 +56,25 @@ const LeftNavigation: React.FC<LeftNavigationProps> = ({
       role="navigation"
       aria-label="Main navigation"
     >
+      <div className="left-nav-mode-switch">
+        <button
+          type="button"
+          className={`mode-btn ${isChat ? 'active' : ''}`}
+          title="Chat"
+          onClick={() => navigate('/agent')}
+        >
+          <MessageSquare size={18} />
+        </button>
+        <button
+          type="button"
+          className={`mode-btn ${isResearch ? 'active' : ''}`}
+          title="Workspace"
+          onClick={() => navigate('/research')}
+        >
+          <LayoutDashboard size={18} />
+        </button>
+      </div>
+
       {/* Navigation Section - includes AgentList, New Agent button, Divider, and Function List */}
       <NavigationSection
         onNewAgent={onNewAgent}
