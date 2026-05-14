@@ -1,12 +1,18 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Target } from './TargetListSidebar';
 
+export interface TargetFile {
+  relPath: string;
+  absPath: string;
+  mtime: number;
+}
+
 interface PortfolioHook {
   targets: Target[];
   loading: boolean;
   refresh: () => Promise<void>;
   initTarget: (code: string, name: string) => Promise<void>;
-  getTargetFiles: (code: string) => Promise<string[]>;
+  getTargetFiles: (code: string) => Promise<TargetFile[]>;
 }
 
 export function usePortfolio(): PortfolioHook {
@@ -48,7 +54,7 @@ export function usePortfolio(): PortfolioHook {
     [refresh],
   );
 
-  const getTargetFiles = useCallback(async (code: string): Promise<string[]> => {
+  const getTargetFiles = useCallback(async (code: string): Promise<TargetFile[]> => {
     try {
       const result = await window.electronAPI.builtinTools.execute(
         'portfolio_get_target_files',
@@ -56,7 +62,21 @@ export function usePortfolio(): PortfolioHook {
       );
       if (result && result.success && result.data) {
         const parsed = typeof result.data === 'string' ? JSON.parse(result.data) : result.data;
-        return Array.isArray(parsed) ? parsed : [];
+        if (!Array.isArray(parsed)) return [];
+        const files: TargetFile[] = [];
+        for (const item of parsed) {
+          if (typeof item === 'string') {
+            files.push({ relPath: item.split(/[\\/]/).pop() || item, absPath: item, mtime: 0 });
+          } else if (item && typeof item === 'object' && (item.absPath || item.path)) {
+            const abs = item.absPath ?? item.path;
+            files.push({
+              relPath: item.relPath ?? item.relativePath ?? (abs.split(/[\\/]/).pop() || abs),
+              absPath: abs,
+              mtime: typeof item.mtime === 'number' ? item.mtime : 0,
+            });
+          }
+        }
+        return files;
       }
       return [];
     } catch (err) {

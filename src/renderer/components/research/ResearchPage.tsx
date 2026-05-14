@@ -20,7 +20,7 @@ export const ResearchPage: React.FC = () => {
       setSelectedCode(code);
       const files = await getTargetFiles(code);
       // Open key-drivers.md as first tab if available
-      const keyDrivers = files.find((f) => f.endsWith('key-drivers.md'));
+      const keyDrivers = files.find((f) => f.relPath.endsWith('key-drivers.md'));
       if (keyDrivers) {
         const tabId = `${code}:key-drivers`;
         const existingTab = tabs.find((t) => t.id === tabId);
@@ -28,7 +28,7 @@ export const ResearchPage: React.FC = () => {
           const newTab: Tab = {
             id: tabId,
             label: 'Key Drivers',
-            filePath: keyDrivers,
+            filePath: keyDrivers.absPath,
             content: '(loading...)',
             type: 'markdown',
           };
