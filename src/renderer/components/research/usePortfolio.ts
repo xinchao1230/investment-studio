@@ -11,8 +11,32 @@ interface PortfolioHook {
   targets: Target[];
   loading: boolean;
   refresh: () => Promise<void>;
-  initTarget: (code: string, name: string) => Promise<void>;
+  initTarget: (code: string, name: string) => Promise<{ success: boolean; error?: string }>;
   getTargetFiles: (code: string) => Promise<TargetFile[]>;
+}
+
+// Recursively unwrap { success, data } envelopes that may have been JSON-stringified
+// multiple times by the builtin-tools IPC layer.
+function unwrapToolResult(result: any): any {
+  let cur: any = result;
+  for (let i = 0; i < 5; i++) {
+    if (cur == null) return cur;
+    if (typeof cur === 'string') {
+      try {
+        cur = JSON.parse(cur);
+        continue;
+      } catch {
+        return cur;
+      }
+    }
+    if (typeof cur === 'object' && 'success' in cur && 'data' in cur) {
+      if (!cur.success) return null;
+      cur = cur.data;
+      continue;
+    }
+    return cur;
+  }
+  return cur;
 }
 
 export function usePortfolio(): PortfolioHook {
@@ -26,11 +50,12 @@ export function usePortfolio(): PortfolioHook {
         'portfolio_list_targets',
         {},
       );
-      if (result && result.success && result.data) {
-        const parsed = typeof result.data === 'string' ? JSON.parse(result.data) : result.data;
-        if (Array.isArray(parsed)) {
-          setTargets(parsed);
-        }
+      console.log('[usePortfolio] portfolio_list_targets result:', result);
+      const parsed = unwrapToolResult(result);
+      if (Array.isArray(parsed)) {
+        setTargets(parsed);
+      } else {
+        console.warn('[usePortfolio] list_targets unwrap not array:', parsed);
       }
     } catch (err) {
       console.error('[usePortfolio] Failed to list targets:', err);
@@ -40,15 +65,25 @@ export function usePortfolio(): PortfolioHook {
   }, []);
 
   const initTarget = useCallback(
-    async (code: string, name: string) => {
+    async (code: string, name: string): Promise<{ success: boolean; error?: string }> => {
       try {
-        await window.electronAPI.builtinTools.execute('portfolio_init_target', {
+        const result = await window.electronAPI.builtinTools.execute('portfolio_init_target', {
           stock_code: code,
           name,
         });
+        console.log('[usePortfolio] portfolio_init_target result:', result);
+        if (!result || !result.success) {
+          const error = (result && result.error) || 'Unknown error';
+          console.error('[usePortfolio] init_target failed:', error);
+          await refresh();
+          return { success: false, error };
+        }
         await refresh();
-      } catch (err) {
+        return { success: true };
+      } catch (err: any) {
+        const msg = err?.message ?? String(err);
         console.error('[usePortfolio] Failed to init target:', err);
+        return { success: false, error: msg };
       }
     },
     [refresh],
@@ -61,7 +96,7 @@ export function usePortfolio(): PortfolioHook {
         { stock_code: code },
       );
       if (result && result.success && result.data) {
-        const parsed = typeof result.data === 'string' ? JSON.parse(result.data) : result.data;
+        const parsed = unwrapToolResult(result);
         if (!Array.isArray(parsed)) return [];
         const files: TargetFile[] = [];
         for (const item of parsed) {

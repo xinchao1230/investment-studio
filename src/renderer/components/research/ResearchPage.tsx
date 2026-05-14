@@ -3,6 +3,8 @@ import { TargetListSidebar } from './TargetListSidebar';
 import { ContentTabs, Tab } from './ContentTabs';
 import { ResearchChatPane } from './ResearchChatPane';
 import { usePortfolio, TargetFile } from './usePortfolio';
+import { LayoutProvider } from '../layout/LayoutProvider';
+import { PasteToWorkspaceProvider } from '../chat/workspace/PasteToWorkspaceProvider';
 import './research-theme.css';
 
 export const ResearchPage: React.FC = () => {
@@ -13,6 +15,8 @@ export const ResearchPage: React.FC = () => {
   const [showAddForm, setShowAddForm] = useState(false);
   const [newCode, setNewCode] = useState('');
   const [newName, setNewName] = useState('');
+  const [addError, setAddError] = useState<string | null>(null);
+  const [addBusy, setAddBusy] = useState(false);
 
   const [expandedCodes, setExpandedCodes] = useState<Set<string>>(new Set());
   const [filesByCode, setFilesByCode] = useState<Record<string, TargetFile[]>>({});
@@ -116,13 +120,25 @@ export const ResearchPage: React.FC = () => {
 
   const handleAddTarget = useCallback(async () => {
     if (showAddForm) {
-      if (newCode && newName) {
-        await initTarget(newCode, newName);
-        setNewCode('');
-        setNewName('');
-        setShowAddForm(false);
+      const code = newCode.trim();
+      const name = newName.trim();
+      if (!code || !name) {
+        setAddError('请填写代号和名称');
+        return;
       }
+      setAddBusy(true);
+      setAddError(null);
+      const result = await initTarget(code, name);
+      setAddBusy(false);
+      if (!result.success) {
+        setAddError(result.error || '添加失败');
+        return;
+      }
+      setNewCode('');
+      setNewName('');
+      setShowAddForm(false);
     } else {
+      setAddError(null);
       setShowAddForm(true);
     }
   }, [initTarget, showAddForm, newCode, newName]);
@@ -154,6 +170,8 @@ export const ResearchPage: React.FC = () => {
   }
 
   return (
+    <LayoutProvider>
+    <PasteToWorkspaceProvider>
     <div data-theme="research" className="flex h-full w-full">
       <div className="flex flex-col">
         <TargetListSidebar
@@ -186,17 +204,24 @@ export const ResearchPage: React.FC = () => {
             <div className="flex gap-1">
               <button
                 onClick={handleAddTarget}
-                className="flex-1 px-2 py-1 text-xs bg-blue-500 text-white rounded hover:bg-blue-600"
+                disabled={addBusy}
+                className="flex-1 px-2 py-1 text-xs bg-blue-500 text-white rounded hover:bg-blue-600 disabled:opacity-50"
               >
-                Add
+                {addBusy ? 'Adding...' : 'Add'}
               </button>
               <button
-                onClick={() => setShowAddForm(false)}
-                className="flex-1 px-2 py-1 text-xs border rounded hover:bg-gray-100"
+                onClick={() => { setShowAddForm(false); setAddError(null); }}
+                disabled={addBusy}
+                className="flex-1 px-2 py-1 text-xs border rounded hover:bg-gray-100 disabled:opacity-50"
               >
                 Cancel
               </button>
             </div>
+            {addError && (
+              <div className="text-[11px] text-red-600 px-1 pt-1 break-words">
+                {addError}
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -208,5 +233,7 @@ export const ResearchPage: React.FC = () => {
       />
       <ResearchChatPane activeFileAbsPath={activeFileAbsPath} />
     </div>
+    </PasteToWorkspaceProvider>
+    </LayoutProvider>
   );
 };

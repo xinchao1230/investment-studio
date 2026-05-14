@@ -10,6 +10,7 @@ import ChatViewHeader from './ChatViewHeader';
 import ChatViewContent from './ChatViewContent';
 import { ContextMenu } from './ContextMenu';
 import ApprovalBar from './ApprovalBar';
+import { EditAgentMenuDropdown, AttachMenuDropdown } from '../menu';
 import { Message } from '../../types/chatTypes';
 import { useProfileData, useChats, useAgentConfig } from '../userData/userDataProvider';
 import { useToast } from '../ui/ToastProvider';
@@ -31,10 +32,45 @@ import {
   useCurrentChatSessionId,
   usePendingApprovalRequests,
   useErrorMessage,
+  useMessages,
+  useStreamingMessageId,
   agentChatSessionCacheManager,
 } from '../../lib/chat/agentChatSessionCacheManager';
+import { agentChatIpc } from '../../lib/chat/agentChatIpc';
 import { profileDataManager } from '../../lib/userData';
 import { AgentContextType } from '../../types/agentContextTypes';
+
+// Compact (embedded) mode: ensure the backend has an active chat session.
+// If not, pick the primary agent (or first chat) from the profile and start
+// a new chat session for it. Mirrors AgentPage.selectPrimaryAgentOnStartup.
+async function ensureCompactChatSession(): Promise<void> {
+  if (agentChatSessionCacheManager.getCurrentChatSessionId()) return;
+  try {
+    if (window.electronAPI?.agentChat?.getCurrentChatSession) {
+      const cur = await window.electronAPI.agentChat.getCurrentChatSession();
+      if (cur?.success && cur.data?.chatId && cur.data?.chatSessionId) {
+        agentChatSessionCacheManager.setCurrentChatSessionId(cur.data.chatId, cur.data.chatSessionId);
+        return;
+      }
+    }
+    const profile = profileDataManager.getProfile() as any;
+    if (!profile) return;
+    const primaryAgentName = profile.primaryAgent || 'Kobi';
+    const chats = profile.chats || [];
+    if (chats.length === 0) return;
+    const primaryChat = chats.find((c: any) => c.agent?.name === primaryAgentName);
+    const targetChatId = primaryChat?.chat_id || chats[0]?.chat_id;
+    if (!targetChatId) return;
+    if (window.electronAPI?.agentChat?.startNewChatFor) {
+      const result = await window.electronAPI.agentChat.startNewChatFor(targetChatId);
+      if (result?.success && result.chatSessionId) {
+        agentChatSessionCacheManager.setCurrentChatSessionId(targetChatId, result.chatSessionId);
+      }
+    }
+  } catch (err) {
+    console.error('[ChatView compact] ensureCompactChatSession failed:', err);
+  }
+}
 
 export interface ChatViewProps {
   mode?: 'full' | 'compact';
@@ -44,18 +80,111 @@ const ChatView: React.FC<ChatViewProps> = memo(({ mode = 'full' }) => {
   // 🔥 DEBUG: Log when ChatView renders
   console.log('[ChatView] 🚀 ChatView component rendering');
   
+  // Investment Studio Research workspace embeds ChatView OUTSIDE of the
+  // /agent outlet, so useOutletContext returns undefined there. Default to an
+  // empty context object so destructuring doesn't crash the entire renderer.
+  // (Embedded ChatView in Research is a placeholder pending real wiring.)
+  const outletCtx = (useOutletContext<AgentContextType>() ?? {}) as Partial<AgentContextType>;
+
+  // In compact mode (embedded in Research workspace), there is no outlet
+  // context. Source messages and sendMessage internally so the chat actually
+  // works.
+  const internalMessages = useMessages();
+  const internalStreamingMessageId = useStreamingMessageId() || undefined;
+  const internalSendMessage = useCallback(async (message: Message) => {
+    try {
+      await ensureCompactChatSession();
+      const userMsg: Message = {
+        ...message,
+        id: message.id || Date.now().toString(),
+        streamingComplete: true,
+      };
+      const sid = agentChatSessionCacheManager.getCurrentChatSessionId();
+      if (sid) {
+        agentChatSessionCacheManager.addUserMessage(sid, userMsg);
+      }
+      await agentChatIpc.streamMessage(userMsg, {
+        onAssistantMessage: () => {},
+        onToolUse: () => {},
+        onToolResult: () => {},
+      });
+    } catch (error) {
+      const sid = agentChatSessionCacheManager.getCurrentChatSessionId();
+      const msg = error instanceof Error ? error.message : String(error);
+      if (sid) agentChatSessionCacheManager.setErrorMessage(sid, msg);
+      console.error('[ChatView compact] sendMessage failed:', error);
+    }
+  }, []);
+
+  // Compact-mode bootstrap: make sure backend has a current chat session so
+  // model selector / sendMessage have something to operate on.
+  useEffect(() => {
+    if (mode !== 'compact') return;
+    void ensureCompactChatSession();
+  }, [mode]);
+
   const {
-    messages,
-    allMessages,
-    streamingMessageId,
-    onSendMessage,
+    messages = mode === 'compact' ? internalMessages : [],
+    allMessages = mode === 'compact' ? internalMessages : [],
+    streamingMessageId = mode === 'compact' ? internalStreamingMessageId : undefined,
+    onSendMessage = mode === 'compact' ? internalSendMessage : () => {},
     onCancelChat,
     onWorkspaceMenuToggle,
     workspaceMenuState,
-    onEditAgentMenuToggle,
-    onAttachMenuToggle,
+    onEditAgentMenuToggle: ctxEditAgentMenuToggle,
+    onAttachMenuToggle: ctxAttachMenuToggle,
     onFileTreeNodeMenuToggle,
-  } = useOutletContext<AgentContextType>();
+  } = outletCtx;
+
+  // Compact-mode local state for the Edit Agent / Attach popups, since the
+  // global versions live in AppLayout which is not in scope here.
+  type MenuPos = { top: number; left: number; triggerTop?: number };
+  const [compactEditAgentMenu, setCompactEditAgentMenu] = useState<{ isOpen: boolean; position: MenuPos | null }>({ isOpen: false, position: null });
+  const [compactAttachMenu, setCompactAttachMenu] = useState<{ isOpen: boolean; position: MenuPos | null }>({ isOpen: false, position: null });
+  const compactEditAgentMenuRef = useRef<HTMLDivElement>(null);
+  const compactAttachMenuRef = useRef<HTMLDivElement>(null);
+
+  const computeMenuPosition = (buttonElement: HTMLElement, menuWidth: number): MenuPos => {
+    const rect = buttonElement.getBoundingClientRect();
+    let left = rect.left;
+    if (left + menuWidth > window.innerWidth) {
+      left = rect.right - menuWidth;
+    }
+    return { top: rect.bottom + 4, left, triggerTop: rect.top };
+  };
+
+  const handleCompactEditAgentToggle = useCallback((buttonElement: HTMLElement) => {
+    setCompactEditAgentMenu((prev) => prev.isOpen
+      ? { isOpen: false, position: null }
+      : { isOpen: true, position: computeMenuPosition(buttonElement, 240) });
+  }, []);
+  const handleCompactAttachToggle = useCallback((buttonElement: HTMLElement) => {
+    setCompactAttachMenu((prev) => prev.isOpen
+      ? { isOpen: false, position: null }
+      : { isOpen: true, position: computeMenuPosition(buttonElement, 200) });
+  }, []);
+  const handleCompactEditAgentClose = useCallback(() => setCompactEditAgentMenu({ isOpen: false, position: null }), []);
+  const handleCompactAttachClose = useCallback(() => setCompactAttachMenu({ isOpen: false, position: null }), []);
+
+  // Click-outside to close compact menus
+  useEffect(() => {
+    if (mode !== 'compact') return;
+    if (!compactEditAgentMenu.isOpen && !compactAttachMenu.isOpen) return;
+    const onDocDown = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (compactEditAgentMenu.isOpen && compactEditAgentMenuRef.current && !compactEditAgentMenuRef.current.contains(target)) {
+        setCompactEditAgentMenu({ isOpen: false, position: null });
+      }
+      if (compactAttachMenu.isOpen && compactAttachMenuRef.current && !compactAttachMenuRef.current.contains(target)) {
+        setCompactAttachMenu({ isOpen: false, position: null });
+      }
+    };
+    document.addEventListener('mousedown', onDocDown);
+    return () => document.removeEventListener('mousedown', onDocDown);
+  }, [mode, compactEditAgentMenu.isOpen, compactAttachMenu.isOpen]);
+
+  const onEditAgentMenuToggle = mode === 'compact' ? handleCompactEditAgentToggle : ctxEditAgentMenuToggle;
+  const onAttachMenuToggle = mode === 'compact' ? handleCompactAttachToggle : ctxAttachMenuToggle;
 
   // 🔥 Route Synchronization
   const { chatId: routeChatId, sessionId: routeSessionId } = useParams();
@@ -94,7 +223,10 @@ const ChatView: React.FC<ChatViewProps> = memo(({ mode = 'full' }) => {
           agentChatSessionCacheManager.getCurrentChatSessionId();
         setCurrentChatId(newChatId);
         setCurrentChatSessionId(newChatSessionId);
-        
+
+        // Skip auto-navigation in compact mode (embedded in Research workspace).
+        if (mode === 'compact') return;
+
         // 🔥 Fix: When cache manager updates and current route has no ID, navigate immediately
         // This fixes ChatView's inability to sync route correctly after FRE completion
         // Because useEffect dependency updates may be delayed, causing syncRoute not to re-execute
@@ -122,6 +254,7 @@ const ChatView: React.FC<ChatViewProps> = memo(({ mode = 'full' }) => {
   
   // 🔥 New: listen for force navigation event
   useEffect(() => {
+    if (mode === 'compact') return;
     const handleForceNavigate = (event: CustomEvent<{ chatId: string; sessionId: string }>) => {
       const { chatId, sessionId } = event.detail;
       const currentPath = window.location.pathname;
@@ -143,6 +276,7 @@ const ChatView: React.FC<ChatViewProps> = memo(({ mode = 'full' }) => {
   // Scenario: Backend has already sent currentChatSessionIdChanged event before frontend sets up IPC listeners
   const initialFetchDoneRef = useRef(false);
   useEffect(() => {
+    if (mode === 'compact') return;
     // Only execute once
     if (initialFetchDoneRef.current) return;
     initialFetchDoneRef.current = true;
@@ -202,6 +336,7 @@ const ChatView: React.FC<ChatViewProps> = memo(({ mode = 'full' }) => {
   const lastProcessedRouteRef = useRef<string>('');
 
   useEffect(() => {
+    if (mode === 'compact') return;
     const syncRoute = async () => {
       const currentRouteKey = `${routeChatId}-${routeSessionId}`;
 
@@ -1224,15 +1359,17 @@ const ChatView: React.FC<ChatViewProps> = memo(({ mode = 'full' }) => {
       <div className="chat-view-layout">
         {/* Chat Area */}
         <div className="chat-area">
-          <ChatViewHeader
-            agentChat={null}
-            onToggleMinimalMode={handleToggleMinimalMode}
-            onToggleWorkspaceExplorer={handleToggleWorkspaceExplorer}
-            isWorkspaceExplorerVisible={isWorkspaceExplorerVisible}
-            onOpenMcpTools={handleOpenMcpTools}
-            onOpenSkills={handleOpenSkills}
-            currentChatSessionId={currentChatSessionId}
-          />
+          {mode !== 'compact' && (
+            <ChatViewHeader
+              agentChat={null}
+              onToggleMinimalMode={handleToggleMinimalMode}
+              onToggleWorkspaceExplorer={handleToggleWorkspaceExplorer}
+              isWorkspaceExplorerVisible={isWorkspaceExplorerVisible}
+              onOpenMcpTools={handleOpenMcpTools}
+              onOpenSkills={handleOpenSkills}
+              currentChatSessionId={currentChatSessionId}
+            />
+          )}
           <ChatViewContent
             messages={messages}
             allMessages={allMessages}
@@ -1280,6 +1417,23 @@ const ChatView: React.FC<ChatViewProps> = memo(({ mode = 'full' }) => {
           onClose={handleContextMenuClose}
           onHover={handleContextMenuHover}
           position={menuPosition}
+        />
+      )}
+
+      {/* Compact-mode local Edit Agent / Attach menus (used when embedded
+          outside AppLayout, e.g. in the Research workspace). */}
+      {mode === 'compact' && compactEditAgentMenu.isOpen && compactEditAgentMenu.position && (
+        <EditAgentMenuDropdown
+          editAgentMenuRef={compactEditAgentMenuRef}
+          position={compactEditAgentMenu.position}
+          onClose={handleCompactEditAgentClose}
+        />
+      )}
+      {mode === 'compact' && compactAttachMenu.isOpen && compactAttachMenu.position && (
+        <AttachMenuDropdown
+          attachMenuRef={compactAttachMenuRef}
+          position={compactAttachMenu.position}
+          onClose={handleCompactAttachClose}
         />
       )}
     </div>

@@ -106,7 +106,8 @@ const SignInWrapper: React.FC = () => {
 const DataLoadingWrapper: React.FC = () => {
   const navigate = useNavigate();
   const handleDataReady = () => {
-    navigate('/agent');
+    // Investment Studio: land directly on the Research workstation
+    navigate('/research');
   };
   return <DataLoadingPage onDataReady={handleDataReady} />;
 };

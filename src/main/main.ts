@@ -4910,19 +4910,58 @@ class ElectronApp {
           }
         });
         
+        const wantsDevTools =
+          this.isDev ||
+          process.argv.includes('--devtools') ||
+          process.env.npm_config_devtools === 'true' ||
+          process.env.KOSMOS_DEVTOOLS === '1';
+        console.log('[Startup] DevTools check:', {
+          wantsDevTools,
+          isDev: this.isDev,
+          argvHasDevtools: process.argv.includes('--devtools'),
+          npmConfigDevtools: process.env.npm_config_devtools,
+          kosmosDevtools: process.env.KOSMOS_DEVTOOLS,
+          argv: process.argv,
+        });
+        if (wantsDevTools && this.mainWindow) {
+          const openDt = (label: string) => {
+            try {
+              if (!this.mainWindow || this.mainWindow.isDestroyed()) {
+                console.log(`[Startup] DevTools (${label}): mainWindow gone`);
+                return;
+              }
+              const wc = this.mainWindow.webContents;
+              if (wc.isDevToolsOpened()) {
+                console.log(`[Startup] DevTools (${label}): already open`);
+                return;
+              }
+              wc.openDevTools({ mode: 'detach' });
+              console.log(`[Startup] DevTools (${label}): openDevTools called, opened=`, wc.isDevToolsOpened());
+            } catch (e) {
+              console.error(`[Startup] DevTools (${label}) failed:`, e);
+            }
+          };
+          // Fire on multiple lifecycle hooks; whichever wins, openDt is idempotent.
+          this.mainWindow.webContents.once('did-finish-load', () => openDt('did-finish-load'));
+          this.mainWindow.webContents.once('dom-ready', () => openDt('dom-ready'));
+          this.mainWindow.once('ready-to-show', () => openDt('ready-to-show'));
+          setTimeout(() => openDt('timeout-2s'), 2000);
+          setTimeout(() => openDt('timeout-5s'), 5000);
+        }
         if (this.isDev) {
-          setTimeout(() => {
-            this.mainWindow?.webContents.openDevTools();
-          }, 2000); // Delay 1 second before opening DevTools to ensure window is fully loaded
-          
-          // Add keyboard shortcuts for development
+          // Dev-only keyboard shortcuts (F5 / Ctrl+R reload)
           this.mainWindow.webContents.on('before-input-event', (event, input) => {
-            // F5 or Ctrl+R to reload
             if ((input.key === 'F5') || (input.control && input.key === 'r')) {
               this.mainWindow?.webContents.reload();
             }
           });
         }
+        // Always allow F12 to toggle DevTools so production-mode issues can be diagnosed
+        this.mainWindow.webContents.on('before-input-event', (event, input) => {
+          if (input.key === 'F12' && input.type === 'keyDown') {
+            this.mainWindow?.webContents.toggleDevTools();
+          }
+        });
       }
     });
 

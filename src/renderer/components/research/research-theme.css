@@ -87,6 +87,115 @@
 [data-theme="research"] .chat-view--compact input {
   font-size: 13px;
 }
+
+/* Pin chat input to the bottom even when message list is empty
+   (default .empty-chat centers it vertically, which looks wrong in a narrow pane). */
+[data-theme="research"] .chat-view--compact .chat-content-wrapper .chat-content.empty-chat {
+  justify-content: flex-end;
+  align-items: stretch;
+  padding: 0;
+}
+
+/* Tighten chat-content padding to fit a 380px pane */
+[data-theme="research"] .chat-view--compact .chat-content-wrapper .chat-content {
+  padding: 8px;
+}
+
+/* Default .input-area has min-width:380px which overflows the 380px pane.
+   Allow it to shrink to its container. */
+[data-theme="research"] .chat-view--compact .input-area {
+  min-width: 0;
+}
+
+/* Reduce the empty-state ChatInput padding/max-width so it sits flush in the pane */
+[data-theme="research"] .chat-view--compact .chat-content-wrapper .chat-content.empty-chat .chat-input-container,
+[data-theme="research"] .chat-view--compact .chat-content-wrapper .chat-content .chat-input-container {
+  max-width: 100%;
+  padding: 8px 8px 8px 8px;
+}
+
+/* Trim the chat textarea height in compact pane (default 72px is too tall) */
+[data-theme="research"] .chat-view--compact .chat-textarea {
+  height: 56px;
+  font-size: 13px;
+  padding: 0 12px;
+  margin-top: 10px;
+}
+
+[data-theme="research"] .chat-view--compact .button-area {
+  padding: 8px 10px 10px 10px;
+  gap: 8px;
+}
+
+/* Model selector default 180px crowds the 380px pane → shrink.
+   .model-button also hardcodes 180px, so override both to avoid the inner
+   button overflowing past the selector container (visual ghosting next to
+   the Send button). */
+[data-theme="research"] .chat-view--compact .chat-input-container .model-selector,
+[data-theme="research"] .chat-view--compact .chat-input-container .model-button {
+  width: 170px !important;
+}
+
+/* Make the model dropdown wider than the trigger and right-align so names
+   like "Claude Opus 4.6" don't wrap awkwardly inside a 170px column. */
+[data-theme="research"] .chat-view--compact .chat-input-container .model-dropdown {
+  left: auto;
+  right: 0;
+  width: 200px;
+  max-height: 360px;
+}
+
+[data-theme="research"] .chat-view--compact .chat-input-container .model-list {
+  max-height: 360px;
+  padding: 6px;
+}
+
+[data-theme="research"] .chat-view--compact .chat-input-container .model-option {
+  padding: 8px 10px;
+  border-radius: 8px;
+  align-items: center;
+  gap: 8px;
+}
+
+[data-theme="research"] .chat-view--compact .chat-input-container .model-info.chat-input-vertical {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: nowrap;
+  min-width: 0;
+}
+
+[data-theme="research"] .chat-view--compact .chat-input-container .model-info.chat-input-vertical .model-option-name {
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1 1 auto;
+  min-width: 0;
+  width: auto;
+}
+
+[data-theme="research"] .chat-view--compact .chat-input-container .model-info.chat-input-vertical .model-badges {
+  display: none;
+}
+
+[data-theme="research"] .chat-view--compact .chat-input-container .check-icon {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 14px;
+}
+
+/* Reserve space for the check icon on unselected rows so badges align across
+   selected and unselected items. */
+[data-theme="research"] .chat-view--compact .chat-input-container .model-option:not(.selected)::after {
+  content: '';
+  display: block;
+  width: 14px;
+  height: 14px;
+  flex: 0 0 14px;
+}
+
 /* TODO(research-compact): once ChatView exposes hooks like
    [data-role="user-bubble"], [data-role="assistant-message"], [data-role="tool-call"],
    restyle message bubbles + tool-call chips here. */
