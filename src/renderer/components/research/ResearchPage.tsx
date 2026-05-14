@@ -1,8 +1,9 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import { TargetListSidebar } from './TargetListSidebar';
 import { ContentTabs, Tab } from './ContentTabs';
 import { SkillActionsPanel } from './SkillActionsPanel';
-import { usePortfolio } from './usePortfolio';
+import { usePortfolio, TargetFile } from './usePortfolio';
+import './research-theme.css';
 
 export const ResearchPage: React.FC = () => {
   const { targets, loading, initTarget, getTargetFiles } = usePortfolio();
@@ -13,31 +14,71 @@ export const ResearchPage: React.FC = () => {
   const [newCode, setNewCode] = useState('');
   const [newName, setNewName] = useState('');
 
+  const [expandedCodes, setExpandedCodes] = useState<Set<string>>(new Set());
+  const [filesByCode, setFilesByCode] = useState<Record<string, TargetFile[]>>({});
+  const [activeFileAbsPath, setActiveFileAbsPath] = useState<string | null>(null);
+
+  const filesByCodeRef = useRef(filesByCode);
+  filesByCodeRef.current = filesByCode;
+
   const selectedTarget = targets.find((t) => t.stock_code === selectedCode);
+
+  const loadFiles = useCallback(
+    async (code: string) => {
+      if (filesByCodeRef.current[code]) return;
+      const files = await getTargetFiles(code);
+      setFilesByCode((prev) => ({ ...prev, [code]: files }));
+    },
+    [getTargetFiles],
+  );
 
   const handleSelectTarget = useCallback(
     async (code: string) => {
       setSelectedCode(code);
-      const files = await getTargetFiles(code);
-      // Open key-drivers.md as first tab if available
-      const keyDrivers = files.find((f) => f.relPath.endsWith('key-drivers.md'));
-      if (keyDrivers) {
-        const tabId = `${code}:key-drivers`;
-        const existingTab = tabs.find((t) => t.id === tabId);
-        if (!existingTab) {
-          const newTab: Tab = {
-            id: tabId,
-            label: 'Key Drivers',
-            filePath: keyDrivers.absPath,
-            content: '(loading...)',
-            type: 'markdown',
-          };
-          setTabs((prev) => [...prev, newTab]);
-        }
-        setActiveTabId(tabId);
-      }
+      setExpandedCodes((prev) => {
+        const next = new Set(prev);
+        next.add(code);
+        return next;
+      });
+      await loadFiles(code);
     },
-    [getTargetFiles, tabs],
+    [loadFiles],
+  );
+
+  const handleToggleExpand = useCallback(
+    (code: string) => {
+      setExpandedCodes((prev) => {
+        const next = new Set(prev);
+        if (next.has(code)) {
+          next.delete(code);
+        } else {
+          next.add(code);
+          loadFiles(code);
+        }
+        return next;
+      });
+    },
+    [loadFiles],
+  );
+
+  const handleOpenFile = useCallback(
+    (file: TargetFile) => {
+      const tabId = file.absPath;
+      setTabs((prev) => {
+        if (prev.find((t) => t.id === tabId)) return prev;
+        const newTab: Tab = {
+          id: tabId,
+          label: file.relPath.split('/').pop() ?? file.relPath,
+          filePath: file.absPath,
+          content: '(loading...)',
+          type: 'markdown',
+        };
+        return [...prev, newTab];
+      });
+      setActiveTabId(tabId);
+      setActiveFileAbsPath(file.absPath);
+    },
+    [],
   );
 
   const handleAddTarget = useCallback(async () => {
@@ -55,13 +96,17 @@ export const ResearchPage: React.FC = () => {
 
   const handleTabSelect = useCallback((id: string) => {
     setActiveTabId(id);
+    setActiveFileAbsPath(id);
   }, []);
 
   const handleTabClose = useCallback(
     (id: string) => {
       setTabs((prev) => prev.filter((t) => t.id !== id));
       if (activeTabId === id) {
-        setActiveTabId(tabs.length > 1 ? tabs[0].id : '');
+        const remaining = tabs.filter((t) => t.id !== id);
+        const nextId = remaining.length > 0 ? remaining[0].id : '';
+        setActiveTabId(nextId);
+        setActiveFileAbsPath(nextId || null);
       }
     },
     [activeTabId, tabs],
@@ -84,17 +129,17 @@ export const ResearchPage: React.FC = () => {
   }
 
   return (
-    <div className="flex h-full w-full bg-white">
+    <div data-theme="research" className="flex h-full w-full">
       <div className="flex flex-col">
         <TargetListSidebar
           targets={targets}
           selectedCode={selectedCode}
-          expandedCodes={new Set()}
-          filesByCode={{}}
-          activeFileAbsPath={null}
+          expandedCodes={expandedCodes}
+          filesByCode={filesByCode}
+          activeFileAbsPath={activeFileAbsPath}
           onSelectTarget={handleSelectTarget}
-          onToggleExpand={() => {}}
-          onOpenFile={() => {}}
+          onToggleExpand={handleToggleExpand}
+          onOpenFile={handleOpenFile}
           onAddTarget={handleAddTarget}
         />
         {showAddForm && (
