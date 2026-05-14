@@ -31,6 +31,7 @@ import { GetAllAgentsTool } from './getAllAgentsTool';
 import { SetPrimaryAgentTool } from './setPrimaryAgentTool';
 import { MoveFileTool } from './moveFileTool';
 import { PresentTool } from './presentDeliverablesTool';
+import { PortfolioTools } from './portfolioTools';
 
 // Heavy tools - lazy loaded (depend on playwright, mammoth, etc.)
 // BingWebSearchTool, BingImageSearchTool, GoogleWebSearchTool, GoogleImageSearchTool
@@ -167,6 +168,14 @@ export class BuiltinToolsManager {
       // Register PresentTool (present final deliverables)
       const presentTool = PresentTool.getDefinition();
       this.tools.set('present_deliverables', presentTool);
+
+      // ===== Portfolio tools (Investment Studio) =====
+      this.tools.set('portfolio_init_target', PortfolioTools.getInitTargetDefinition());
+      this.tools.set('portfolio_list_targets', PortfolioTools.getListTargetsDefinition());
+      this.tools.set('portfolio_get_target_files', PortfolioTools.getGetTargetFilesDefinition());
+      this.tools.set('portfolio_get_tracking_status', PortfolioTools.getGetTrackingStatusDefinition());
+      this.tools.set('portfolio_update_key_drivers', PortfolioTools.getUpdateKeyDriversDefinition());
+      this.tools.set('portfolio_append_note', PortfolioTools.getAppendNoteDefinition());
 
       // ===== Heavy tools (use static definitions, lazy load actual modules) =====
       // ⚠️ IMPORTANT CAUTION FOR LLM / DEVELOPERS:
@@ -445,6 +454,20 @@ export class BuiltinToolsManager {
         result = await MoveFileTool.execute(args);
       } else if (name === 'present_deliverables') {
         result = await PresentTool.execute(args);
+      }
+      // ===== Portfolio tools =====
+      else if (name === 'portfolio_init_target') {
+        result = await PortfolioTools.executeInitTarget(args);
+      } else if (name === 'portfolio_list_targets') {
+        result = await PortfolioTools.executeListTargets();
+      } else if (name === 'portfolio_get_target_files') {
+        result = await PortfolioTools.executeGetTargetFiles(args);
+      } else if (name === 'portfolio_get_tracking_status') {
+        result = await PortfolioTools.executeGetTrackingStatus();
+      } else if (name === 'portfolio_update_key_drivers') {
+        result = await PortfolioTools.executeUpdateKeyDrivers(args);
+      } else if (name === 'portfolio_append_note') {
+        result = await PortfolioTools.executeAppendNote(args);
       }
       // ===== Heavy tools (lazy loaded) =====
       else if (name === 'bing_web_search') {
