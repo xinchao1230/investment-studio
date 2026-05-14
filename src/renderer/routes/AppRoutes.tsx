@@ -27,6 +27,7 @@ import {
 } from '../types/startupValidationTypes';
 import { createLogger } from '../lib/utilities/logger';
 import { AutoLoginSingleUser } from '../components/auth/AutoLoginSingleUser';
+import { ResearchPage } from '../components/research/ResearchPage';
 import { useAuthContext } from '../components/auth/AuthProvider';
 
 const logger = createLogger('[AppRoutes]');
@@ -149,7 +150,10 @@ export const AppRoutes: React.FC = () => {
           <Route path="chat/:chatId/settings" element={<AgentChatEditingView />} />
           <Route path="chat/:chatId/settings/*" element={<AgentChatEditingView />} />
         </Route>
-        
+
+        {/* Research Route */}
+        <Route path="/research" element={<ResearchPage />} />
+
         {/* Settings Routes - separate from agent */}
         <Route path="/settings" element={<SettingsPage />}>
           <Route index element={<Navigate to="mcp" replace />} />

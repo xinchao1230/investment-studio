@@ -1,5 +1,6 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { TrendingUp } from 'lucide-react';
 import AgentList from '../chat/agent-area/AgentList';
 import { useProfileData } from '../userData/userDataProvider';
 import NavItem from '../ui/navigation/NavItem';
@@ -335,6 +336,15 @@ const NavigationSection: React.FC<NavigationSectionProps> = ({
       )}
 
       {/* Function List - Chat, MCP, Memory - migrated to settings page */}
+
+      {/* Research nav item */}
+      <NavItem
+        icon={<TrendingUp size={20} />}
+        label="Research"
+        onClick={() => navigate('/research')}
+        title="Investment Research"
+        isActive={location.pathname.startsWith('/research')}
+      />
     </div>
   );
 };
