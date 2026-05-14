@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useRef } from 'react';
 import { TargetListSidebar } from './TargetListSidebar';
 import { ContentTabs, Tab } from './ContentTabs';
-import { SkillActionsPanel } from './SkillActionsPanel';
+import { ResearchChatPane } from './ResearchChatPane';
 import { usePortfolio, TargetFile } from './usePortfolio';
 import './research-theme.css';
 
@@ -20,8 +20,6 @@ export const ResearchPage: React.FC = () => {
 
   const filesByCodeRef = useRef(filesByCode);
   filesByCodeRef.current = filesByCode;
-
-  const selectedTarget = targets.find((t) => t.stock_code === selectedCode);
 
   const loadFiles = useCallback(
     async (code: string) => {
@@ -147,14 +145,6 @@ export const ResearchPage: React.FC = () => {
     [activeTabId, tabs],
   );
 
-  const handleSkillInvoke = useCallback(
-    (skillId: string, targetCode: string | null) => {
-      console.log('[ResearchPage] Skill invoked:', skillId, targetCode);
-      // TODO: integrate with chat/agent system
-    },
-    [],
-  );
-
   if (loading) {
     return (
       <div className="flex items-center justify-center h-full text-gray-400 text-sm">
@@ -216,11 +206,7 @@ export const ResearchPage: React.FC = () => {
         onTabSelect={handleTabSelect}
         onTabClose={handleTabClose}
       />
-      <SkillActionsPanel
-        targetCode={selectedCode}
-        targetName={selectedTarget?.name ?? null}
-        onSkillInvoke={handleSkillInvoke}
-      />
+      <ResearchChatPane activeFileAbsPath={activeFileAbsPath} />
     </div>
   );
 };

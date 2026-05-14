@@ -72,3 +72,6 @@
 [data-theme="research"] .rw-tree-row:hover { background: rgba(0,0,0,0.03); }
 [data-theme="research"] .rw-tree-row.is-active { background: var(--rw-accent-soft); color: var(--rw-text); }
 [data-theme="research"] .rw-tree-row.is-disabled { color: var(--rw-text-3); cursor: default; }
+
+[data-theme="research"] .rw-pane-right :where(input, textarea) { font-size: 13px; }
+[data-theme="research"] .rw-pane-right { min-width: 320px; }
