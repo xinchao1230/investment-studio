@@ -1,5 +1,7 @@
 import React from 'react';
-import { X } from 'lucide-react';
+import { X, Search, Download, MoreHorizontal } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { UniverSheet } from './UniverSheet';
 
 export interface Tab {
@@ -9,6 +11,7 @@ export interface Tab {
   content: string;
   type: 'markdown' | 'spreadsheet';
   sheetData?: any;
+  mtime?: number;
 }
 
 interface ContentTabsProps {
@@ -16,6 +19,37 @@ interface ContentTabsProps {
   activeTabId: string;
   onTabSelect: (id: string) => void;
   onTabClose: (id: string) => void;
+}
+
+const STATUS_MAP: Record<string, string> = {
+  '边际改善': 'rw-status-pill rw-status-good',
+  '边际承压': 'rw-status-pill rw-status-warn',
+  '边际恶化': 'rw-status-pill rw-status-bad',
+};
+
+const StatusCell: React.FC<any> = ({ children, ...rest }) => {
+  const text = React.Children.toArray(children)
+    .map((c) => (typeof c === 'string' ? c : ''))
+    .join('')
+    .trim();
+  const cls = STATUS_MAP[text];
+  if (cls)
+    return (
+      <td {...rest}>
+        <span className={cls}>{text}</span>
+      </td>
+    );
+  return <td {...rest}>{children}</td>;
+};
+
+function formatTime(mtime?: number): string {
+  if (!mtime) return '—';
+  return new Intl.DateTimeFormat('zh-CN', {
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(new Date(mtime));
 }
 
 export const ContentTabs: React.FC<ContentTabsProps> = ({
@@ -28,52 +62,109 @@ export const ContentTabs: React.FC<ContentTabsProps> = ({
 
   if (tabs.length === 0) {
     return (
-      <div className="flex-1 flex items-center justify-center text-gray-400 text-sm">
-        Select a target to view research files
+      <div className="flex-1 flex items-center justify-center text-[var(--rw-text-3)] text-sm">
+        从左侧选择文件以打开
       </div>
     );
   }
 
+  const basename = activeTab
+    ? activeTab.filePath.split(/[\\/]/).pop() ?? activeTab.label
+    : '';
+
   return (
-    <div className="flex-1 flex flex-col min-w-0">
-      {/* Tab bar */}
-      <div className="flex border-b border-gray-200 bg-gray-50 overflow-x-auto">
-        {tabs.map((tab) => (
-          <div
-            key={tab.id}
-            className={`flex items-center gap-1 px-3 py-1.5 text-sm cursor-pointer border-r border-gray-200 shrink-0 ${
-              tab.id === activeTabId
-                ? 'bg-white text-gray-800 border-b-2 border-b-blue-500'
-                : 'text-gray-500 hover:bg-gray-100'
-            }`}
-            onClick={() => onTabSelect(tab.id)}
-          >
-            <span className="truncate max-w-[120px]">{tab.label}</span>
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                onTabClose(tab.id);
-              }}
-              className="p-0.5 rounded hover:bg-gray-200 text-gray-400 hover:text-gray-600"
+    <div className="flex-1 flex flex-col min-w-0" style={{ background: 'var(--rw-bg)' }}>
+      {/* Tab strip */}
+      <div className="flex h-7 rw-divider overflow-x-auto bg-[var(--rw-bg-soft)]">
+        {tabs.map((tab) => {
+          const isActive = tab.id === activeTabId;
+          return (
+            <div
+              key={tab.id}
+              className={`group flex items-center gap-2 px-3 text-[12.5px] cursor-pointer border-r border-[var(--rw-border)] shrink-0 h-full ${
+                isActive
+                  ? 'rw-tab-active-bar bg-white text-[var(--rw-text)]'
+                  : 'bg-[var(--rw-bg-soft)] text-[var(--rw-text-2)] hover:bg-black/5'
+              }`}
+              onClick={() => onTabSelect(tab.id)}
             >
-              <X size={12} />
-            </button>
-          </div>
-        ))}
+              <span className="truncate max-w-[120px]">{tab.label}</span>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onTabClose(tab.id);
+                }}
+                className={`p-0.5 rounded hover:bg-black/10 ${
+                  isActive ? 'opacity-60' : 'opacity-0 group-hover:opacity-100'
+                }`}
+              >
+                <X size={12} />
+              </button>
+            </div>
+          );
+        })}
+        <button disabled className="px-2 text-[var(--rw-text-3)] cursor-not-allowed">
+          +
+        </button>
       </div>
 
-      {/* Content area */}
-      <div className="flex-1 overflow-auto p-4">
-        {activeTab ? (
-          activeTab.type === 'spreadsheet' && activeTab.sheetData ? (
+      {/* Document header */}
+      {activeTab && (
+        <div className="flex items-center justify-between h-8 px-4 rw-divider text-[12.5px] text-[var(--rw-text-2)] bg-[var(--rw-bg)]">
+          <span>
+            {basename} · 最近更新 {formatTime(activeTab.mtime)}
+          </span>
+          <div className="flex items-center">
+            <button
+              className="p-1 rounded hover:bg-black/5 text-[var(--rw-text-2)]"
+              disabled
+            >
+              <Search size={14} />
+            </button>
+            <button
+              className="p-1 rounded hover:bg-black/5 text-[var(--rw-text-2)]"
+              disabled
+            >
+              <Download size={14} />
+            </button>
+            <button
+              className="p-1 rounded hover:bg-black/5 text-[var(--rw-text-2)]"
+              disabled
+            >
+              <MoreHorizontal size={14} />
+            </button>
+            <button
+              className="ml-2 px-3 h-6 rounded bg-[var(--rw-accent)] text-white text-[12px] opacity-50 cursor-not-allowed"
+              disabled
+            >
+              保存
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Body */}
+      {activeTab ? (
+        activeTab.type === 'spreadsheet' && activeTab.sheetData ? (
+          <div className="flex-1 overflow-auto">
             <UniverSheet data={activeTab.sheetData} />
-          ) : (
-            <pre className="text-sm text-gray-700 whitespace-pre-wrap font-mono">
-              {activeTab.content}
-            </pre>
-          )
-        ) : null}
-      </div>
+          </div>
+        ) : (
+          <div className="flex-1 overflow-auto">
+            <div className="rw-doc-body prose prose-sm max-w-none">
+              <ReactMarkdown
+                remarkPlugins={[remarkGfm]}
+                components={{
+                  td: StatusCell,
+                  th: ({ children }) => <th>{children}</th>,
+                }}
+              >
+                {activeTab.content}
+              </ReactMarkdown>
+            </div>
+          </div>
+        )
+      ) : null}
     </div>
   );
 };

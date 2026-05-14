@@ -64,19 +64,54 @@ export const ResearchPage: React.FC = () => {
   const handleOpenFile = useCallback(
     (file: TargetFile) => {
       const tabId = file.absPath;
+      let isNew = false;
       setTabs((prev) => {
-        if (prev.find((t) => t.id === tabId)) return prev;
+        const existing = prev.find((t) => t.id === tabId);
+        if (existing) return prev;
+        isNew = true;
         const newTab: Tab = {
           id: tabId,
           label: file.relPath.split('/').pop() ?? file.relPath,
           filePath: file.absPath,
           content: '(loading...)',
           type: 'markdown',
+          mtime: file.mtime,
         };
         return [...prev, newTab];
       });
       setActiveTabId(tabId);
       setActiveFileAbsPath(file.absPath);
+
+      // Fire-and-forget: load file content on first open
+      if (isNew) {
+        (async () => {
+          try {
+            const result = await window.electronAPI.builtinTools.execute('read_file', {
+              description: 'Open file in research workspace',
+              filePath: file.absPath,
+            });
+            let text: string;
+            if (result && result.success && result.data != null) {
+              const d = result.data;
+              if (typeof d === 'string') {
+                text = d;
+              } else if (d && typeof d === 'object' && 'content' in d && typeof (d as any).content === 'string') {
+                text = (d as any).content;
+              } else {
+                text = JSON.stringify(d);
+              }
+            } else {
+              text = '(无法读取文件: 请求失败)';
+            }
+            setTabs((prev) => prev.map((t) => (t.id === tabId ? { ...t, content: text } : t)));
+          } catch (err: any) {
+            const msg = err?.message ?? String(err);
+            setTabs((prev) =>
+              prev.map((t) => (t.id === tabId ? { ...t, content: `(无法读取文件: ${msg})` } : t)),
+            );
+          }
+        })();
+      }
     },
     [],
   );
