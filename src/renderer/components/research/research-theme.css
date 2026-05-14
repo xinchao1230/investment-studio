@@ -1,0 +1,74 @@
+/* Research workspace — light refined theme.
+   Scoped strictly under [data-theme="research"] to avoid leaking into the
+   rest of the app. */
+
+[data-theme="research"] {
+  --rw-bg: #ffffff;
+  --rw-bg-soft: #fafafa;
+  --rw-bg-chat-header: #f7f8fa;
+  --rw-border: #eeeeee;
+  --rw-text: #1f2328;
+  --rw-text-2: #57606a;
+  --rw-text-3: #8c959f;
+  --rw-accent: #6d4cff; /* keep aligned with brand purple */
+  --rw-accent-soft: #efeaff;
+
+  --rw-status-good-bg: #e6f4ea;
+  --rw-status-good-fg: #1e8e3e;
+  --rw-status-warn-bg: #fef7e0;
+  --rw-status-warn-fg: #b06000;
+  --rw-status-bad-bg:  #fce8e6;
+  --rw-status-bad-fg:  #c5221f;
+
+  background: var(--rw-bg);
+  color: var(--rw-text);
+  font-size: 13.5px;
+  line-height: 1.55;
+}
+
+[data-theme="research"] .rw-pane-left {
+  background: var(--rw-bg-soft);
+  border-right: 1px solid var(--rw-border);
+}
+[data-theme="research"] .rw-pane-right {
+  border-left: 1px solid var(--rw-border);
+  background: var(--rw-bg);
+}
+[data-theme="research"] .rw-divider {
+  border-bottom: 1px solid var(--rw-border);
+}
+[data-theme="research"] .rw-tab-active-bar {
+  box-shadow: inset 0 2px 0 0 var(--rw-accent);
+}
+[data-theme="research"] .rw-status-pill {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  line-height: 16px;
+  font-weight: 500;
+}
+[data-theme="research"] .rw-status-good { background: var(--rw-status-good-bg); color: var(--rw-status-good-fg); }
+[data-theme="research"] .rw-status-warn { background: var(--rw-status-warn-bg); color: var(--rw-status-warn-fg); }
+[data-theme="research"] .rw-status-bad  { background: var(--rw-status-bad-bg);  color: var(--rw-status-bad-fg); }
+
+[data-theme="research"] .rw-doc-body {
+  font-size: 14px;
+  color: var(--rw-text);
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 24px 40px 64px;
+}
+[data-theme="research"] .rw-tree-row {
+  font-size: 12.5px;
+  color: var(--rw-text-2);
+  height: 26px;
+  display: flex;
+  align-items: center;
+  padding: 0 8px;
+  cursor: pointer;
+  user-select: none;
+}
+[data-theme="research"] .rw-tree-row:hover { background: rgba(0,0,0,0.03); }
+[data-theme="research"] .rw-tree-row.is-active { background: var(--rw-accent-soft); color: var(--rw-text); }
+[data-theme="research"] .rw-tree-row.is-disabled { color: var(--rw-text-3); cursor: default; }
