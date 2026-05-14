@@ -1335,6 +1335,18 @@ class ElectronApp {
       try {
         const { getBuiltinToolsManager } = await import('./lib/mcpRuntime/builtinTools/builtinToolsManager');
         const builtinToolsManager = getBuiltinToolsManager();
+
+        // Ensure portfolio workspace is set
+        if (toolName.startsWith('portfolio_')) {
+          const { PortfolioTools } = await import('./lib/mcpRuntime/builtinTools/portfolioTools');
+          if (!PortfolioTools.getWorkspaceDir()) {
+            const portfolioDir = path.join(app.getPath('userData'), 'portfolio');
+            if (!fs.existsSync(portfolioDir)) {
+              fs.mkdirSync(portfolioDir, { recursive: true });
+            }
+            PortfolioTools.setWorkspaceDir(portfolioDir);
+          }
+        }
         
         // Initialize if not already initialized
         if (!builtinToolsManager['isInitialized']) {
