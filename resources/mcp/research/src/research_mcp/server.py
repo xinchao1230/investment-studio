@@ -41,6 +41,19 @@ async def list_tools() -> list[types.Tool]:
                 "required": ["symbol", "out_dir"],
             },
         ),
+        types.Tool(
+            name="peer_collect",
+            description="Fetch peer comparison data (valuation + financials) for a list of A-share tickers via Tushare.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "ts_code": {"type": "string", "description": "Target ticker, e.g. 600036.SH"},
+                    "peer_codes": {"type": "array", "items": {"type": "string"}, "description": "List of peer tickers"},
+                    "out_dir": {"type": "string", "description": "Absolute output directory"},
+                },
+                "required": ["ts_code", "peer_codes", "out_dir"],
+            },
+        ),
     ]
 
 @app.call_tool()
@@ -60,6 +73,13 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent]:
             symbol=arguments["symbol"],
             out_dir=arguments["out_dir"],
             period=arguments.get("period", "5y"),
+        )
+    elif name == "peer_collect":
+        from .tools.data_collect import peer_collect
+        result = peer_collect(
+            ts_code=arguments["ts_code"],
+            peer_codes=arguments["peer_codes"],
+            out_dir=arguments["out_dir"],
         )
     else:
         result = {"ok": False, "error": f"unknown tool: {name}", "retryable": False}

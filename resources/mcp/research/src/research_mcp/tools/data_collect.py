@@ -172,3 +172,76 @@ def yfinance_collect(
         return ok(paths=paths, summary=summary)
     except Exception as e:
         return fail(error=f"yfinance_collect failed: {e}", retryable=True)
+
+
+# ---------------------------------------------------------------------------
+# Tool 3: peer_collect
+# ---------------------------------------------------------------------------
+
+def _build_peer_client():
+    """Build default tushare pro_api client for peer collection."""
+    return _build_tushare_client()
+
+
+def peer_collect(
+    ts_code: str,
+    peer_codes: list[str],
+    out_dir: str,
+    *,
+    _client=None,
+) -> dict:
+    """Fetch peer comparison data for a list of A-share tickers.
+
+    Simplified vs source: accepts explicit peer_codes list instead of
+    re-implementing industry classification lookups. The caller (LLM agent)
+    provides peer tickers directly.
+
+    Args:
+        ts_code: Target ticker for context, e.g. '600036.SH'.
+        peer_codes: List of peer tickers to compare, e.g. ['601166.SH', '000001.SZ'].
+        out_dir: Absolute output directory.
+        _client: Injected tushare pro_api instance for testing.
+
+    Returns:
+        Result dict with ok, paths, summary or error fields.
+    """
+    try:
+        os.makedirs(out_dir, exist_ok=True)
+        client = _client or _build_peer_client()
+        all_codes = [ts_code] + peer_codes
+        paths: list[str] = []
+        summary: dict = {"target": ts_code, "peers": peer_codes}
+
+        # Fetch daily_basic (valuation) for each code
+        rows = []
+        for code in all_codes:
+            df = client.daily_basic(ts_code=code)
+            if df is not None and not df.empty:
+                row = df.iloc[0].to_dict()
+                row["ts_code"] = code
+                rows.append(row)
+
+        df_valuation = pd.DataFrame(rows)
+        p = Path(out_dir) / "peer_valuation.csv"
+        df_valuation.to_csv(p, index=False)
+        paths.append("peer_valuation.csv")
+        summary["valuation_rows"] = len(df_valuation)
+
+        # Fetch fina_indicator for each code
+        fina_rows = []
+        for code in all_codes:
+            df = client.fina_indicator(ts_code=code)
+            if df is not None and not df.empty:
+                row = df.iloc[0].to_dict()
+                row["ts_code"] = code
+                fina_rows.append(row)
+
+        df_fina = pd.DataFrame(fina_rows)
+        p = Path(out_dir) / "peer_financials.csv"
+        df_fina.to_csv(p, index=False)
+        paths.append("peer_financials.csv")
+        summary["financials_rows"] = len(df_fina)
+
+        return ok(paths=paths, summary=summary)
+    except Exception as e:
+        return fail(error=f"peer_collect failed: {e}", retryable=True)

@@ -90,3 +90,43 @@ def test_yfinance_collect_handles_failure_gracefully(tmp_path):
     out = yfinance_collect("AAPL", str(tmp_path), _client=BoomTicker())
     assert out["ok"] is False
     assert "yf_boom" in out["error"]
+
+from research_mcp.tools.data_collect import peer_collect
+
+
+# ===========================================================================
+# peer_collect
+# ===========================================================================
+
+class FakePeerClient:
+    def daily_basic(self, ts_code=None, **kw):
+        return pd.DataFrame({"ts_code": [ts_code], "pe_ttm": [12.5], "pb": [1.2], "total_mv": [5000.0]})
+
+    def fina_indicator(self, ts_code=None, **kw):
+        return pd.DataFrame({"ts_code": [ts_code], "roe": [15.0], "grossprofit_margin": [30.0]})
+
+
+def test_peer_collect_writes_expected_output(tmp_path):
+    out = peer_collect(
+        "600036.SH",
+        ["601166.SH", "000001.SZ"],
+        str(tmp_path),
+        _client=FakePeerClient(),
+    )
+    assert out["ok"] is True
+    assert "peer_valuation.csv" in out["paths"]
+    assert "peer_financials.csv" in out["paths"]
+    # 3 codes total (target + 2 peers)
+    assert out["summary"]["valuation_rows"] == 3
+    assert out["summary"]["financials_rows"] == 3
+    assert (tmp_path / "peer_valuation.csv").exists()
+
+
+def test_peer_collect_handles_failure_gracefully(tmp_path):
+    class BoomClient:
+        def daily_basic(self, **kw):
+            raise RuntimeError("peer_boom")
+
+    out = peer_collect("600036.SH", ["601166.SH"], str(tmp_path), _client=BoomClient())
+    assert out["ok"] is False
+    assert "peer_boom" in out["error"]
