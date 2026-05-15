@@ -498,6 +498,34 @@ class ElectronApp {
           console.warn('[research-mcp] seed failed (non-fatal):', e instanceof Error ? e.message : String(e));
         }
 
+        // 🆕 Background silent upgrade: if requirements.txt hash differs from installed meta, reinstall.
+        // Brand-gated, never blocks login, never throws.
+        if ((process.env.BRAND_NAME || 'openkosmos') === 'investment-studio') {
+          setImmediate(async () => {
+            try {
+              const { getResearchMcpInstallManager } = await import('./lib/researchMcp');
+              const m = getResearchMcpInstallManager();
+              if (!m.isInstalled()) return;
+              const resourcesDir = app.isPackaged
+                ? path.join((process as { resourcesPath?: string }).resourcesPath!, 'mcp', 'research')
+                : path.join(app.getAppPath(), 'resources', 'mcp', 'research');
+              const reqPath = path.join(resourcesDir, 'requirements.txt');
+              if (!fs.existsSync(reqPath)) return;
+              const currentHash = m.computeDepsHash(reqPath);
+              const meta = m.getInstallMeta();
+              if (meta?.deps_hash && meta.deps_hash !== currentHash) {
+                console.info('[research-mcp] requirements.txt drift detected; silent upgrading',
+                  { old: meta.deps_hash, new: currentHash });
+                const r = await m.install();
+                if (r.ok) console.info('[research-mcp] silent upgrade complete');
+                else console.warn('[research-mcp] silent upgrade failed (old install retained):', r.error);
+              }
+            } catch (e: any) {
+              console.warn('[research-mcp] silent upgrade check failed:', e?.message ?? String(e));
+            }
+          });
+        }
+
         return { success: true };
       } catch (error) {
         return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
