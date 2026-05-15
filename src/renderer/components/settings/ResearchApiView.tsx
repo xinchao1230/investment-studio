@@ -94,10 +94,10 @@ export const ResearchApiView: React.FC = () => {
   }, [cards, handleSave, updateCard]);
 
   return (
-    <div className="p-6 max-w-3xl mx-auto">
+    <div className="p-6">
       <h1 className="text-xl font-semibold mb-1">Research API</h1>
       <p className="text-sm text-gray-500 mb-6">
-        投研工作流使用的数据源 API token 配置。Token 以明文形式与 profile.json 一同保存。
+        投研工作流使用的数据源 API token 配置。
       </p>
 
       <div className="space-y-4">

@@ -96,7 +96,7 @@ const SettingsNavigation: React.FC<SettingsNavigationProps> = ({ onBack }) => {
     if (path.includes('/settings/about')) return 'about';
     if (path.includes('/settings/browser-control')) return 'browser-control';
     if (path.includes('/settings/research-api')) return 'research-api';
-    return 'mcp'; // Default to mcp
+    return 'research-api'; // Default to research-api
   };
 
   const activeView = getActiveView();
@@ -155,6 +155,14 @@ const SettingsNavigation: React.FC<SettingsNavigationProps> = ({ onBack }) => {
           }}
         >
           <NavItem
+            icon={<Key size={20} />}
+            label="API"
+            isActive={activeView === 'research-api'}
+            onClick={() => navigate('/settings/research-api')}
+            ariaLabel="Research API tokens"
+          />
+
+          <NavItem
             icon={<McpIcon />}
             label="MCP"
             isActive={activeView === 'mcp'}
@@ -187,14 +195,6 @@ const SettingsNavigation: React.FC<SettingsNavigationProps> = ({ onBack }) => {
             isActive={activeView === 'runtime'}
             onClick={() => navigate('/settings/runtime')}
             ariaLabel="Runtime Environment"
-          />
-
-          <NavItem
-            icon={<Key size={20} />}
-            label="Research API"
-            isActive={activeView === 'research-api'}
-            onClick={() => navigate('/settings/research-api')}
-            ariaLabel="Research API tokens"
           />
           
           {/* Browser Control entry controlled by feature flag */}
