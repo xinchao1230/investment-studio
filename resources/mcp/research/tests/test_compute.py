@@ -4,7 +4,7 @@ import json
 import pandas as pd
 import pytest
 
-from research_mcp.tools.compute import derived_metrics, financial_audit_11, technical_analysis
+from research_mcp.tools.compute import derived_metrics, financial_audit_11, technical_analysis, data_snapshot
 
 
 # ===========================================================================
@@ -176,3 +176,71 @@ def test_technical_analysis_handles_missing_file(tmp_path):
     result = technical_analysis(str(tmp_path / "nope.csv"), str(tmp_path / "out"))
     assert result["ok"] is False
     assert result["retryable"] is False
+
+
+# ===========================================================================
+# data_snapshot
+# ===========================================================================
+
+
+def test_data_snapshot_bundles_sources(tmp_path):
+    """data_snapshot reads multiple source files and writes snapshot.json."""
+    # Create synthetic source files
+    metrics_csv = tmp_path / "derived_metrics.csv"
+    pd.DataFrame({"period": ["20221231"], "gross_margin": [0.35]}).to_csv(metrics_csv, index=False)
+
+    audit_json = tmp_path / "audit.json"
+    audit_json.write_text(json.dumps({"checks": [], "overall": "PASS"}), encoding="utf-8")
+
+    tech_csv = tmp_path / "technicals.csv"
+    pd.DataFrame({"trade_date": ["20230101"], "close": [100.0], "rsi_14": [55.0]}).to_csv(tech_csv, index=False)
+
+    out_dir = str(tmp_path / "out")
+    sources = {
+        "derived_metrics": str(metrics_csv),
+        "audit": str(audit_json),
+        "technicals": str(tech_csv),
+    }
+
+    result = data_snapshot(out_dir, sources=sources)
+    assert result["ok"] is True
+    assert "snapshot.json" in result["paths"]
+
+    snapshot_path = tmp_path / "out" / "snapshot.json"
+    assert snapshot_path.exists()
+    snapshot = json.loads(snapshot_path.read_text(encoding="utf-8"))
+    assert "derived_metrics" in snapshot
+    assert "audit" in snapshot
+    assert "technicals" in snapshot
+    assert snapshot["audit"]["overall"] == "PASS"
+
+    assert result["summary"]["available"] == 3
+    assert result["summary"]["unavailable"] == 0
+    assert set(result["summary"]["sources"]) == {"derived_metrics", "audit", "technicals"}
+
+
+def test_data_snapshot_tolerates_missing_sources(tmp_path):
+    """data_snapshot records _unavailable for missing files, does not fail."""
+    out_dir = str(tmp_path / "out")
+    sources = {
+        "derived_metrics": str(tmp_path / "nonexistent.csv"),
+        "audit": str(tmp_path / "also_missing.json"),
+    }
+
+    result = data_snapshot(out_dir, sources=sources)
+    assert result["ok"] is True
+
+    snapshot = json.loads((tmp_path / "out" / "snapshot.json").read_text(encoding="utf-8"))
+    assert snapshot["derived_metrics"] == {"_unavailable": True}
+    assert snapshot["audit"] == {"_unavailable": True}
+    assert result["summary"]["available"] == 0
+    assert result["summary"]["unavailable"] == 2
+
+
+def test_data_snapshot_empty_sources(tmp_path):
+    """data_snapshot with no sources still succeeds with empty snapshot."""
+    out_dir = str(tmp_path / "out")
+    result = data_snapshot(out_dir, sources=None)
+    assert result["ok"] is True
+    assert result["summary"]["available"] == 0
+    assert result["summary"]["unavailable"] == 0

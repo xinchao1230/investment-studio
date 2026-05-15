@@ -443,3 +443,70 @@ def technical_analysis(
         return ok(paths=["technicals.csv", "signals.json"], summary=summary)
     except Exception as e:
         return fail(error=f"technical_analysis failed: {e}", retryable=False)
+
+
+# ---------------------------------------------------------------------------
+# Tool: data_snapshot
+# ---------------------------------------------------------------------------
+
+def data_snapshot(
+    out_dir: str,
+    *,
+    sources: dict | None = None,
+) -> dict:
+    """Bundle multiple source files into a unified JSON snapshot.
+
+    Reads each source file path from `sources` dict. CSV files are parsed as
+    records, JSON files are loaded as-is. Missing files get recorded as
+    {"_unavailable": True} without failing the tool.
+
+    Args:
+        out_dir: Absolute output directory.
+        sources: Mapping of key -> file path. e.g.
+            {"derived_metrics": "/path/to/derived_metrics.csv",
+             "audit": "/path/to/audit.json",
+             "technicals": "/path/to/technicals.csv"}
+
+    Returns:
+        Result dict with ok, paths, summary or error fields.
+    """
+    try:
+        os.makedirs(out_dir, exist_ok=True)
+        sources = sources or {}
+
+        snapshot: dict = {}
+        available = 0
+        unavailable = 0
+
+        for key, filepath in sources.items():
+            p = Path(filepath)
+            if not p.exists():
+                snapshot[key] = {"_unavailable": True}
+                unavailable += 1
+                continue
+
+            try:
+                if p.suffix == ".json":
+                    snapshot[key] = json.loads(p.read_text(encoding="utf-8"))
+                elif p.suffix == ".csv":
+                    df = pd.read_csv(filepath)
+                    snapshot[key] = df.to_dict(orient="records")
+                else:
+                    snapshot[key] = p.read_text(encoding="utf-8")
+                available += 1
+            except Exception:
+                snapshot[key] = {"_unavailable": True}
+                unavailable += 1
+
+        out_path = Path(out_dir) / "snapshot.json"
+        out_path.write_text(json.dumps(snapshot, ensure_ascii=False, indent=2), encoding="utf-8")
+
+        summary = {
+            "available": available,
+            "unavailable": unavailable,
+            "sources": list(sources.keys()),
+        }
+
+        return ok(paths=["snapshot.json"], summary=summary)
+    except Exception as e:
+        return fail(error=f"data_snapshot failed: {e}", retryable=False)

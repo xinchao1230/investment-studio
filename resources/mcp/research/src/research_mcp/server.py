@@ -118,6 +118,18 @@ async def list_tools() -> list[types.Tool]:
                 "required": ["daily_csv", "out_dir"],
             },
         ),
+        types.Tool(
+            name="data_snapshot",
+            description="Bundle multiple source files into a unified JSON snapshot for downstream reporting.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "out_dir": {"type": "string", "description": "Absolute output directory"},
+                    "sources": {"type": "object", "description": "Mapping of key -> file path to bundle", "default": {}},
+                },
+                "required": ["out_dir"],
+            },
+        ),
     ]
 
 @app.call_tool()
@@ -178,6 +190,12 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent]:
         result = technical_analysis(
             daily_csv=arguments["daily_csv"],
             out_dir=arguments["out_dir"],
+        )
+    elif name == "data_snapshot":
+        from .tools.compute import data_snapshot
+        result = data_snapshot(
+            out_dir=arguments["out_dir"],
+            sources=arguments.get("sources"),
         )
     else:
         result = {"ok": False, "error": f"unknown tool: {name}", "retryable": False}
