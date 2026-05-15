@@ -334,6 +334,8 @@ export const ResearchPage: React.FC = () => {
           onOpenFile={handleOpenFile}
           onAddTarget={handleOpenAddForm}
           onDeleteTarget={handleDeleteTarget}
+          addFormOpen={showAddForm}
+          onOpenSearch={handleCancelAddTarget}
           chatsByCode={targetChats.chatsByCode}
           activeChatSessionId={targetChats.active?.chatSessionId ?? null}
           onSelectChat={handleSelectChat}

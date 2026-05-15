@@ -39,6 +39,13 @@ interface TargetListSidebarProps {
   onDeleteTarget: (code: string, name: string) => void;
   /** Optional slot rendered above the tree (e.g. add-target combobox). */
   topSlot?: React.ReactNode;
+  /** Whether the add-target slot is currently visible. When it becomes
+   *  visible, the sidebar auto-closes its built-in search so the two
+   *  inputs are mutually exclusive. */
+  addFormOpen?: boolean;
+  /** Fired when the user opens the search input. Parent can close the
+   *  add-target form to keep both inputs mutually exclusive. */
+  onOpenSearch?: () => void;
   // --- Target ↔ Chat binding ---
   /** chats[code] → sessions for that target (undefined = not yet loaded). */
   chatsByCode?: Record<string, ResearchChatSessionMeta[] | undefined>;
@@ -70,6 +77,8 @@ export const TargetListSidebar: React.FC<TargetListSidebarProps> = ({
   onAddTarget,
   onDeleteTarget,
   topSlot,
+  addFormOpen,
+  onOpenSearch,
   chatsByCode,
   activeChatSessionId,
   onSelectChat,
@@ -86,10 +95,22 @@ export const TargetListSidebar: React.FC<TargetListSidebarProps> = ({
     setSearchOpen((open) => {
       const next = !open;
       if (!next) setSearchQuery('');
-      else setTimeout(() => searchInputRef.current?.focus(), 0);
+      else {
+        setTimeout(() => searchInputRef.current?.focus(), 0);
+        onOpenSearch?.();
+      }
       return next;
     });
-  }, []);
+  }, [onOpenSearch]);
+
+  // When the add-target form opens, auto-close the search input so only
+  // one of the two stays visible.
+  React.useEffect(() => {
+    if (addFormOpen && searchOpen) {
+      setSearchOpen(false);
+      setSearchQuery('');
+    }
+  }, [addFormOpen, searchOpen]);
 
   const q = searchQuery.trim().toLowerCase();
   const filteredTargets = q
