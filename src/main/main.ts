@@ -3439,7 +3439,18 @@ class ElectronApp {
         m.on('progress', onProgress);
         m.on('log', onLog);
         try {
-          return await m.install();
+          const result = await m.install();
+          // 🆕 On successful install, kick the MCP client to (re)connect immediately
+          // so the server flips from "connecting" → "connected" without an app restart.
+          if (result?.ok) {
+            try {
+              const { mcpClientManager } = await import('./lib/mcpRuntime/mcpClientManager');
+              await mcpClientManager.reconnect('research-mcp');
+            } catch (e) {
+              console.warn('[research-mcp] post-install reconnect failed (non-fatal):', e instanceof Error ? e.message : String(e));
+            }
+          }
+          return result;
         } finally {
           m.off('progress', onProgress);
           m.off('log', onLog);
