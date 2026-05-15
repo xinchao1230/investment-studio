@@ -161,86 +161,96 @@ async def list_tools() -> list[types.Tool]:
 
 @app.call_tool()
 async def call_tool(name: str, arguments: dict) -> list[types.TextContent]:
-    if name == "check_env":
-        result = check_env()
-    elif name == "tushare_collect":
-        from .tools.data_collect import tushare_collect
-        result = tushare_collect(
-            ts_code=arguments["ts_code"],
-            out_dir=arguments["out_dir"],
-            start_date=arguments.get("start_date", ""),
-        )
-    elif name == "yfinance_collect":
-        from .tools.data_collect import yfinance_collect
-        result = yfinance_collect(
-            symbol=arguments["symbol"],
-            out_dir=arguments["out_dir"],
-            period=arguments.get("period", "5y"),
-        )
-    elif name == "peer_collect":
-        from .tools.data_collect import peer_collect
-        result = peer_collect(
-            ts_code=arguments["ts_code"],
-            peer_codes=arguments["peer_codes"],
-            out_dir=arguments["out_dir"],
-        )
-    elif name == "capital_flow":
-        from .tools.data_collect import capital_flow
-        result = capital_flow(
-            symbol=arguments["symbol"],
-            out_dir=arguments["out_dir"],
-        )
-    elif name == "pdf_download_extract":
-        from .tools.pdf import pdf_download_extract
-        result = pdf_download_extract(
-            url=arguments["url"],
-            out_dir=arguments["out_dir"],
-        )
-    elif name == "derived_metrics":
-        from .tools.compute import derived_metrics
-        result = derived_metrics(
-            income_csv=arguments["income_csv"],
-            balance_csv=arguments["balance_csv"],
-            cashflow_csv=arguments["cashflow_csv"],
-            out_dir=arguments["out_dir"],
-        )
-    elif name == "financial_audit_11":
-        from .tools.compute import financial_audit_11
-        result = financial_audit_11(
-            income_csv=arguments["income_csv"],
-            balance_csv=arguments["balance_csv"],
-            cashflow_csv=arguments["cashflow_csv"],
-            out_dir=arguments["out_dir"],
-        )
-    elif name == "technical_analysis":
-        from .tools.compute import technical_analysis
-        result = technical_analysis(
-            daily_csv=arguments["daily_csv"],
-            out_dir=arguments["out_dir"],
-        )
-    elif name == "data_snapshot":
-        from .tools.compute import data_snapshot
-        result = data_snapshot(
-            out_dir=arguments["out_dir"],
-            sources=arguments.get("sources"),
-        )
-    elif name == "assemble_report":
-        from .tools.report import assemble_report
-        result = assemble_report(
-            snapshot_json_path=arguments["snapshot_json_path"],
-            out_dir=arguments["out_dir"],
-            ticker=arguments.get("ticker", ""),
-            company_name=arguments.get("company_name", ""),
-        )
-    elif name == "monitor_compare":
-        from .tools.report import monitor_compare
-        result = monitor_compare(
-            current_snapshot=arguments["current_snapshot"],
-            previous_snapshot=arguments["previous_snapshot"],
-            out_dir=arguments["out_dir"],
-        )
-    else:
-        result = {"ok": False, "error": f"unknown tool: {name}", "retryable": False}
+    """Dispatch tool calls. All tool functions are synchronous (they do network
+    I/O via requests/pandas), so we run them in a thread to avoid blocking the
+    async MCP event loop."""
+
+    import functools
+
+    def _dispatch() -> dict:
+        if name == "check_env":
+            result = check_env()
+        elif name == "tushare_collect":
+            from .tools.data_collect import tushare_collect
+            result = tushare_collect(
+                ts_code=arguments["ts_code"],
+                out_dir=arguments["out_dir"],
+                start_date=arguments.get("start_date", ""),
+            )
+        elif name == "yfinance_collect":
+            from .tools.data_collect import yfinance_collect
+            result = yfinance_collect(
+                symbol=arguments["symbol"],
+                out_dir=arguments["out_dir"],
+                period=arguments.get("period", "5y"),
+            )
+        elif name == "peer_collect":
+            from .tools.data_collect import peer_collect
+            result = peer_collect(
+                ts_code=arguments["ts_code"],
+                peer_codes=arguments["peer_codes"],
+                out_dir=arguments["out_dir"],
+            )
+        elif name == "capital_flow":
+            from .tools.data_collect import capital_flow
+            result = capital_flow(
+                symbol=arguments["symbol"],
+                out_dir=arguments["out_dir"],
+            )
+        elif name == "pdf_download_extract":
+            from .tools.pdf import pdf_download_extract
+            result = pdf_download_extract(
+                url=arguments["url"],
+                out_dir=arguments["out_dir"],
+            )
+        elif name == "derived_metrics":
+            from .tools.compute import derived_metrics
+            result = derived_metrics(
+                income_csv=arguments["income_csv"],
+                balance_csv=arguments["balance_csv"],
+                cashflow_csv=arguments["cashflow_csv"],
+                out_dir=arguments["out_dir"],
+            )
+        elif name == "financial_audit_11":
+            from .tools.compute import financial_audit_11
+            result = financial_audit_11(
+                income_csv=arguments["income_csv"],
+                balance_csv=arguments["balance_csv"],
+                cashflow_csv=arguments["cashflow_csv"],
+                out_dir=arguments["out_dir"],
+            )
+        elif name == "technical_analysis":
+            from .tools.compute import technical_analysis
+            result = technical_analysis(
+                daily_csv=arguments["daily_csv"],
+                out_dir=arguments["out_dir"],
+            )
+        elif name == "data_snapshot":
+            from .tools.compute import data_snapshot
+            result = data_snapshot(
+                out_dir=arguments["out_dir"],
+                sources=arguments.get("sources"),
+            )
+        elif name == "assemble_report":
+            from .tools.report import assemble_report
+            result = assemble_report(
+                snapshot_json_path=arguments["snapshot_json_path"],
+                out_dir=arguments["out_dir"],
+                ticker=arguments.get("ticker", ""),
+                company_name=arguments.get("company_name", ""),
+            )
+        elif name == "monitor_compare":
+            from .tools.report import monitor_compare
+            result = monitor_compare(
+                current_snapshot=arguments["current_snapshot"],
+                previous_snapshot=arguments["previous_snapshot"],
+                out_dir=arguments["out_dir"],
+            )
+        else:
+            result = {"ok": False, "error": f"unknown tool: {name}", "retryable": False}
+        return result
+
+    result = await asyncio.to_thread(_dispatch)
     return [types.TextContent(type="text", text=json.dumps(result, ensure_ascii=False))]
 
 async def main():
