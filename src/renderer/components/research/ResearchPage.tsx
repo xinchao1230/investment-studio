@@ -160,7 +160,10 @@ export const ResearchPage: React.FC = () => {
           id: tabId,
           label: file.relPath.split('/').pop() ?? file.relPath,
           filePath: file.absPath,
-          content: '(loading...)',
+          // Start with empty content; if the file is missing or empty it will
+          // simply render as an empty document (consistent across key-drivers.md,
+          // notes.md and tracking.md).
+          content: '',
           type: 'markdown',
           mtime: file.mtime,
           pathPrefix,
@@ -170,30 +173,36 @@ export const ResearchPage: React.FC = () => {
       setActiveTabId(tabId);
       setActiveFileAbsPath(file.absPath);
 
-      // Fire-and-forget: load file content on first open.
-      // Use the simple fs:readFile IPC (returns plain string) instead of the
-      // builtinTools 'read_file' wrapper, which JSON-stringifies its payload
-      // and was producing inconsistent renderer-side parsing.
-      if (isNew) {
-        (async () => {
-          try {
-            const result: any = await window.electronAPI.fs!.readFile(file.absPath, 'utf-8');
-            let text: string;
-            if (result && result.success && typeof result.content === 'string') {
-              text = result.content;
-            } else {
-              const errMsg = result?.error ?? '请求失败';
-              text = `(无法读取文件: ${errMsg})`;
-            }
-            setTabs((prev) => prev.map((t) => (t.id === tabId ? { ...t, content: text } : t)));
-          } catch (err: any) {
-            const msg = err?.message ?? String(err);
-            setTabs((prev) =>
-              prev.map((t) => (t.id === tabId ? { ...t, content: `(无法读取文件: ${msg})` } : t)),
-            );
+      // Always (re)load file content on open so HMR / stale tabs never get
+      // stuck with empty content. Local file reads are cheap.
+      void (async () => {
+        try {
+          const result: any = await window.electronAPI.fs!.readFile(file.absPath, 'utf-8');
+          // eslint-disable-next-line no-console
+          console.debug('[ResearchPage] fs:readFile', file.absPath, {
+            success: result?.success,
+            size: result?.size,
+            contentLen: typeof result?.content === 'string' ? result.content.length : -1,
+            error: result?.error,
+          });
+          let text: string;
+          if (result && result.success && typeof result.content === 'string') {
+            text = result.content;
+          } else {
+            const errMsg = result?.error ?? '请求失败';
+            text = `(无法读取文件: ${errMsg})`;
           }
-        })();
-      }
+          setTabs((prev) => prev.map((t) => (t.id === tabId ? { ...t, content: text } : t)));
+        } catch (err: any) {
+          const msg = err?.message ?? String(err);
+          setTabs((prev) =>
+            prev.map((t) => (t.id === tabId ? { ...t, content: `(无法读取文件: ${msg})` } : t)),
+          );
+        }
+      })();
+      // Silence unused-var warning when not in dev; isNew is intentionally tracked
+      // for potential future use (e.g. focus management on new tabs).
+      void isNew;
     },
     [],
   );
