@@ -129,6 +129,40 @@ export class PortfolioTools {
       return { success: false, error: `Target "${dirName}" already exists` };
     }
 
+    // Duplicate-detection: refuse to create if a target with the same company
+    // name OR same normalized stock code already exists. This catches the
+    // "招商银行_600036" vs "招商银行_600036.SH" case where the LLM picks up a
+    // suffix variant from a data source and would otherwise spawn a sibling
+    // research folder for the same underlying company.
+    const normalizeCode = (c: string) =>
+      c.toUpperCase().replace(/\.(SS|SH|SZ|SHA|SZA)$/i, '');
+    if (fs.existsSync(this.workspaceDir)) {
+      const wantNormalized = normalizeCode(stock_code);
+      const wantName = name.trim();
+      for (const entry of fs.readdirSync(this.workspaceDir, { withFileTypes: true })) {
+        if (!entry.isDirectory() || entry.name.startsWith('_')) continue;
+        const profilePath = path.join(this.workspaceDir, entry.name, 'profile.yaml');
+        if (!fs.existsSync(profilePath)) continue;
+        try {
+          const p = yaml.load(fs.readFileSync(profilePath, 'utf-8')) as { stock_code?: string; name?: string };
+          const existingCode = (p?.stock_code || '').trim();
+          const existingName = (p?.name || '').trim();
+          if (existingCode && normalizeCode(existingCode) === wantNormalized) {
+            return {
+              success: false,
+              error: `Target with stock_code "${existingCode}" already exists at "${entry.name}". Reuse the existing target directory instead of creating a new one.`,
+            };
+          }
+          if (existingName && existingName === wantName) {
+            return {
+              success: false,
+              error: `Target with name "${existingName}" already exists at "${entry.name}" (stock_code: ${existingCode}). Reuse the existing target instead of creating a duplicate.`,
+            };
+          }
+        } catch { /* skip malformed */ }
+      }
+    }
+
     fs.mkdirSync(targetDir, { recursive: true });
     fs.mkdirSync(path.join(targetDir, 'earnings'), { recursive: true });
     fs.mkdirSync(path.join(targetDir, 'models'), { recursive: true });

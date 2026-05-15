@@ -544,6 +544,7 @@ export class AgentChat {
               sections.push(`\n**Research Target:** ${targetName} (${targetCode})`);
               sections.push(`- Target Directory: \`${targetAbsDir}\``);
               sections.push(`- All file/command operations for this conversation should default to this directory.`);
+              sections.push(`- DO NOT call \`portfolio_init_target\` for this target — it already exists. Write any new files (财报/分析/笔记等) directly under the Target Directory above. Creating a new target folder for the same company will produce a duplicate in the workspace sidebar.`);
             }
 
             // Command Execution cwd — narrowed to target dir when bound, else session/KB.
