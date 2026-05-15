@@ -2330,6 +2330,51 @@ export class ProfileCacheManager {
   }
 
   /**
+   * Merge-update the user's research-API tokens. Empty string clears the
+   * provider (treated as undefined). Returns true on success.
+   */
+  async updateResearchApiTokens(
+    alias: string,
+    patch: { tushare?: string; eastmoney?: string },
+  ): Promise<boolean> {
+    try {
+      let profile = this.cache.get(alias);
+      if (!profile) {
+        const fileProfile = await this.readProfileFromFile(alias);
+        if (!fileProfile) return false;
+        profile = fileProfile;
+      }
+      if (!isProfileV2(profile)) return false;
+
+      const current = profile.researchApiTokens ?? {};
+      const next: { tushare?: string; eastmoney?: string } = { ...current };
+      for (const key of ['tushare', 'eastmoney'] as const) {
+        if (key in patch) {
+          const value = patch[key];
+          if (typeof value === 'string' && value.length > 0) {
+            next[key] = value;
+          } else {
+            delete next[key];
+          }
+        }
+      }
+
+      if (Object.keys(next).length === 0) {
+        delete profile.researchApiTokens;
+      } else {
+        profile.researchApiTokens = next;
+      }
+
+      this.cache.set(alias, profile);
+      await this.notifyProfileDataManager(alias, true);
+      const success = await this.writeProfileToFile(alias, profile);
+      return success;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
    * ========================================
    * Primary Agent management methods (V2 Profile only)
    * ========================================
