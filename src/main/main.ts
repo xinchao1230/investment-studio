@@ -3364,6 +3364,84 @@ class ElectronApp {
     });
 
     // ===============================
+    // Research MCP Install IPC handlers
+    // ===============================
+
+    ipcMain.handle('researchMcp:isInstalled', async () => {
+      try {
+        const { getResearchMcpInstallManager } = await import('./lib/researchMcp');
+        return getResearchMcpInstallManager().isInstalled();
+      } catch (err: any) {
+        return false;
+      }
+    });
+
+    ipcMain.handle('researchMcp:install', async (event) => {
+      try {
+        const { getResearchMcpInstallManager } = await import('./lib/researchMcp');
+        const m = getResearchMcpInstallManager();
+        const onProgress = (p: any) => {
+          try { event.sender.send('researchMcp:progress', p); } catch { /* window closed */ }
+        };
+        const onLog = (line: string) => {
+          try { event.sender.send('researchMcp:log', line); } catch { /* window closed */ }
+        };
+        m.on('progress', onProgress);
+        m.on('log', onLog);
+        try {
+          return await m.install();
+        } finally {
+          m.off('progress', onProgress);
+          m.off('log', onLog);
+        }
+      } catch (err: any) {
+        return { ok: false, error: err?.message ?? String(err) };
+      }
+    });
+
+    ipcMain.handle('researchMcp:cancel', async () => {
+      try {
+        const { getResearchMcpInstallManager } = await import('./lib/researchMcp');
+        getResearchMcpInstallManager().cancel();
+        return { ok: true };
+      } catch (err: any) {
+        return { ok: false, error: err?.message ?? String(err) };
+      }
+    });
+
+    ipcMain.handle('researchMcp:reset', async () => {
+      try {
+        const { getResearchMcpInstallManager } = await import('./lib/researchMcp');
+        await getResearchMcpInstallManager().reset();
+        return { ok: true };
+      } catch (err: any) {
+        return { ok: false, error: err?.message ?? String(err) };
+      }
+    });
+
+    ipcMain.handle('researchMcp:getInstallMeta', async () => {
+      try {
+        const { getResearchMcpInstallManager } = await import('./lib/researchMcp');
+        return getResearchMcpInstallManager().getInstallMeta();
+      } catch {
+        return null;
+      }
+    });
+
+    ipcMain.handle('researchMcp:openLogsDir', async () => {
+      try {
+        const { shell } = await import('electron');
+        const logsDir = path.join(app.getPath('userData'), 'logs', 'research-mcp');
+        const fs = await import('fs');
+        fs.mkdirSync(logsDir, { recursive: true });
+        await shell.openPath(logsDir);
+        return { ok: true };
+      } catch (err: any) {
+        return { ok: false, error: err?.message ?? String(err) };
+      }
+    });
+
+    // ===============================
     // Quick Start image cache IPC handlers
     // ===============================
     

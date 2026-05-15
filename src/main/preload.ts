@@ -1286,6 +1286,18 @@ export interface ElectronAPI {
     testConnection: (provider: 'tushare' | 'eastmoney') => Promise<{ ok: boolean; error?: string }>;
   };
 
+  // Research MCP install management
+  researchMcp: {
+    isInstalled: () => Promise<boolean>;
+    install: () => Promise<{ ok: boolean; error?: string }>;
+    cancel: () => Promise<{ ok: boolean; error?: string }>;
+    reset: () => Promise<{ ok: boolean; error?: string }>;
+    getInstallMeta: () => Promise<{ deps_hash: string; python_version: string; version: string; installed_at?: string } | null>;
+    openLogsDir: () => Promise<{ ok: boolean; error?: string }>;
+    onProgress: (cb: (progress: { stage: string; percent: number; message?: string }) => void) => () => void;
+    onLog: (cb: (line: string) => void) => () => void;
+  };
+
   // Generic event listening methods for main window IPC events
   on: (channel: string, callback: (data: any) => void) => () => void;
   off: (channel: string, callback: (data: any) => void) => void;
@@ -2019,6 +2031,30 @@ export const electronAPI: ElectronAPI = {
       ipcRenderer.invoke('researchApi:setToken', provider, token) as Promise<{ ok: boolean; error?: string }>,
     testConnection: (provider: 'tushare' | 'eastmoney') =>
       ipcRenderer.invoke('researchApi:testConnection', provider) as Promise<{ ok: boolean; error?: string }>,
+  },
+  researchMcp: {
+    isInstalled: () =>
+      ipcRenderer.invoke('researchMcp:isInstalled') as Promise<boolean>,
+    install: () =>
+      ipcRenderer.invoke('researchMcp:install') as Promise<{ ok: boolean; error?: string }>,
+    cancel: () =>
+      ipcRenderer.invoke('researchMcp:cancel') as Promise<{ ok: boolean; error?: string }>,
+    reset: () =>
+      ipcRenderer.invoke('researchMcp:reset') as Promise<{ ok: boolean; error?: string }>,
+    getInstallMeta: () =>
+      ipcRenderer.invoke('researchMcp:getInstallMeta') as Promise<any>,
+    openLogsDir: () =>
+      ipcRenderer.invoke('researchMcp:openLogsDir') as Promise<{ ok: boolean; error?: string }>,
+    onProgress: (cb: (progress: any) => void) => {
+      const listener = (_e: any, p: any) => cb(p);
+      ipcRenderer.on('researchMcp:progress', listener);
+      return () => { ipcRenderer.removeListener('researchMcp:progress', listener); };
+    },
+    onLog: (cb: (line: string) => void) => {
+      const listener = (_e: any, line: string) => cb(line);
+      ipcRenderer.on('researchMcp:log', listener);
+      return () => { ipcRenderer.removeListener('researchMcp:log', listener); };
+    },
   },
   debug: {
     openWindow: () => ipcRenderer.invoke('debug:openWindow'),
