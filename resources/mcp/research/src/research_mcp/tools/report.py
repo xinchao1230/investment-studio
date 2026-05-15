@@ -183,4 +183,94 @@ def monitor_compare(
     Returns:
         Result dict with ok, paths, summary or error fields.
     """
-    return fail(error="monitor_compare not yet implemented", retryable=False)
+    try:
+        curr_path = Path(current_snapshot)
+        prev_path = Path(previous_snapshot)
+
+        if not curr_path.exists():
+            return fail(error="monitor_compare failed: current snapshot not found", retryable=False)
+        if not prev_path.exists():
+            return fail(error="monitor_compare failed: previous snapshot not found", retryable=False)
+
+        current = json.loads(curr_path.read_text(encoding="utf-8"))
+        previous = json.loads(prev_path.read_text(encoding="utf-8"))
+
+        os.makedirs(out_dir, exist_ok=True)
+
+        curr_keys = set(current.keys())
+        prev_keys = set(previous.keys())
+
+        added_keys = list(curr_keys - prev_keys)
+        removed_keys = list(prev_keys - curr_keys)
+        common_keys = curr_keys & prev_keys
+
+        changed: list[dict] = []
+
+        for key in sorted(common_keys):
+            curr_data = current[key]
+            prev_data = previous[key]
+
+            # Flatten numeric values from both sections
+            curr_nums = _extract_numerics(curr_data, prefix=key)
+            prev_nums = _extract_numerics(prev_data, prefix=key)
+
+            all_metric_keys = set(curr_nums.keys()) | set(prev_nums.keys())
+            for mk in sorted(all_metric_keys):
+                cv = curr_nums.get(mk)
+                pv = prev_nums.get(mk)
+                if cv is None and pv is None:
+                    continue
+                if cv is not None and pv is not None:
+                    if cv != pv:
+                        pct = abs(cv - pv) / abs(pv) if pv != 0 else None
+                        changed.append({
+                            "key": mk,
+                            "old": pv,
+                            "new": cv,
+                            "pct": round(pct, 4) if pct is not None else None,
+                        })
+                elif cv is not None and pv is None:
+                    # New metric within an existing section
+                    changed.append({"key": mk, "old": None, "new": cv, "pct": None})
+                else:
+                    # Metric removed within an existing section
+                    changed.append({"key": mk, "old": pv, "new": None, "pct": None})
+
+        alerts = sum(1 for c in changed if c.get("pct") is not None and c["pct"] > 0.10)
+
+        diff = {
+            "added": added_keys,
+            "removed": removed_keys,
+            "changed": changed,
+        }
+
+        out_path = Path(out_dir) / "diff.json"
+        out_path.write_text(json.dumps(diff, ensure_ascii=False, indent=2), encoding="utf-8")
+
+        summary = {
+            "added": len(added_keys),
+            "removed": len(removed_keys),
+            "changed": len(changed),
+            "alerts": alerts,
+        }
+
+        return ok(paths=["diff.json"], summary=summary)
+    except Exception as e:
+        return fail(error=f"monitor_compare failed: {e}", retryable=False)
+
+
+def _extract_numerics(data, prefix: str = "") -> dict[str, float]:
+    """Extract numeric values from a snapshot section into a flat dict."""
+    result = {}
+    if isinstance(data, list):
+        # List of records — take the last one (most recent)
+        if data:
+            record = data[-1]
+            for k, v in record.items():
+                if isinstance(v, (int, float)):
+                    result[f"{prefix}.{k}"] = float(v)
+    elif isinstance(data, dict):
+        for k, v in data.items():
+            if isinstance(v, (int, float)):
+                result[f"{prefix}.{k}"] = float(v)
+    return result

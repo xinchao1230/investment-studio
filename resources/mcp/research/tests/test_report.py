@@ -86,3 +86,88 @@ def test_assemble_report_handles_missing_snapshot(tmp_path):
     result = assemble_report(str(tmp_path / "no_such_file.json"), str(tmp_path / "out"))
     assert result["ok"] is False
     assert result["retryable"] is False
+
+
+# ===========================================================================
+# monitor_compare
+# ===========================================================================
+
+
+def _write_two_snapshots(tmp_path):
+    """Write current and previous snapshots with known deltas."""
+    previous = {
+        "derived_metrics": [
+            {"period": "20211231", "gross_margin": 0.30, "net_margin": 0.08, "roe": 0.12,
+             "revenue": 1e9, "net_income": 8e7},
+        ],
+        "technicals": [
+            {"trade_date": "20220101", "close": 100.0, "rsi_14": 50.0},
+        ],
+    }
+    current = {
+        "derived_metrics": [
+            {"period": "20221231", "gross_margin": 0.35, "net_margin": 0.10, "roe": 0.15,
+             "revenue": 1.2e9, "net_income": 1.2e8},
+        ],
+        "technicals": [
+            {"trade_date": "20230101", "close": 115.0, "rsi_14": 62.0},
+        ],
+    }
+    prev_path = tmp_path / "previous.json"
+    curr_path = tmp_path / "current.json"
+    prev_path.write_text(json.dumps(previous, ensure_ascii=False), encoding="utf-8")
+    curr_path.write_text(json.dumps(current, ensure_ascii=False), encoding="utf-8")
+    return str(curr_path), str(prev_path)
+
+
+def test_monitor_compare_writes_diff(tmp_path):
+    curr, prev = _write_two_snapshots(tmp_path)
+    out_dir = str(tmp_path / "out")
+
+    result = monitor_compare(curr, prev, out_dir)
+    assert result["ok"] is True
+    assert "diff.json" in result["paths"]
+
+    diff_path = tmp_path / "out" / "diff.json"
+    assert diff_path.exists()
+    diff = json.loads(diff_path.read_text(encoding="utf-8"))
+    assert "added" in diff
+    assert "removed" in diff
+    assert "changed" in diff
+    assert isinstance(diff["changed"], list)
+
+    # revenue went from 1e9 to 1.2e9 — 20% change, should be an alert
+    summary = result["summary"]
+    assert summary["changed"] > 0
+    assert summary["alerts"] > 0  # at least one >10% delta
+
+
+def test_monitor_compare_detects_added_removed(tmp_path):
+    previous = {"derived_metrics": [{"period": "20211231", "revenue": 1e9}]}
+    current = {
+        "derived_metrics": [{"period": "20221231", "revenue": 1.1e9, "new_metric": 42}],
+        "technicals": [{"close": 100.0}],
+    }
+    prev_path = tmp_path / "prev.json"
+    curr_path = tmp_path / "curr.json"
+    prev_path.write_text(json.dumps(previous), encoding="utf-8")
+    curr_path.write_text(json.dumps(current), encoding="utf-8")
+
+    out_dir = str(tmp_path / "out")
+    result = monitor_compare(str(curr_path), str(prev_path), out_dir)
+    assert result["ok"] is True
+
+    diff = json.loads((tmp_path / "out" / "diff.json").read_text(encoding="utf-8"))
+    # "technicals" section added in current
+    assert len(diff["added"]) > 0
+    assert result["summary"]["added"] > 0
+
+
+def test_monitor_compare_fails_on_missing_input(tmp_path):
+    result = monitor_compare(
+        str(tmp_path / "nonexistent.json"),
+        str(tmp_path / "also_missing.json"),
+        str(tmp_path / "out"),
+    )
+    assert result["ok"] is False
+    assert result["retryable"] is False

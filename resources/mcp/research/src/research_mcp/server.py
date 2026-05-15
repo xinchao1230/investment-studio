@@ -144,6 +144,19 @@ async def list_tools() -> list[types.Tool]:
                 "required": ["snapshot_json_path", "out_dir"],
             },
         ),
+        types.Tool(
+            name="monitor_compare",
+            description="Compare two snapshot.json files (current vs previous) and compute per-metric deltas with alerts.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "current_snapshot": {"type": "string", "description": "Path to current snapshot.json"},
+                    "previous_snapshot": {"type": "string", "description": "Path to previous snapshot.json"},
+                    "out_dir": {"type": "string", "description": "Absolute output directory"},
+                },
+                "required": ["current_snapshot", "previous_snapshot", "out_dir"],
+            },
+        ),
     ]
 
 @app.call_tool()
@@ -218,6 +231,13 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent]:
             out_dir=arguments["out_dir"],
             ticker=arguments.get("ticker", ""),
             company_name=arguments.get("company_name", ""),
+        )
+    elif name == "monitor_compare":
+        from .tools.report import monitor_compare
+        result = monitor_compare(
+            current_snapshot=arguments["current_snapshot"],
+            previous_snapshot=arguments["previous_snapshot"],
+            out_dir=arguments["out_dir"],
         )
     else:
         result = {"ok": False, "error": f"unknown tool: {name}", "retryable": False}
