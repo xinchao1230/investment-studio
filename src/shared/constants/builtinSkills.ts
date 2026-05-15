@@ -6,10 +6,24 @@
 /**
  * Built-in skill names that are pre-installed and cannot be deleted.
  * These skills are automatically installed during FRE and startup updates.
+ *
+ * NOTE: This is the union across all brands. For brand-specific filtering use
+ * {@link getBuiltinSkillNamesForBrand}.
  */
 export const BUILTIN_SKILL_NAMES: string[] = [
   'skill-creator',
+  'stock-analyze', // investment-studio only (skipped at seed time for other brands)
 ];
+
+/**
+ * Brand-scoped builtin skill list — used by FRE seeder + agent skill auto-attach.
+ */
+export function getBuiltinSkillNamesForBrand(brandName: string): string[] {
+  if (brandName === 'investment-studio') {
+    return ['skill-creator', 'stock-analyze'];
+  }
+  return ['skill-creator'];
+}
 
 /**
  * Check if a skill is a built-in skill

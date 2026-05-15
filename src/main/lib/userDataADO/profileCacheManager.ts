@@ -33,7 +33,7 @@ import { ChatSessionFile, ChatSessionFileOps } from './chatSessionFileOps';
 import { getDefaultWorkspacePath, getDefaultAgentWorkspacePath, ensureWorkspaceExists, removeChatSessionsDirectory, removeDefaultWorkspaceDirectory, isDefaultWorkspacePath, moveContentsToDirectory } from './pathUtils';
 import { chatSessionManager } from './chatSessionManager';
 import { BRAND_NAME } from '@shared/constants/branding';
-import { BUILTIN_SKILL_NAMES } from '../../../shared/constants/builtinSkills';
+import { BUILTIN_SKILL_NAMES, getBuiltinSkillNamesForBrand } from '../../../shared/constants/builtinSkills';
 
 /**
  * MCP Server status enumeration
@@ -289,9 +289,10 @@ export class ProfileCacheManager {
           zero_states: chat.agent.zero_states || DEFAULT_ZERO_STATES
         } : undefined;
 
-        // 🆕 Ensure builtin agents include all builtin skills
+        // 🆕 Ensure builtin agents include all builtin skills (brand-scoped)
         if (cleanAgent && isBuiltinAgent(cleanAgent.name, BRAND_NAME)) {
-          const missingSkills = BUILTIN_SKILL_NAMES.filter(s => !cleanAgent.skills.includes(s));
+          const builtinForBrand = getBuiltinSkillNamesForBrand(BRAND_NAME);
+          const missingSkills = builtinForBrand.filter(s => !cleanAgent.skills.includes(s));
           if (missingSkills.length > 0) {
             cleanAgent.skills = [...cleanAgent.skills, ...missingSkills];
           }
@@ -784,10 +785,11 @@ export class ProfileCacheManager {
             agentNeedsUpdate = true;
           }
           
-          // 🆕 Step 4.5: Ensure builtin agents include all builtin skills
+          // 🆕 Step 4.5: Ensure builtin agents include all builtin skills (brand-scoped)
           if (isBuiltinAgent(updatedAgent.name, BRAND_NAME)) {
             const currentSkills = updatedAgent.skills || [];
-            const missingSkills = BUILTIN_SKILL_NAMES.filter(s => !currentSkills.includes(s));
+            const builtinForBrand = getBuiltinSkillNamesForBrand(BRAND_NAME);
+            const missingSkills = builtinForBrand.filter(s => !currentSkills.includes(s));
             if (missingSkills.length > 0) {
               updatedAgent.skills = [...currentSkills, ...missingSkills];
               agentNeedsUpdate = true;

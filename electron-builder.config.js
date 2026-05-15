@@ -137,6 +137,13 @@ module.exports = {
       to: 'mcp',
       filter: ['**/*', '!**/.venv/**', '!**/__pycache__/**', '!**/*.pyc', '!**/uv.lock', '!**/*.egg-info/**'],
     },
+    {
+      // Builtin skills (e.g. stock-analyze). Lands at <resourcesPath>/skills/<name>/
+      // and is consumed by builtinSkillSeeder.ts during FRE.
+      from: 'skills',
+      to: 'skills',
+      filter: ['**/*', '!**/.git/**', '!**/node_modules/**'],
+    },
   ],
   npmRebuild: false,
   nodeGypRebuild: false,

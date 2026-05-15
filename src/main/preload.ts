@@ -1298,6 +1298,15 @@ export interface ElectronAPI {
     onLog: (cb: (line: string) => void) => () => void;
   };
 
+  // Builtin skill seeder (FRE Step 3.6)
+  builtinSkills: {
+    seed: () => Promise<{
+      ok: boolean;
+      error?: string;
+      result?: { installed: string[]; skipped: string[]; failed: { name: string; error: string }[] };
+    }>;
+  };
+
   // Generic event listening methods for main window IPC events
   on: (channel: string, callback: (data: any) => void) => () => void;
   off: (channel: string, callback: (data: any) => void) => void;
@@ -2055,6 +2064,14 @@ export const electronAPI: ElectronAPI = {
       ipcRenderer.on('researchMcp:log', listener);
       return () => { ipcRenderer.removeListener('researchMcp:log', listener); };
     },
+  },
+  builtinSkills: {
+    seed: () =>
+      ipcRenderer.invoke('builtinSkills:seed') as Promise<{
+        ok: boolean;
+        error?: string;
+        result?: { installed: string[]; skipped: string[]; failed: { name: string; error: string }[] };
+      }>,
   },
   debug: {
     openWindow: () => ipcRenderer.invoke('debug:openWindow'),

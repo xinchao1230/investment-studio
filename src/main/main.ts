@@ -498,6 +498,18 @@ class ElectronApp {
           console.warn('[research-mcp] seed failed (non-fatal):', e instanceof Error ? e.message : String(e));
         }
 
+        // 🆕 Auto-seed builtin skills for the active brand (idempotent, non-fatal).
+        // Safety-net for users who finished FRE before this feature shipped.
+        try {
+          const { seedBuiltinSkills } = await import('./lib/skill/builtinSkillSeeder');
+          const r = await seedBuiltinSkills(userLogin, process.env.BRAND_NAME || 'openkosmos');
+          if (r.installed.length > 0) {
+            console.info('[builtin-skills] seeded:', r.installed.join(', '));
+          }
+        } catch (e) {
+          console.warn('[builtin-skills] seed failed (non-fatal):', e instanceof Error ? e.message : String(e));
+        }
+
         // 🆕 Background silent upgrade: if requirements.txt hash differs from installed meta, reinstall.
         // Brand-gated, never blocks login, never throws.
         if ((process.env.BRAND_NAME || 'openkosmos') === 'investment-studio') {
@@ -3474,6 +3486,26 @@ class ElectronApp {
         fs.mkdirSync(logsDir, { recursive: true });
         await shell.openPath(logsDir);
         return { ok: true };
+      } catch (err: any) {
+        return { ok: false, error: err?.message ?? String(err) };
+      }
+    });
+
+    // ===============================
+    // Builtin Skills Seeder IPC
+    // ===============================
+
+    // Idempotently install all builtin skills for the current brand into the active user profile.
+    // Used by FRE Step 3.6 and (optionally) login-time bootstrap.
+    ipcMain.handle('builtinSkills:seed', async () => {
+      try {
+        if (!this.currentUserAlias) {
+          return { ok: false, error: 'No current user alias set' };
+        }
+        const { seedBuiltinSkills } = await import('./lib/skill/builtinSkillSeeder');
+        const brandName = process.env.BRAND_NAME || 'openkosmos';
+        const result = await seedBuiltinSkills(this.currentUserAlias, brandName);
+        return { ok: true, result };
       } catch (err: any) {
         return { ok: false, error: err?.message ?? String(err) };
       }
