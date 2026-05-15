@@ -85,6 +85,9 @@ module.exports = {
     'dist/**/*',
     'resources/**/*',
     '!resources/python',
+    // Python MCP servers are shipped via extraResources (lands at <resourcesPath>/mcp/<name>/)
+    // not as part of the asar bundle. Excluded here to avoid double-packaging.
+    '!resources/mcp/**',
     'package.json',
     '!**/*.map',
     '!**/*.ts',
@@ -126,6 +129,13 @@ module.exports = {
       from: 'resources/scripts',
       to: 'scripts',
       filter: ['**/*'],
+    },
+    {
+      // Python MCP servers (e.g. research-mcp). Lands at <resourcesPath>/mcp/<name>/
+      // and is read at runtime via @KOSMOS_RESEARCH_RESOURCES_DIR placeholder.
+      from: 'resources/mcp',
+      to: 'mcp',
+      filter: ['**/*', '!**/.venv/**', '!**/__pycache__/**', '!**/*.pyc', '!**/uv.lock', '!**/*.egg-info/**'],
     },
   ],
   npmRebuild: false,
