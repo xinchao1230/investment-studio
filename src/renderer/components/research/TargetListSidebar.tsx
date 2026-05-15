@@ -293,7 +293,9 @@ export const TargetListSidebar: React.FC<TargetListSidebarProps> = ({
                           </button>
                         )}
                       </div>
-                      {(chatsByCode?.[code] ?? []).map((chat) => (
+                      {[...(chatsByCode?.[code] ?? [])]
+                        .sort((a, b) => (a.last_updated || '').localeCompare(b.last_updated || ''))
+                        .map((chat) => (
                         <div
                           key={chat.chatSession_id}
                           className={`rw-tree-row rw-chat-row group ${activeChatSessionId === chat.chatSession_id ? 'is-active' : ''}`}
