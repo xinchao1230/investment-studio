@@ -3,13 +3,14 @@
 // Contains system-level prompt information shared by all Agents
 
 import { Message } from '../types/chatTypes';
+import { BRAND_CONFIG } from '@shared/constants/branding';
 
 /**
  * Get the global System Prompt
  * @returns {string} Global system prompt content
  */
 export function getGlobalSystemPrompt(): string {
-  return `
+  let prompt = `
 
 COMMAND EXECUTION PRINCIPLES
 
@@ -523,6 +524,13 @@ If you receive "Tool arguments were truncated" or "Invalid tool arguments":
 1. Stop and inform the user about the truncation
 2. Switch to chunked approach with smaller content pieces
 3. Resume from where truncation occurred`;
+
+  // Append brand-specific system prompt addendum if configured
+  if (BRAND_CONFIG && typeof (BRAND_CONFIG as any).systemPromptAddendum === 'string' && (BRAND_CONFIG as any).systemPromptAddendum.trim()) {
+    prompt += `\n\n===\n\n${(BRAND_CONFIG as any).systemPromptAddendum}`;
+  }
+
+  return prompt;
 }
 
 /**
