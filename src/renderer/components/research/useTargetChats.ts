@@ -13,7 +13,7 @@
  * caller's responsibility — see `ResearchPage.tsx`.
  */
 
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   researchChatIpc,
   ResearchChatSessionMeta,
@@ -169,6 +169,47 @@ export function useTargetChats(): UseTargetChatsApi {
     } catch (err) {
       console.error('[useTargetChats] renameChat failed:', err);
     }
+  }, []);
+
+  // Refresh chat metadata (title, last_updated) when the main process
+  // notifies us of a chatSession list change — most importantly the async
+  // title generated after the first user message lands.
+  useEffect(() => {
+    const api: any = (window as any).electronAPI;
+    const off = api?.profile?.onChatSessionUpdated?.((data: { sessions: any[] }) => {
+      const incoming = data?.sessions;
+      if (!Array.isArray(incoming)) return;
+      // Build a map: chatSession_id -> latest meta (title, last_updated)
+      const byId = new Map<string, { title?: string; last_updated?: string }>();
+      for (const s of incoming) {
+        if (s && typeof s.chatSession_id === 'string') {
+          byId.set(s.chatSession_id, { title: s.title, last_updated: s.last_updated });
+        }
+      }
+      setChatsByCode((prev) => {
+        let mutated = false;
+        const next: typeof prev = { ...prev };
+        for (const [code, list] of Object.entries(prev)) {
+          if (!list) continue;
+          let listChanged = false;
+          const updated = list.map((c) => {
+            const fresh = byId.get(c.chatSession_id);
+            if (!fresh) return c;
+            const newTitle = fresh.title ?? c.title;
+            const newLU = fresh.last_updated ?? c.last_updated;
+            if (newTitle === c.title && newLU === c.last_updated) return c;
+            listChanged = true;
+            return { ...c, title: newTitle, last_updated: newLU };
+          });
+          if (listChanged) {
+            next[code] = updated;
+            mutated = true;
+          }
+        }
+        return mutated ? next : prev;
+      });
+    });
+    return () => { try { off?.(); } catch { /* ignore */ } };
   }, []);
 
   return {
