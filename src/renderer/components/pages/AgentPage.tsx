@@ -10,6 +10,7 @@ import { profileDataManager } from '../../lib/userData';
 import { FreOverlay } from '../fre';
 import { BRAND_NAME } from '@shared/constants/branding';
 import { getDefaultPrimaryAgentName } from '../../../main/lib/userDataADO/types/profile';
+import { ResearchMcpInstallDialog } from '../researchMcp/ResearchMcpInstallDialog';
 // Read data from AgentChatSessionCacheManager
 import {
   useMessages,
@@ -36,6 +37,9 @@ export const AgentPage: React.FC = () => {
 
   // 🔥 FRE (First Run Experience) state
   const [showFreOverlay, setShowFreOverlay] = useState<boolean>(false);
+
+  // Research MCP install dialog state (brand-gated)
+  const [showResearchInstallDialog, setShowResearchInstallDialog] = useState(false);
 
   // Get current chatId and chatSessionId from agentChatSessionCacheManager
   const [currentChatId, setCurrentChatId] = React.useState<string | null>(
@@ -443,6 +447,25 @@ export const AgentPage: React.FC = () => {
     try {
       console.log('[AgentPage] 📤 Sending message...');
 
+      // Brand-gated: intercept /stock-analyze and check if research-mcp is installed
+      if (BRAND_NAME === 'investment-studio') {
+        const textContent = message.content
+          ?.filter((p: any) => p.type === 'text')
+          .map((p: any) => p.text)
+          .join('') || '';
+        if (textContent.trimStart().startsWith('/stock-analyze')) {
+          try {
+            const installed = await window.electronAPI.researchMcp.isInstalled();
+            if (!installed) {
+              setShowResearchInstallDialog(true);
+              return; // suppress send until installed
+            }
+          } catch (e) {
+            console.warn('[AgentPage] researchMcp.isInstalled check failed:', e);
+          }
+        }
+      }
+
       const userMsg: Message = {
         ...message,
         id: message.id || Date.now().toString(),
@@ -563,6 +586,14 @@ export const AgentPage: React.FC = () => {
           );
         }}
       />
+
+      {/* Research MCP Install Dialog (brand-gated) */}
+      {BRAND_NAME === 'investment-studio' && (
+        <ResearchMcpInstallDialog
+          open={showResearchInstallDialog}
+          onOpenChange={setShowResearchInstallDialog}
+        />
+      )}
     </>
   );
 };
