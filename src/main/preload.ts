@@ -1279,6 +1279,13 @@ export interface ElectronAPI {
     getLastActive: (targetCode: string | null) => Promise<{ success: boolean; data?: string | null; error?: string }>;
   };
 
+  // Research API token management
+  researchApi: {
+    getToken: (provider: 'tushare' | 'eastmoney') => Promise<string | undefined>;
+    setToken: (provider: 'tushare' | 'eastmoney', token: string | null) => Promise<{ ok: boolean; error?: string }>;
+    testConnection: (provider: 'tushare' | 'eastmoney') => Promise<{ ok: boolean; error?: string }>;
+  };
+
   // Generic event listening methods for main window IPC events
   on: (channel: string, callback: (data: any) => void) => () => void;
   off: (channel: string, callback: (data: any) => void) => void;
@@ -2004,6 +2011,14 @@ export const electronAPI: ElectronAPI = {
     // Uses Electron webUtils.getPathForFile() API (Electron 26+)
     // This is the official solution for missing path property on dragged files in contextIsolation: true
     getPathForFile: (file: File) => webUtils.getPathForFile(file),
+  },
+  researchApi: {
+    getToken: (provider: 'tushare' | 'eastmoney') =>
+      ipcRenderer.invoke('researchApi:getToken', provider) as Promise<string | undefined>,
+    setToken: (provider: 'tushare' | 'eastmoney', token: string | null) =>
+      ipcRenderer.invoke('researchApi:setToken', provider, token) as Promise<{ ok: boolean; error?: string }>,
+    testConnection: (provider: 'tushare' | 'eastmoney') =>
+      ipcRenderer.invoke('researchApi:testConnection', provider) as Promise<{ ok: boolean; error?: string }>,
   },
   debug: {
     openWindow: () => ipcRenderer.invoke('debug:openWindow'),
