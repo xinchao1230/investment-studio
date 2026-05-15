@@ -3321,7 +3321,7 @@ class ElectronApp {
     });
 
     ipcMain.handle('researchApi:setToken',
-      async (_event, provider: string, token: string | null) => {
+      async (event, provider: string, token: string | null) => {
         try {
           if (provider !== 'tushare' && provider !== 'eastmoney') {
             return { ok: false, error: 'unknown provider' };
@@ -3335,6 +3335,16 @@ class ElectronApp {
             this.currentUserAlias,
             { [provider]: value } as { tushare?: string; eastmoney?: string },
           );
+          // 🔄 Restart research-mcp server so the new token is picked up via @KOSMOS_RESEARCH_TUSHARE_TOKEN placeholder
+          if (ok && provider === 'tushare') {
+            try {
+              const { mcpClientManager } = await import('./lib/mcpRuntime/mcpClientManager');
+              await mcpClientManager.reconnect('research-mcp');
+            } catch (e: any) {
+              console.warn('[research-mcp] restart on tushare token change failed:',
+                e?.message ?? String(e));
+            }
+          }
           return { ok };
         } catch (err: any) {
           return { ok: false, error: err?.message ?? String(err) };
