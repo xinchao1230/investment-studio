@@ -137,7 +137,7 @@ export const ResearchApiView: React.FC = () => {
                   {c.saving ? '保存中…' : '保存'}
                 </button>
                 <button
-                  disabled={c.testing || !c.initial}
+                  disabled={c.testing || (!c.initial && !c.draft)}
                   onClick={() => handleTest(p.id)}
                   className="px-3 py-1.5 text-sm rounded border border-gray-300 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
