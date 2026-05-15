@@ -484,7 +484,20 @@ class ElectronApp {
           await browserControlHttpServer.ensureStarted();
           browserControlMonitor.start(userLogin);
         }
-        
+
+        // 🆕 Auto-seed research-mcp server for investment-studio brand (idempotent, non-fatal)
+        try {
+          const { seedResearchMcpIfMissing } = await import('./lib/mcpRuntime/seedResearchMcp');
+          const { runtimeManager } = await import('./lib/runtime/RuntimeManager');
+          await seedResearchMcpIfMissing({
+            alias: userLogin,
+            brandName: process.env.BRAND_NAME || 'openkosmos',
+            uvPath: runtimeManager.getBinaryPath('uv'),
+          });
+        } catch (e) {
+          console.warn('[research-mcp] seed failed (non-fatal):', e instanceof Error ? e.message : String(e));
+        }
+
         return { success: true };
       } catch (error) {
         return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
