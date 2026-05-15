@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { Camera, Key, Terminal } from 'lucide-react';
 import NavItem from '../ui/navigation/NavItem';
 import '../../styles/LeftNavigation.css';
-import { APP_NAME, BRAND_CONFIG } from '@shared/constants/branding';
+import { APP_NAME, BRAND_NAME, BRAND_CONFIG } from '@shared/constants/branding';
 import { useFeatureFlag } from '../../lib/featureFlags';
 
 // MCP icon - from McpHeaderView
@@ -96,6 +96,7 @@ const SettingsNavigation: React.FC<SettingsNavigationProps> = ({ onBack }) => {
     if (path.includes('/settings/about')) return 'about';
     if (path.includes('/settings/browser-control')) return 'browser-control';
     if (path.includes('/settings/research-api')) return 'research-api';
+    if (path.includes('/settings/research-engine')) return 'research-engine';
     return 'research-api'; // Default to research-api
   };
 
@@ -161,6 +162,16 @@ const SettingsNavigation: React.FC<SettingsNavigationProps> = ({ onBack }) => {
             onClick={() => navigate('/settings/research-api')}
             ariaLabel="Research API tokens"
           />
+
+          {BRAND_NAME === 'investment-studio' && (
+            <NavItem
+              icon={<Terminal size={20} />}
+              label="投研引擎"
+              isActive={activeView === 'research-engine'}
+              onClick={() => navigate('/settings/research-engine')}
+              ariaLabel="Research Engine (research-mcp) install/reset"
+            />
+          )}
 
           <NavItem
             icon={<McpIcon />}

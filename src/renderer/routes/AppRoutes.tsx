@@ -13,6 +13,7 @@ import MemoryView from '../components/memory/MemoryView';
 import SettingsPage from '../components/pages/SettingsPage';
 import RuntimeSettingsView from '../components/settings/RuntimeSettingsView';
 import ResearchApiView from '../components/settings/ResearchApiView';
+import ResearchEngineSettings from '../components/settings/ResearchEngineSettings';
 import VoiceInputSettingsView from '../components/settings/VoiceInputSettingsView';
 import ScreenshotSettingsView from '../components/settings/ScreenshotSettingsView';
 import AboutAppView from '../components/settings/AboutAppView';
@@ -167,6 +168,7 @@ export const AppRoutes: React.FC = () => {
           <Route path="mcp/import-vscode" element={<ImportVscodeMcpServerView />} />
           <Route path="runtime" element={<RuntimeSettingsView />} />
           <Route path="research-api" element={<ResearchApiView />} />
+          <Route path="research-engine" element={<ResearchEngineSettings />} />
           <Route path="skills" element={<SkillsView />} />
           <Route path="memory" element={<MemoryView />} />
           <Route path="about" element={<AboutAppView />} />
