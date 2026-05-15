@@ -21,6 +21,14 @@ import { getUserDataPath } from './pathUtils';
 export enum KosmosPlaceholder {
   /** Profile's chat_workspaces folder path */
   PROFILE_WORKSPACES_FOLDER = '@KOSMOS_PROFILE_WORKSPACES_FOLDER',
+  /** Research MCP runtime directory */
+  RESEARCH_RUNTIME_DIR = '@KOSMOS_RESEARCH_RUNTIME_DIR',
+  /** Research MCP bundled resources directory */
+  RESEARCH_RESOURCES_DIR = '@KOSMOS_RESEARCH_RESOURCES_DIR',
+  /** Tushare API token for research MCP */
+  RESEARCH_TUSHARE_TOKEN = '@KOSMOS_RESEARCH_TUSHARE_TOKEN',
+  /** Research MCP user data directory */
+  RESEARCH_USER_DATA_DIR = '@KOSMOS_RESEARCH_USER_DATA_DIR',
 }
 
 /**
@@ -38,6 +46,10 @@ export enum PlaceholderType {
  */
 const PLACEHOLDER_METADATA: Record<string, { type: PlaceholderType }> = {
   [KosmosPlaceholder.PROFILE_WORKSPACES_FOLDER]: { type: PlaceholderType.PATH },
+  [KosmosPlaceholder.RESEARCH_RUNTIME_DIR]: { type: PlaceholderType.PATH },
+  [KosmosPlaceholder.RESEARCH_RESOURCES_DIR]: { type: PlaceholderType.PATH },
+  [KosmosPlaceholder.RESEARCH_TUSHARE_TOKEN]: { type: PlaceholderType.STRING },
+  [KosmosPlaceholder.RESEARCH_USER_DATA_DIR]: { type: PlaceholderType.PATH },
 };
 
 /**
@@ -98,6 +110,18 @@ export class KosmosPlaceholderManager {
       case KosmosPlaceholder.PROFILE_WORKSPACES_FOLDER:
         value = this.getProfileWorkspacesFolderPath(context.alias);
         break;
+      case KosmosPlaceholder.RESEARCH_RUNTIME_DIR:
+        value = this.getResearchRuntimeDir();
+        break;
+      case KosmosPlaceholder.RESEARCH_RESOURCES_DIR:
+        value = this.getResearchResourcesDir();
+        break;
+      case KosmosPlaceholder.RESEARCH_TUSHARE_TOKEN:
+        value = this.getResearchTushareToken(context.alias);
+        break;
+      case KosmosPlaceholder.RESEARCH_USER_DATA_DIR:
+        value = getUserDataPath();
+        break;
       default:
         console.warn(`[KosmosPlaceholderManager] Unknown placeholder: ${placeholder}`);
         return null;
@@ -149,6 +173,45 @@ export class KosmosPlaceholderManager {
   private getProfileWorkspacesFolderPath(alias: string): string {
     const userDataPath = getUserDataPath();
     return path.join(userDataPath, 'profiles', alias, 'chat_workspaces');
+  }
+
+  /**
+   * Get the research MCP runtime directory
+   */
+  private getResearchRuntimeDir(): string {
+    const userDataPath = getUserDataPath();
+    return path.join(userDataPath, 'runtimes', 'research-mcp');
+  }
+
+  /**
+   * Get the research MCP bundled resources directory
+   */
+  private getResearchResourcesDir(): string {
+    try {
+      const { app } = require('electron');
+      if (app.isPackaged) {
+        // process.resourcesPath is electron-augmented; not present in ts-jest's root tsconfig types
+        return path.join((process as { resourcesPath?: string }).resourcesPath!, 'mcp', 'research');
+      } else {
+        return path.join(app.getAppPath(), 'resources', 'mcp', 'research');
+      }
+    } catch {
+      // Electron unavailable (e.g. Jest test environment)
+      return path.join(process.cwd(), 'resources', 'mcp', 'research');
+    }
+  }
+
+  /**
+   * Get the Tushare API token from the user's profile
+   */
+  private getResearchTushareToken(alias: string): string {
+    try {
+      const { ProfileCacheManager } = require('./profileCacheManager');
+      const profile = ProfileCacheManager.getInstance().getCachedProfile(alias);
+      return profile?.researchApiTokens?.tushare ?? '';
+    } catch {
+      return '';
+    }
   }
   
   /**
@@ -232,6 +295,22 @@ export class KosmosPlaceholderManager {
       {
         name: KosmosPlaceholder.PROFILE_WORKSPACES_FOLDER,
         description: "Profile's chat_workspaces folder path: {user data}/profiles/{alias}/chat_workspaces"
+      },
+      {
+        name: KosmosPlaceholder.RESEARCH_RUNTIME_DIR,
+        description: "Research MCP runtime directory: {user data}/runtimes/research-mcp"
+      },
+      {
+        name: KosmosPlaceholder.RESEARCH_RESOURCES_DIR,
+        description: "Research MCP bundled resources directory"
+      },
+      {
+        name: KosmosPlaceholder.RESEARCH_TUSHARE_TOKEN,
+        description: "Tushare API token for research MCP"
+      },
+      {
+        name: KosmosPlaceholder.RESEARCH_USER_DATA_DIR,
+        description: "Research MCP user data directory (same as app userData)"
       },
     ];
   }
