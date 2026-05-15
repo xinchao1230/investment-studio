@@ -3292,6 +3292,65 @@ class ElectronApp {
     });
     
     // ===============================
+    // Research API IPC handlers
+    // ===============================
+
+    ipcMain.handle('researchApi:getToken', async (_event, provider: string) => {
+      try {
+        if (provider !== 'tushare' && provider !== 'eastmoney') return undefined;
+        if (!this.currentUserAlias) return undefined;
+        const pcManager = await getProfileCacheManager();
+        const profile = pcManager.getCachedProfile(this.currentUserAlias);
+        return profile?.researchApiTokens?.[provider as 'tushare' | 'eastmoney'];
+      } catch {
+        return undefined;
+      }
+    });
+
+    ipcMain.handle('researchApi:setToken',
+      async (_event, provider: string, token: string | null) => {
+        try {
+          if (provider !== 'tushare' && provider !== 'eastmoney') {
+            return { ok: false, error: 'unknown provider' };
+          }
+          if (!this.currentUserAlias) {
+            return { ok: false, error: 'no current user' };
+          }
+          const value = token ?? '';
+          const pcManager = await getProfileCacheManager();
+          const ok = await pcManager.updateResearchApiTokens(
+            this.currentUserAlias,
+            { [provider]: value } as { tushare?: string; eastmoney?: string },
+          );
+          return { ok };
+        } catch (err: any) {
+          return { ok: false, error: err?.message ?? String(err) };
+        }
+      });
+
+    ipcMain.handle('researchApi:testConnection', async (_event, provider: string) => {
+      try {
+        if (provider !== 'tushare' && provider !== 'eastmoney') {
+          return { ok: false, error: 'unknown provider' };
+        }
+        if (!this.currentUserAlias) {
+          return { ok: false, error: 'no current user' };
+        }
+        const pcManager = await getProfileCacheManager();
+        const profile = pcManager.getCachedProfile(this.currentUserAlias);
+        const token = profile?.researchApiTokens?.[provider as 'tushare' | 'eastmoney'];
+        if (!token) return { ok: false, error: 'token not configured' };
+        const { testTushareToken, testEastmoneyToken } =
+          await import('./lib/researchApi/testConnection');
+        return provider === 'tushare'
+          ? await testTushareToken(token)
+          : await testEastmoneyToken(token);
+      } catch (err: any) {
+        return { ok: false, error: err?.message ?? String(err) };
+      }
+    });
+
+    // ===============================
     // Quick Start image cache IPC handlers
     // ===============================
     
