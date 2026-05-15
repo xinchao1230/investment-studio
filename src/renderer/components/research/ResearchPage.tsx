@@ -1,4 +1,5 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
+import { PanelLeftOpen } from 'lucide-react';
 import { TargetListSidebar } from './TargetListSidebar';
 import { ContentTabs, Tab } from './ContentTabs';
 import { ResearchChatPane } from './ResearchChatPane';
@@ -10,7 +11,36 @@ import { PasteToWorkspaceProvider } from '../chat/workspace/PasteToWorkspaceProv
 import { agentChatSessionCacheManager } from '../../lib/chat/agentChatSessionCacheManager';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../ui/dialog';
 import { Button } from '../ui/button';
+import ResizableDivider from '../ui/ResizableDivider';
 import './research-theme.css';
+
+// Layout constants for the 3-pane resizable workspace.
+const LEFT_MIN = 200;
+const LEFT_MAX = 480;
+const LEFT_DEFAULT = 240;
+const RIGHT_MIN = 400;
+const RIGHT_DEFAULT = 400;
+const CENTER_MIN = 240;  // The single absolute constraint: center pane never goes below this.
+const LEFT_COLLAPSED_WIDTH = 32;
+const RIGHT_COLLAPSED_WIDTH = 40;
+
+const LS_KEY_LEFT_WIDTH = 'rw:leftWidth';
+const LS_KEY_RIGHT_WIDTH = 'rw:rightWidth';
+const LS_KEY_LEFT_COLLAPSED = 'rw:leftCollapsed';
+const LS_KEY_RIGHT_COLLAPSED = 'rw:rightCollapsed';
+
+const readNum = (key: string, fallback: number): number => {
+  try {
+    const v = localStorage.getItem(key);
+    if (v == null) return fallback;
+    const n = parseInt(v, 10);
+    return Number.isFinite(n) ? n : fallback;
+  } catch { return fallback; }
+};
+const readBool = (key: string): boolean => {
+  try { return localStorage.getItem(key) === 'true'; } catch { return false; }
+};
+const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(v, hi));
 
 export const ResearchPage: React.FC = () => {
   const { targets, loading, initTarget, deleteTarget, getTargetFiles } = usePortfolio();
@@ -37,6 +67,142 @@ export const ResearchPage: React.FC = () => {
   const targetChats = useTargetChats();
   const targetsRef = useRef(targets);
   targetsRef.current = targets;
+
+  // --- 3-pane resizable layout state -----------------------------------
+  const [leftWidth, setLeftWidth] = useState<number>(() => {
+    const w = clamp(readNum(LS_KEY_LEFT_WIDTH, LEFT_DEFAULT), LEFT_MIN, LEFT_MAX);
+    const r = Math.max(RIGHT_MIN, readNum(LS_KEY_RIGHT_WIDTH, RIGHT_DEFAULT));
+    // Defensive: if a stale wider window persisted values that no longer fit,
+    // shrink left so center pane keeps CENTER_MIN.
+    const avail = (typeof window !== 'undefined' ? window.innerWidth : 1200) - r - CENTER_MIN;
+    return Math.min(w, Math.max(LEFT_MIN, avail));
+  });
+  const [rightWidth, setRightWidth] = useState<number>(() => {
+    const w = Math.max(RIGHT_MIN, readNum(LS_KEY_RIGHT_WIDTH, RIGHT_DEFAULT));
+    const l = clamp(readNum(LS_KEY_LEFT_WIDTH, LEFT_DEFAULT), LEFT_MIN, LEFT_MAX);
+    const avail = (typeof window !== 'undefined' ? window.innerWidth : 1200) - l - CENTER_MIN;
+    return Math.min(w, Math.max(RIGHT_MIN, avail));
+  });
+  const [leftCollapsed, setLeftCollapsed] = useState<boolean>(() => readBool(LS_KEY_LEFT_COLLAPSED));
+  const [rightCollapsed, setRightCollapsed] = useState<boolean>(() => readBool(LS_KEY_RIGHT_COLLAPSED));
+  const [isDraggingDivider, setIsDraggingDivider] = useState(false);
+  // Track window width so dynamic max-width constraints react to window resize / maximize.
+  const [windowWidth, setWindowWidth] = useState<number>(() =>
+    typeof window !== 'undefined' ? window.innerWidth : 1200,
+  );
+
+  // Dynamic max widths: bound purely by the available space after the
+  // opposite pane + CENTER_MIN. No hard cap on right pane — user can drag
+  // it as wide as the window allows while the center keeps CENTER_MIN.
+  const oppositeForLeft = rightCollapsed ? RIGHT_COLLAPSED_WIDTH : rightWidth;
+  const oppositeForRight = leftCollapsed ? LEFT_COLLAPSED_WIDTH : leftWidth;
+  const dynLeftMax = Math.max(LEFT_MIN, Math.min(LEFT_MAX, windowWidth - oppositeForLeft - CENTER_MIN));
+  const dynRightMax = Math.max(RIGHT_MIN, windowWidth - oppositeForRight - CENTER_MIN);
+
+  // Persist widths & collapsed flags.
+  useEffect(() => {
+    try { localStorage.setItem(LS_KEY_LEFT_WIDTH, String(leftWidth)); } catch {}
+  }, [leftWidth]);
+  useEffect(() => {
+    try { localStorage.setItem(LS_KEY_RIGHT_WIDTH, String(rightWidth)); } catch {}
+  }, [rightWidth]);
+  useEffect(() => {
+    try { localStorage.setItem(LS_KEY_LEFT_COLLAPSED, String(leftCollapsed)); } catch {}
+  }, [leftCollapsed]);
+  useEffect(() => {
+    try { localStorage.setItem(LS_KEY_RIGHT_COLLAPSED, String(rightCollapsed)); } catch {}
+  }, [rightCollapsed]);
+
+  const handleLeftResize = useCallback((w: number) => {
+    const opposite = rightCollapsed ? RIGHT_COLLAPSED_WIDTH : rightWidth;
+    const maxAllowed = window.innerWidth - opposite - CENTER_MIN;
+    setLeftWidth(clamp(Math.min(w, maxAllowed), LEFT_MIN, LEFT_MAX));
+  }, [rightCollapsed, rightWidth]);
+
+  const handleRightResize = useCallback((w: number) => {
+    const opposite = leftCollapsed ? LEFT_COLLAPSED_WIDTH : leftWidth;
+    const maxAllowed = window.innerWidth - opposite - CENTER_MIN;
+    setRightWidth(Math.max(RIGHT_MIN, Math.min(w, maxAllowed)));
+  }, [leftCollapsed, leftWidth]);
+
+  const handleDragStart = useCallback(() => setIsDraggingDivider(true), []);
+  const handleDragEnd = useCallback(() => setIsDraggingDivider(false), []);
+
+  // Window-resize tolerance: track width and shrink panes that overflow.
+  useEffect(() => {
+    const onResize = () => {
+      const winW = window.innerWidth;
+      setWindowWidth(winW);
+      const lw = leftCollapsed ? LEFT_COLLAPSED_WIDTH : leftWidth;
+      const rw = rightCollapsed ? RIGHT_COLLAPSED_WIDTH : rightWidth;
+      const overflow = lw + rw + CENTER_MIN - winW;
+      if (overflow <= 0) return;
+      // Shrink right first
+      if (!rightCollapsed) {
+        const newRight = Math.max(RIGHT_MIN, rightWidth - overflow);
+        const shaved = rightWidth - newRight;
+        setRightWidth(newRight);
+        const remaining = overflow - shaved;
+        if (remaining > 0 && !leftCollapsed) {
+          setLeftWidth(Math.max(LEFT_MIN, leftWidth - remaining));
+        }
+      } else if (!leftCollapsed) {
+        setLeftWidth(Math.max(LEFT_MIN, leftWidth - overflow));
+      }
+    };
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, [leftCollapsed, rightCollapsed, leftWidth, rightWidth]);
+
+  // Keyboard shortcuts: Ctrl/Cmd+B toggles left, Ctrl/Cmd+/ toggles right.
+  // Don't intercept when an input/textarea/contentEditable has focus.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.ctrlKey || e.metaKey)) return;
+      const target = e.target as HTMLElement | null;
+      if (target) {
+        const tag = target.tagName;
+        if (tag === 'INPUT' || tag === 'TEXTAREA' || target.isContentEditable) return;
+      }
+      if (e.key === 'b' || e.key === 'B') {
+        e.preventDefault();
+        setLeftCollapsed((v) => !v);
+      } else if (e.key === '/') {
+        e.preventDefault();
+        setRightCollapsed((v) => !v);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
+  // When un-collapsing a pane, clamp its restored width against current
+  // window + opposite pane so the center pane never gets squeezed below
+  // CENTER_MIN (e.g. user collapsed on a big window, resized down, then
+  // expanded — old width may no longer fit).
+  const toggleLeftCollapsed = useCallback(() => {
+    setLeftCollapsed((prev) => {
+      const next = !prev;
+      if (!next) {
+        const opposite = rightCollapsed ? RIGHT_COLLAPSED_WIDTH : rightWidth;
+        const maxAllowed = Math.max(LEFT_MIN, window.innerWidth - opposite - CENTER_MIN);
+        setLeftWidth((w) => Math.min(Math.max(w, LEFT_MIN), maxAllowed, LEFT_MAX));
+      }
+      return next;
+    });
+  }, [rightCollapsed, rightWidth]);
+  const toggleRightCollapsed = useCallback(() => {
+    setRightCollapsed((prev) => {
+      const next = !prev;
+      if (!next) {
+        const opposite = leftCollapsed ? LEFT_COLLAPSED_WIDTH : leftWidth;
+        const maxAllowed = Math.max(RIGHT_MIN, window.innerWidth - opposite - CENTER_MIN);
+        setRightWidth((w) => Math.min(Math.max(w, RIGHT_MIN), maxAllowed));
+      }
+      return next;
+    });
+  }, [leftCollapsed, leftWidth]);
+  // ----------------------------------------------------------------------
 
   // First-use / empty-state UX: auto-open the add-target entry whenever the
   // list is empty (initial load with no targets, or after the user clears the
@@ -322,53 +488,113 @@ export const ResearchPage: React.FC = () => {
     <LayoutProvider>
     <PasteToWorkspaceProvider>
     <div data-theme="research" className="flex h-full w-full">
-      <div className="flex flex-col">
-        <TargetListSidebar
-          targets={targets}
-          selectedCode={selectedCode}
-          expandedCodes={expandedCodes}
-          filesByCode={filesByCode}
-          activeFileAbsPath={activeFileAbsPath}
-          onSelectTarget={handleSelectTarget}
-          onToggleExpand={handleToggleExpand}
-          onOpenFile={handleOpenFile}
-          onAddTarget={handleOpenAddForm}
-          onDeleteTarget={handleDeleteTarget}
-          addFormOpen={showAddForm}
-          onOpenSearch={handleCancelAddTarget}
-          chatsByCode={targetChats.chatsByCode}
-          activeChatSessionId={targetChats.active?.chatSessionId ?? null}
-          onSelectChat={handleSelectChat}
-          onNewChat={handleNewChat}
-          onDeleteChat={handleDeleteChat}
-          onRenameChat={handleRenameChat}
-          topSlot={showAddForm ? (
-            <AddTargetSearch
-              busy={addBusy}
-              error={addError}
-              onSubmit={handleSubmitAddTarget}
-              onCancel={handleCancelAddTarget}
-            />
-          ) : null}
+      {leftCollapsed ? (
+        <div
+          className="rw-pane-left rw-pane-left--collapsed"
+          onClick={toggleLeftCollapsed}
+          title="Expand sidebar (Ctrl+B)"
+          style={{ width: LEFT_COLLAPSED_WIDTH, flex: `0 0 ${LEFT_COLLAPSED_WIDTH}px` }}
+        >
+          <button
+            type="button"
+            className="rw-side-icon-btn"
+            aria-label="Expand sidebar"
+            onClick={(e) => { e.stopPropagation(); toggleLeftCollapsed(); }}
+          >
+            <PanelLeftOpen size={14} />
+          </button>
+        </div>
+      ) : (
+        <div
+          className="flex flex-col"
+          style={{
+            width: leftWidth,
+            flex: `0 0 ${leftWidth}px`,
+            transition: isDraggingDivider ? 'none' : 'width 0.2s ease, flex-basis 0.2s ease',
+            overflow: 'hidden',
+          }}
+        >
+          <TargetListSidebar
+            targets={targets}
+            selectedCode={selectedCode}
+            expandedCodes={expandedCodes}
+            filesByCode={filesByCode}
+            activeFileAbsPath={activeFileAbsPath}
+            onSelectTarget={handleSelectTarget}
+            onToggleExpand={handleToggleExpand}
+            onOpenFile={handleOpenFile}
+            onAddTarget={handleOpenAddForm}
+            onDeleteTarget={handleDeleteTarget}
+            addFormOpen={showAddForm}
+            onOpenSearch={handleCancelAddTarget}
+            chatsByCode={targetChats.chatsByCode}
+            activeChatSessionId={targetChats.active?.chatSessionId ?? null}
+            onSelectChat={handleSelectChat}
+            onNewChat={handleNewChat}
+            onDeleteChat={handleDeleteChat}
+            onRenameChat={handleRenameChat}
+            width={leftWidth}
+            onCollapse={toggleLeftCollapsed}
+            topSlot={showAddForm ? (
+              <AddTargetSearch
+                busy={addBusy}
+                error={addError}
+                onSubmit={handleSubmitAddTarget}
+                onCancel={handleCancelAddTarget}
+              />
+            ) : null}
+          />
+        </div>
+      )}
+      {!leftCollapsed && (
+        <ResizableDivider
+          onResize={handleLeftResize}
+          minWidth={LEFT_MIN}
+          maxWidth={dynLeftMax}
+          currentWidth={leftWidth}
+          onDragStart={handleDragStart}
+          onDragEnd={handleDragEnd}
         />
-      </div>
+      )}
       <ContentTabs
         tabs={tabs}
         activeTabId={activeTabId}
         onTabSelect={handleTabSelect}
         onTabClose={handleTabClose}
       />
-      <ResearchChatPane
-        activeFileAbsPath={activeFileAbsPath}
-        targetName={selectedCode ? (targets.find((t) => t.stock_code === selectedCode)?.name ?? null) : null}
-        targetCode={selectedCode}
-        chatTitle={(() => {
-          const sid = targetChats.active?.chatSessionId;
-          if (!sid || !selectedCode) return null;
-          const list = targetChats.chatsByCode[selectedCode];
-          return list?.find((c) => c.chatSession_id === sid)?.title ?? null;
-        })()}
-      />
+      {!rightCollapsed && (
+        <ResizableDivider
+          onResize={handleRightResize}
+          minWidth={RIGHT_MIN}
+          maxWidth={dynRightMax}
+          currentWidth={rightWidth}
+          onDragStart={handleDragStart}
+          onDragEnd={handleDragEnd}
+          invert
+        />
+      )}
+      <div
+        style={{
+          flex: `0 0 ${rightCollapsed ? RIGHT_COLLAPSED_WIDTH : rightWidth}px`,
+          transition: isDraggingDivider ? 'none' : 'flex-basis 0.2s ease',
+          display: 'flex',
+        }}
+      >
+        <ResearchChatPane
+          activeFileAbsPath={activeFileAbsPath}
+          targetName={selectedCode ? (targets.find((t) => t.stock_code === selectedCode)?.name ?? null) : null}
+          targetCode={selectedCode}
+          chatTitle={(() => {
+            const sid = targetChats.active?.chatSessionId;
+            if (!sid || !selectedCode) return null;
+            const list = targetChats.chatsByCode[selectedCode];
+            return list?.find((c) => c.chatSession_id === sid)?.title ?? null;
+          })()}
+          width={rightWidth}
+          collapsed={rightCollapsed}
+          onToggleCollapsed={toggleRightCollapsed}
+        />
+      </div>
       <Dialog open={!!pendingDelete} onOpenChange={(open) => { if (!open && !deleteBusy) setPendingDelete(null); }}>
         <DialogContent>
           <DialogHeader>

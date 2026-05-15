@@ -14,6 +14,7 @@ import {
   MessageSquare,
   Pencil,
   Settings,
+  PanelLeftClose,
 } from 'lucide-react';
 import type { TargetFile } from './usePortfolio';
 import type { ResearchChatSessionMeta } from './researchChatIpc';
@@ -55,6 +56,10 @@ interface TargetListSidebarProps {
   onNewChat?: (code: string) => void;
   onDeleteChat?: (code: string, chatSessionId: string) => void;
   onRenameChat?: (code: string, chatSessionId: string, newTitle: string) => void;
+  /** Width of the sidebar in pixels. Caller is responsible for clamping. */
+  width?: number;
+  /** When provided, a PanelLeftClose button is rendered next to the Workspace title. */
+  onCollapse?: () => void;
 }
 
 const SUBCATEGORIES = ['纪要', '专家交流', '公司交流', '研报', '模型', '公告', '其它'];
@@ -85,6 +90,8 @@ export const TargetListSidebar: React.FC<TargetListSidebarProps> = ({
   onNewChat,
   onDeleteChat,
   onRenameChat,
+  width = 240,
+  onCollapse,
 }) => {
   const [expandedCats, setExpandedCats] = useState<Set<string>>(new Set());
   const [searchQuery, setSearchQuery] = useState('');
@@ -134,22 +141,35 @@ export const TargetListSidebar: React.FC<TargetListSidebarProps> = ({
   const navigate = useNavigate();
 
   return (
-    <div className="rw-pane-left flex flex-col h-full" style={{ width: 240 }}>
+    <div className="rw-pane-left flex flex-col h-full" style={{ width }}>
       {/* Header — Workspace title */}
       <div className="flex items-center justify-between px-3 pt-3 pb-2">
         <span className="rw-side-title">Workspace</span>
-        <button
-          type="button"
-          className="rw-side-icon-btn"
-          title="Settings"
-          aria-label="Open Settings"
-          onClick={() => {
-            sessionStorage.setItem('previousPath', window.location.hash.replace(/^#/, '') || '/research');
-            navigate('/settings');
-          }}
-        >
-          <Settings size={14} />
-        </button>
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            className="rw-side-icon-btn"
+            title="Settings"
+            aria-label="Open Settings"
+            onClick={() => {
+              sessionStorage.setItem('previousPath', window.location.hash.replace(/^#/, '') || '/research');
+              navigate('/settings');
+            }}
+          >
+            <Settings size={14} />
+          </button>
+          {onCollapse && (
+            <button
+              type="button"
+              className="rw-side-icon-btn"
+              title="Collapse sidebar (Ctrl+B)"
+              aria-label="Collapse sidebar"
+              onClick={onCollapse}
+            >
+              <PanelLeftClose size={14} />
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Secondary tab row */}

@@ -1,4 +1,5 @@
 import React, { useCallback } from 'react';
+import { PanelRightClose, PanelRightOpen } from 'lucide-react';
 import ChatView from '../chat/ChatView';
 import { useMessages } from '../../lib/chat/agentChatSessionCacheManager';
 
@@ -9,6 +10,12 @@ interface ResearchChatPaneProps {
   targetCode?: string | null;
   /** Title of the active chat session, shown next to target name. */
   chatTitle?: string | null;
+  /** Width in pixels when expanded. Caller is responsible for clamping. */
+  width?: number;
+  /** When true, render as a narrow icon strip instead of the full chat UI. */
+  collapsed?: boolean;
+  /** Toggle collapsed state. */
+  onToggleCollapsed?: () => void;
 }
 
 const SUGGESTIONS: string[] = [
@@ -57,6 +64,9 @@ export const ResearchChatPane: React.FC<ResearchChatPaneProps> = ({
   targetName,
   targetCode,
   chatTitle,
+  width = 380,
+  collapsed = false,
+  onToggleCollapsed,
 }) => {
   const messages = useMessages();
   const isEmpty = !messages || messages.length === 0;
@@ -69,10 +79,30 @@ export const ResearchChatPane: React.FC<ResearchChatPaneProps> = ({
 
   const hasTarget = Boolean(targetName || targetCode);
 
+  if (collapsed) {
+    return (
+      <aside
+        className="rw-pane-right rw-pane-right--collapsed"
+        onClick={onToggleCollapsed}
+        title="Expand assistant (Ctrl+/)"
+      >
+        <button
+          type="button"
+          className="rw-side-icon-btn"
+          aria-label="Expand assistant"
+          onClick={(e) => { e.stopPropagation(); onToggleCollapsed?.(); }}
+        >
+          <PanelRightOpen size={14} />
+        </button>
+        <span className="rw-pane-right--collapsed-emoji" aria-hidden>📊</span>
+      </aside>
+    );
+  }
+
   return (
     <aside
       className="rw-pane-right flex flex-col h-full"
-      style={{ width: 380, flex: '0 0 380px' }}
+      style={{ width, flex: `0 0 ${width}px` }}
       data-target-selected={hasTarget ? 'true' : 'false'}
     >
       <header
@@ -101,6 +131,17 @@ export const ResearchChatPane: React.FC<ResearchChatPaneProps> = ({
           )}
         </div>
         <span className="text-[11px] text-[var(--rw-text-3)] flex-shrink-0">Research Assistant</span>
+        {onToggleCollapsed && (
+          <button
+            type="button"
+            className="rw-side-icon-btn flex-shrink-0"
+            title="Collapse assistant (Ctrl+/)"
+            aria-label="Collapse assistant"
+            onClick={onToggleCollapsed}
+          >
+            <PanelRightClose size={14} />
+          </button>
+        )}
       </header>
       <div className="flex-1 min-h-0 overflow-hidden relative">
         {isEmpty && (

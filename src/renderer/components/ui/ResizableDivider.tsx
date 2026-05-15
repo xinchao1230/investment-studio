@@ -6,6 +6,12 @@ interface ResizableDividerProps {
   maxWidth: number;
   currentWidth: number;
   className?: string;
+  /** Fired once when the user starts dragging (mousedown). */
+  onDragStart?: () => void;
+  /** Fired once when the drag ends (mouseup). */
+  onDragEnd?: () => void;
+  /** When true, dragging left widens the pane (use for right-side panes). */
+  invert?: boolean;
 }
 
 const ResizableDivider: React.FC<ResizableDividerProps> = ({
@@ -13,7 +19,10 @@ const ResizableDivider: React.FC<ResizableDividerProps> = ({
   minWidth,
   maxWidth,
   currentWidth,
-  className = ''
+  className = '',
+  onDragStart,
+  onDragEnd,
+  invert = false,
 }) => {
   const [isDragging, setIsDragging] = useState(false);
   const startXRef = useRef<number>(0);
@@ -29,16 +38,18 @@ const ResizableDivider: React.FC<ResizableDividerProps> = ({
 
     document.body.style.cursor = 'col-resize';
     document.body.style.userSelect = 'none';
-  }, [currentWidth]);
+    onDragStart?.();
+  }, [currentWidth, onDragStart]);
 
   const handleMouseMove = useCallback((e: MouseEvent) => {
     if (!isDragging) return;
 
-    const deltaX = e.clientX - startXRef.current;
+    const rawDelta = e.clientX - startXRef.current;
+    const deltaX = invert ? -rawDelta : rawDelta;
     const newWidth = Math.min(maxWidth, Math.max(minWidth, startWidthRef.current + deltaX));
     
     onResize(newWidth);
-  }, [isDragging, onResize, minWidth, maxWidth]);
+  }, [isDragging, onResize, minWidth, maxWidth, invert]);
 
   const handleMouseUp = useCallback(() => {
     if (!isDragging) return;
@@ -46,7 +57,8 @@ const ResizableDivider: React.FC<ResizableDividerProps> = ({
     setIsDragging(false);
     document.body.style.cursor = '';
     document.body.style.userSelect = '';
-  }, [isDragging]);
+    onDragEnd?.();
+  }, [isDragging, onDragEnd]);
 
   React.useEffect(() => {
     if (isDragging) {

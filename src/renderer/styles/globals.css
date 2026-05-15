@@ -1192,6 +1192,35 @@
  background: rgba(14, 165, 233, 0.5);
 }
 
+/* Research workspace: mutually-exclusive swap between the static 1px gray
+   border (rendered on .rw-pane-left / .rw-pane-right) and the 4px blue
+   highlight on the divider during hover/drag.
+   - Negative margins make the 4px divider occupy 0px of layout width, so its
+     blue stripe is geometrically centered over the original gray border line,
+     avoiding any 1-2px horizontal jump when swapping.
+   - The `:has()` rules fade the adjacent pane border out the moment the
+     divider lights up.
+   Electron 35 (Chromium 134) natively supports :has(). */
+[data-theme="research"] .resizable-divider {
+ margin-left: -2px;
+ margin-right: -2px;
+ z-index: 2;
+}
+[data-theme="research"] .rw-pane-left,
+[data-theme="research"] .rw-pane-right {
+ transition: border-color 0.15s ease;
+}
+[data-theme="research"] .rw-pane-left:has(+ .resizable-divider:hover),
+[data-theme="research"] .rw-pane-left:has(+ .resizable-divider.dragging) {
+ border-right-color: transparent;
+}
+[data-theme="research"] .resizable-divider:hover + .rw-pane-right,
+[data-theme="research"] .resizable-divider.dragging + .rw-pane-right,
+[data-theme="research"] .resizable-divider:hover + div > .rw-pane-right,
+[data-theme="research"] .resizable-divider.dragging + div > .rw-pane-right {
+ border-left-color: transparent;
+}
+
 .agent-chat-divider {
  background: rgba(203, 213, 225, 0.3);
 }

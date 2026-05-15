@@ -160,7 +160,94 @@
 }
 
 [data-theme="research"] .rw-pane-right :where(input, textarea) { font-size: 13px; }
-[data-theme="research"] .rw-pane-right { min-width: 320px; }
+[data-theme="research"] .rw-pane-right:not(.rw-pane-right--collapsed) { min-width: 400px; }
+
+/* Zero-states (Stella greeting + quick-start cards) — scale down typography
+   in the Research right pane so it matches the surrounding 12-13px UI rather
+   than the 18-20px /agent main-window scale. */
+[data-theme="research"] .rw-pane-right .chat-zero-states-greeting {
+  font-size: 14px;
+  line-height: 1.5;
+}
+[data-theme="research"] .rw-pane-right .chat-zero-states {
+  gap: 12px;
+  padding: 0 16px;
+}
+[data-theme="research"] .rw-pane-right .quick-start-card-title {
+  font-size: 13px;
+  line-height: 18px;
+}
+[data-theme="research"] .rw-pane-right .quick-start-card-description {
+  font-size: 12px;
+  line-height: 16px;
+}
+[data-theme="research"] .rw-pane-right .quick-start-card {
+  padding: 10px 12px;
+  gap: 2px;
+  border-radius: 12px;
+  max-width: 240px;  /* don't let grid 1fr stretch cards into huge tiles */
+}
+/* Hide the empty gray image placeholder at all widths inside the research pane
+   (the /agent main page still shows it). */
+[data-theme="research"] .rw-pane-right .quick-start-card-image {
+  display: none;
+}
+/* Override the wide-pane grid: keep auto-fill but use a fixed 220px column
+   so cards don't grow huge as the pane widens — they just wrap into more
+   columns. justify-content: start prevents the row from spreading. */
+[data-theme="research"] .rw-pane-right .quick-start-list {
+  grid-template-columns: repeat(auto-fill, 220px) !important;
+  justify-content: start;
+}
+@container chat-zero-states (max-width: 480px) {
+  [data-theme="research"] .rw-pane-right .chat-zero-states-greeting {
+    font-size: 14px;
+  }
+  /* In narrow mode the cards stack vertically (already handled by base
+     narrow rules); allow the single column to stretch full width. */
+  [data-theme="research"] .rw-pane-right .quick-start-card {
+    max-width: none;
+  }
+  [data-theme="research"] .rw-pane-right .quick-start-list {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+/* Collapsed-state side panels (icon strips). */
+[data-theme="research"] .rw-pane-left--collapsed {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 10px 0;
+  gap: 12px;
+  background: var(--rw-bg-soft);
+  border-right: 1px solid var(--rw-border);
+  cursor: pointer;
+}
+[data-theme="research"] .rw-pane-left--collapsed:hover {
+  background: rgba(0, 0, 0, 0.03);
+}
+[data-theme="research"] .rw-pane-right--collapsed {
+  flex: 0 0 40px;
+  width: 40px;
+  min-width: 40px !important;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 10px 0;
+  gap: 12px;
+  background: var(--rw-bg-soft);
+  border-left: 1px solid var(--rw-border);
+  cursor: pointer;
+}
+[data-theme="research"] .rw-pane-right--collapsed:hover {
+  background: rgba(0, 0, 0, 0.03);
+}
+[data-theme="research"] .rw-pane-right--collapsed-emoji {
+  font-size: 18px;
+  line-height: 1;
+  user-select: none;
+}
 
 /* Research-pane compact ChatView overrides.
    Scoped to [data-theme="research"] so the regular /agent page is untouched.
