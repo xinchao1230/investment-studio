@@ -66,6 +66,58 @@ async def list_tools() -> list[types.Tool]:
                 "required": ["symbol", "out_dir"],
             },
         ),
+        types.Tool(
+            name="pdf_download_extract",
+            description="Download a PDF from a URL and extract text and tables to out_dir.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "url": {"type": "string", "description": "HTTP(S) URL of the PDF file"},
+                    "out_dir": {"type": "string", "description": "Absolute output directory"},
+                },
+                "required": ["url", "out_dir"],
+            },
+        ),
+        types.Tool(
+            name="derived_metrics",
+            description="Compute derived financial ratios (margins, ROE, ROA, FCF, growth) from income/balance/cashflow CSVs.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "income_csv": {"type": "string", "description": "Path to income statement CSV"},
+                    "balance_csv": {"type": "string", "description": "Path to balance sheet CSV"},
+                    "cashflow_csv": {"type": "string", "description": "Path to cashflow CSV"},
+                    "out_dir": {"type": "string", "description": "Absolute output directory"},
+                },
+                "required": ["income_csv", "balance_csv", "cashflow_csv", "out_dir"],
+            },
+        ),
+        types.Tool(
+            name="financial_audit_11",
+            description="Run an 11-checkpoint financial-quality audit (Piotroski-inspired) on income/balance/cashflow CSVs.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "income_csv": {"type": "string", "description": "Path to income statement CSV"},
+                    "balance_csv": {"type": "string", "description": "Path to balance sheet CSV"},
+                    "cashflow_csv": {"type": "string", "description": "Path to cashflow CSV"},
+                    "out_dir": {"type": "string", "description": "Absolute output directory"},
+                },
+                "required": ["income_csv", "balance_csv", "cashflow_csv", "out_dir"],
+            },
+        ),
+        types.Tool(
+            name="technical_analysis",
+            description="Compute technical indicators (SMA, EMA, RSI, MACD, Bollinger, volatility) from daily price CSV.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "daily_csv": {"type": "string", "description": "Path to daily price CSV"},
+                    "out_dir": {"type": "string", "description": "Absolute output directory"},
+                },
+                "required": ["daily_csv", "out_dir"],
+            },
+        ),
     ]
 
 @app.call_tool()
@@ -97,6 +149,34 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent]:
         from .tools.data_collect import capital_flow
         result = capital_flow(
             symbol=arguments["symbol"],
+            out_dir=arguments["out_dir"],
+        )
+    elif name == "pdf_download_extract":
+        from .tools.pdf import pdf_download_extract
+        result = pdf_download_extract(
+            url=arguments["url"],
+            out_dir=arguments["out_dir"],
+        )
+    elif name == "derived_metrics":
+        from .tools.compute import derived_metrics
+        result = derived_metrics(
+            income_csv=arguments["income_csv"],
+            balance_csv=arguments["balance_csv"],
+            cashflow_csv=arguments["cashflow_csv"],
+            out_dir=arguments["out_dir"],
+        )
+    elif name == "financial_audit_11":
+        from .tools.compute import financial_audit_11
+        result = financial_audit_11(
+            income_csv=arguments["income_csv"],
+            balance_csv=arguments["balance_csv"],
+            cashflow_csv=arguments["cashflow_csv"],
+            out_dir=arguments["out_dir"],
+        )
+    elif name == "technical_analysis":
+        from .tools.compute import technical_analysis
+        result = technical_analysis(
+            daily_csv=arguments["daily_csv"],
             out_dir=arguments["out_dir"],
         )
     else:
