@@ -322,6 +322,8 @@ export class ProfileCacheManager {
         })) : [],
         chats: cleanChats.length > 0 ? cleanChats : [this.createDefaultChat()],
         browserControl: profile.browserControl,
+        researchApiTokens: profile.researchApiTokens,
+        lastActiveChatByTarget: profile.lastActiveChatByTarget,
       };
 
       return sanitizedProfile;
@@ -500,6 +502,27 @@ export class ProfileCacheManager {
       if (BRAND_NAME === 'investment-studio' && profileCopy.primaryAgent === 'Kobi') {
         profileCopy.primaryAgent = 'Stella';
         needsSave = true;
+      }
+
+      // 🔧 investment-studio brand: backfill empty knowledgeBase on builtin agents
+      // to @KOSMOS_PORTFOLIO_DIR so the portfolio directory acts as the knowledge base.
+      // Also ensure research-mcp is in the agent's mcp_servers list so its tools
+      // are injected into chat.
+      if (BRAND_NAME === 'investment-studio' && Array.isArray(profileCopy.chats)) {
+        for (const chat of profileCopy.chats) {
+          if (chat.agent && isBuiltinAgent(chat.agent.name, BRAND_NAME)) {
+            if (!chat.agent.knowledgeBase) {
+              chat.agent.knowledgeBase = '@KOSMOS_PORTFOLIO_DIR';
+              needsSave = true;
+            }
+            const agentServers = Array.isArray(chat.agent.mcp_servers) ? chat.agent.mcp_servers : [];
+            if (!agentServers.some((s: any) => s.name === 'research-mcp')) {
+              agentServers.push({ name: 'research-mcp', tools: [] });
+              chat.agent.mcp_servers = agentServers;
+              needsSave = true;
+            }
+          }
+        }
       }
       
       // Ensure chats array exists

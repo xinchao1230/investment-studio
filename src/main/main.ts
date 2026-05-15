@@ -23,6 +23,12 @@ import { app, BrowserWindow, ipcMain, Menu, shell, dialog, protocol } from 'elec
 import * as path from 'path';
 import * as fs from 'fs';
 
+// 🏷️ Brand-specific glue (investment-studio: research-mcp, target↔chat, builtin skills)
+import {
+  registerInvestmentStudioIpc,
+  runPostLoginSeeders as runInvestmentStudioPostLoginSeeders,
+} from './investmentStudio';
+
 // Browser Control configuration and status check
 import { ExcelService } from './lib/excelService';
 import { BROWSER_CONFIG, COMBINED_SCRIPTS } from './lib/browserControl/browserConfig';
@@ -485,30 +491,7 @@ class ElectronApp {
           browserControlMonitor.start(userLogin);
         }
 
-        // 🆕 Auto-seed research-mcp server for investment-studio brand (idempotent, non-fatal)
-        try {
-          const { seedResearchMcpIfMissing } = await import('./lib/mcpRuntime/seedResearchMcp');
-          const { runtimeManager } = await import('./lib/runtime/RuntimeManager');
-          await seedResearchMcpIfMissing({
-            alias: userLogin,
-            brandName: process.env.BRAND_NAME || 'openkosmos',
-            uvPath: runtimeManager.getBinaryPath('uv'),
-          });
-        } catch (e) {
-          console.warn('[research-mcp] seed failed (non-fatal):', e instanceof Error ? e.message : String(e));
-        }
-
-        // 🆕 Auto-seed builtin skills for the active brand (idempotent, non-fatal).
-        // Safety-net for users who finished FRE before this feature shipped.
-        try {
-          const { seedBuiltinSkills } = await import('./lib/skill/builtinSkillSeeder');
-          const r = await seedBuiltinSkills(userLogin, process.env.BRAND_NAME || 'openkosmos');
-          if (r.installed.length > 0) {
-            console.info('[builtin-skills] seeded:', r.installed.join(', '));
-          }
-        } catch (e) {
-          console.warn('[builtin-skills] seed failed (non-fatal):', e instanceof Error ? e.message : String(e));
-        }
+        await runInvestmentStudioPostLoginSeeders(userLogin, 'auth:setCurrentSession');
 
         // 🆕 Background silent upgrade: if requirements.txt hash differs from installed meta, reinstall.
         // Brand-gated, never blocks login, never throws.
@@ -666,7 +649,10 @@ class ElectronApp {
               this.currentUserAlias = authInfo.ghcAuth.user.login;
 
               await this.registerGlobalShortcuts(); // Register global shortcuts
-              
+
+              // 🆕 Run brand-aware seeders (research-mcp + builtin skills) on this login path too.
+              await runInvestmentStudioPostLoginSeeders(this.currentUserAlias, 'auth:startGhcDeviceFlow');
+
               // 🔥 Important: only notify frontend after all initialization is complete
               safeSend('auth:deviceFlowSuccess', { authInfo });
               
@@ -3345,181 +3331,12 @@ class ElectronApp {
     });
     
     // ===============================
-    // Research API IPC handlers
+    // Investment Studio brand-specific IPC (researchApi:*, researchMcp:*,
+    // builtinSkills:seed, researchChat:*) — see src/main/investmentStudio/
     // ===============================
-
-    ipcMain.handle('researchApi:getToken', async (_event, provider: string) => {
-      try {
-        if (provider !== 'tushare' && provider !== 'eastmoney') return undefined;
-        if (!this.currentUserAlias) return undefined;
-        const pcManager = await getProfileCacheManager();
-        const profile = pcManager.getCachedProfile(this.currentUserAlias);
-        return profile?.researchApiTokens?.[provider as 'tushare' | 'eastmoney'];
-      } catch {
-        return undefined;
-      }
-    });
-
-    ipcMain.handle('researchApi:setToken',
-      async (event, provider: string, token: string | null) => {
-        try {
-          if (provider !== 'tushare' && provider !== 'eastmoney') {
-            return { ok: false, error: 'unknown provider' };
-          }
-          if (!this.currentUserAlias) {
-            return { ok: false, error: 'no current user' };
-          }
-          const value = token ?? '';
-          const pcManager = await getProfileCacheManager();
-          const ok = await pcManager.updateResearchApiTokens(
-            this.currentUserAlias,
-            { [provider]: value } as { tushare?: string; eastmoney?: string },
-          );
-          // 🔄 Restart research-mcp server so the new token is picked up via @KOSMOS_RESEARCH_TUSHARE_TOKEN placeholder
-          if (ok && provider === 'tushare') {
-            try {
-              const { mcpClientManager } = await import('./lib/mcpRuntime/mcpClientManager');
-              await mcpClientManager.reconnect('research-mcp');
-            } catch (e: any) {
-              console.warn('[research-mcp] restart on tushare token change failed:',
-                e?.message ?? String(e));
-            }
-          }
-          return { ok };
-        } catch (err: any) {
-          return { ok: false, error: err?.message ?? String(err) };
-        }
-      });
-
-    ipcMain.handle('researchApi:testConnection', async (_event, provider: string) => {
-      try {
-        if (provider !== 'tushare' && provider !== 'eastmoney') {
-          return { ok: false, error: 'unknown provider' };
-        }
-        if (!this.currentUserAlias) {
-          return { ok: false, error: 'no current user' };
-        }
-        const pcManager = await getProfileCacheManager();
-        const profile = pcManager.getCachedProfile(this.currentUserAlias);
-        const token = profile?.researchApiTokens?.[provider as 'tushare' | 'eastmoney'];
-        if (!token) return { ok: false, error: 'token not configured' };
-        const { testTushareToken, testEastmoneyToken } =
-          await import('./lib/researchApi/testConnection');
-        return provider === 'tushare'
-          ? await testTushareToken(token)
-          : await testEastmoneyToken(token);
-      } catch (err: any) {
-        return { ok: false, error: err?.message ?? String(err) };
-      }
-    });
-
-    // ===============================
-    // Research MCP Install IPC handlers
-    // ===============================
-
-    ipcMain.handle('researchMcp:isInstalled', async () => {
-      try {
-        const { getResearchMcpInstallManager } = await import('./lib/researchMcp');
-        return getResearchMcpInstallManager().isInstalled();
-      } catch (err: any) {
-        return false;
-      }
-    });
-
-    ipcMain.handle('researchMcp:install', async (event) => {
-      try {
-        const { getResearchMcpInstallManager } = await import('./lib/researchMcp');
-        const m = getResearchMcpInstallManager();
-        const onProgress = (p: any) => {
-          try { event.sender.send('researchMcp:progress', p); } catch { /* window closed */ }
-        };
-        const onLog = (line: string) => {
-          try { event.sender.send('researchMcp:log', line); } catch { /* window closed */ }
-        };
-        m.on('progress', onProgress);
-        m.on('log', onLog);
-        try {
-          const result = await m.install();
-          // 🆕 On successful install, kick the MCP client to (re)connect immediately
-          // so the server flips from "connecting" → "connected" without an app restart.
-          if (result?.ok) {
-            try {
-              const { mcpClientManager } = await import('./lib/mcpRuntime/mcpClientManager');
-              await mcpClientManager.reconnect('research-mcp');
-            } catch (e) {
-              console.warn('[research-mcp] post-install reconnect failed (non-fatal):', e instanceof Error ? e.message : String(e));
-            }
-          }
-          return result;
-        } finally {
-          m.off('progress', onProgress);
-          m.off('log', onLog);
-        }
-      } catch (err: any) {
-        return { ok: false, error: err?.message ?? String(err) };
-      }
-    });
-
-    ipcMain.handle('researchMcp:cancel', async () => {
-      try {
-        const { getResearchMcpInstallManager } = await import('./lib/researchMcp');
-        getResearchMcpInstallManager().cancel();
-        return { ok: true };
-      } catch (err: any) {
-        return { ok: false, error: err?.message ?? String(err) };
-      }
-    });
-
-    ipcMain.handle('researchMcp:reset', async () => {
-      try {
-        const { getResearchMcpInstallManager } = await import('./lib/researchMcp');
-        await getResearchMcpInstallManager().reset();
-        return { ok: true };
-      } catch (err: any) {
-        return { ok: false, error: err?.message ?? String(err) };
-      }
-    });
-
-    ipcMain.handle('researchMcp:getInstallMeta', async () => {
-      try {
-        const { getResearchMcpInstallManager } = await import('./lib/researchMcp');
-        return getResearchMcpInstallManager().getInstallMeta();
-      } catch {
-        return null;
-      }
-    });
-
-    ipcMain.handle('researchMcp:openLogsDir', async () => {
-      try {
-        const { shell } = await import('electron');
-        const logsDir = path.join(app.getPath('userData'), 'logs', 'research-mcp');
-        const fs = await import('fs');
-        fs.mkdirSync(logsDir, { recursive: true });
-        await shell.openPath(logsDir);
-        return { ok: true };
-      } catch (err: any) {
-        return { ok: false, error: err?.message ?? String(err) };
-      }
-    });
-
-    // ===============================
-    // Builtin Skills Seeder IPC
-    // ===============================
-
-    // Idempotently install all builtin skills for the current brand into the active user profile.
-    // Used by FRE Step 3.6 and (optionally) login-time bootstrap.
-    ipcMain.handle('builtinSkills:seed', async () => {
-      try {
-        if (!this.currentUserAlias) {
-          return { ok: false, error: 'No current user alias set' };
-        }
-        const { seedBuiltinSkills } = await import('./lib/skill/builtinSkillSeeder');
-        const brandName = process.env.BRAND_NAME || 'openkosmos';
-        const result = await seedBuiltinSkills(this.currentUserAlias, brandName);
-        return { ok: true, result };
-      } catch (err: any) {
-        return { ok: false, error: err?.message ?? String(err) };
-      }
+    registerInvestmentStudioIpc({
+      getCurrentUserAlias: () => this.currentUserAlias,
+      getProfileCacheManager,
     });
 
     // ===============================
@@ -4810,153 +4627,6 @@ class ElectronApp {
         const results = await memory.history(memoryId);
         
         return { success: true, data: results || [] };
-      } catch (error) {
-        return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
-      }
-    });
-
-    // ===============================
-    // Research workspace: Target ↔ Chat binding (researchChat:*)
-    // See docs/research-target-chat-binding.md
-    // All sessions are stored under the user's primary-agent chat config; the
-    // `targetCode` field on each ChatSession scopes them to a specific target.
-    // ===============================
-
-    // Resolve the chat_id used by the Research workspace (= primary agent's chat).
-    // Returns null if no current user, no profile, or no chats exist.
-    const resolveResearchChatId = async (): Promise<string | null> => {
-      if (!this.currentUserAlias) return null;
-      const pcManager = await getProfileCacheManager();
-      const profile = pcManager.getCachedProfile(this.currentUserAlias) as any;
-      if (!profile || !Array.isArray(profile.chats) || profile.chats.length === 0) return null;
-      const { getDefaultPrimaryAgentName } = await import('./lib/userDataADO/types/profile');
-      const primaryAgentName = profile.primaryAgent || getDefaultPrimaryAgentName(process.env.BRAND_NAME);
-      const primary = profile.chats.find((c: any) => c?.agent?.name === primaryAgentName);
-      return primary?.chat_id || profile.chats[0]?.chat_id || null;
-    };
-
-    // List chat sessions bound to the given target (null = global research scope).
-    // Returns the parent chat container id + metadata list (sorted desc by last_updated).
-    ipcMain.handle('researchChat:listByTarget', async (_event, targetCode: string | null) => {
-      try {
-        if (!this.currentUserAlias) return { success: false, error: 'No current user session' };
-        const chatId = await resolveResearchChatId();
-        if (!chatId) return { success: true, data: { chatId: null, sessions: [] } };
-        const pcManager = await getProfileCacheManager();
-        const all = await pcManager.getChatSessionsAsync(this.currentUserAlias, chatId);
-        const filtered = all.filter((s: any) => {
-          const sc = s.targetCode === undefined ? null : s.targetCode;
-          return sc === targetCode;
-        });
-        return { success: true, data: { chatId, sessions: filtered } };
-      } catch (error) {
-        return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
-      }
-    });
-
-    // Create a new chat session bound to a target (or global if targetCode === null).
-    // Returns the new chatSessionId.
-    ipcMain.handle('researchChat:create', async (
-      _event,
-      targetCode: string | null,
-      opts?: { title?: string; targetDir?: string }
-    ) => {
-      try {
-        if (!this.currentUserAlias) return { success: false, error: 'No current user session' };
-        const chatId = await resolveResearchChatId();
-        if (!chatId) return { success: false, error: 'No chat config found for current user' };
-
-        const { ChatSessionUtils } = await import('./lib/userDataADO/types/profile');
-        const sessionId = ChatSessionUtils.generateChatSessionId();
-        const nowIso = new Date().toISOString();
-        const title = (opts?.title?.trim()) || 'New Chat';
-
-        const sessionMeta = {
-          chatSession_id: sessionId,
-          last_updated: nowIso,
-          title,
-          targetCode,
-          ...(opts?.targetDir ? { targetDir: opts.targetDir } : {}),
-        };
-        const sessionFile = {
-          chatSession_id: sessionId,
-          last_updated: nowIso,
-          title,
-          chat_history: [],
-          context_history: [],
-          targetCode,
-          ...(opts?.targetDir ? { targetDir: opts.targetDir } : {}),
-        };
-
-        const pcManager = await getProfileCacheManager();
-        const ok = await pcManager.addChatSession(this.currentUserAlias, chatId, sessionMeta as any, sessionFile as any);
-        if (!ok) return { success: false, error: 'Failed to add chat session' };
-        return { success: true, data: { chatId, chatSessionId: sessionId } };
-      } catch (error) {
-        return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
-      }
-    });
-
-    // Delete a chat session by id (removes from index + deletes session file).
-    ipcMain.handle('researchChat:delete', async (_event, chatSessionId: string) => {
-      try {
-        if (!this.currentUserAlias) return { success: false, error: 'No current user session' };
-        const chatId = await resolveResearchChatId();
-        if (!chatId) return { success: false, error: 'No chat config found for current user' };
-        const pcManager = await getProfileCacheManager();
-        const ok = await pcManager.deleteChatSession(this.currentUserAlias, chatId, chatSessionId);
-        return ok ? { success: true } : { success: false, error: 'Failed to delete chat session' };
-      } catch (error) {
-        return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
-      }
-    });
-
-    // Rename a chat session (updates title in both index and session file).
-    ipcMain.handle('researchChat:rename', async (_event, chatSessionId: string, title: string) => {
-      try {
-        if (!this.currentUserAlias) return { success: false, error: 'No current user session' };
-        const trimmed = (title || '').trim();
-        if (!trimmed) return { success: false, error: 'Title cannot be empty' };
-        const chatId = await resolveResearchChatId();
-        if (!chatId) return { success: false, error: 'No chat config found for current user' };
-
-        const pcManager = await getProfileCacheManager();
-        const file = await pcManager.getChatSessionFile(this.currentUserAlias, chatId, chatSessionId);
-        if (!file) return { success: false, error: 'Chat session file not found' };
-        const nowIso = new Date().toISOString();
-        const updatedFile = { ...file, title: trimmed, last_updated: nowIso };
-        const ok = await pcManager.updateChatSession(
-          this.currentUserAlias,
-          chatId,
-          chatSessionId,
-          { title: trimmed, last_updated: nowIso },
-          updatedFile as any,
-        );
-        return ok ? { success: true } : { success: false, error: 'Failed to rename chat session' };
-      } catch (error) {
-        return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
-      }
-    });
-
-    // Record the most-recently-active chat session for a target.
-    ipcMain.handle('researchChat:setLastActive', async (_event, targetCode: string | null, chatSessionId: string) => {
-      try {
-        if (!this.currentUserAlias) return { success: false, error: 'No current user session' };
-        const pcManager = await getProfileCacheManager();
-        const ok = await pcManager.setLastActiveChatByTarget(this.currentUserAlias, targetCode, chatSessionId);
-        return ok ? { success: true } : { success: false, error: 'Failed to set last active chat' };
-      } catch (error) {
-        return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
-      }
-    });
-
-    // Get the most-recently-active chat session id for a target.
-    ipcMain.handle('researchChat:getLastActive', async (_event, targetCode: string | null) => {
-      try {
-        if (!this.currentUserAlias) return { success: false, error: 'No current user session' };
-        const pcManager = await getProfileCacheManager();
-        const sessionId = pcManager.getLastActiveChatByTarget(this.currentUserAlias, targetCode);
-        return { success: true, data: sessionId };
       } catch (error) {
         return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
       }

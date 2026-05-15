@@ -214,49 +214,8 @@ const FreSettingUpView: React.FC<FreSettingUpViewProps> = ({
       await installBuiltinAssets();
       console.log(`[FRE][SettingUp] Step 3.6: Built-in assets installation completed in ${Date.now() - builtinAssetsStartTime}ms`);
 
-      // Step 3.7: Install research-mcp Python venv — investment-studio brand only.
-      // Idempotent (no-op if already installed). Non-fatal on failure.
-      if (BRAND_NAME === 'investment-studio') {
-        const researchStartTime = Date.now();
-        try {
-          const researchApi: any = (window as any).electronAPI?.researchMcp;
-          if (researchApi?.isInstalled && researchApi?.install) {
-            const already = await researchApi.isInstalled();
-            if (already) {
-              console.log('[FRE][SettingUp] Step 3.7: research-mcp already installed, skipping');
-            } else {
-              console.log('[FRE][SettingUp] Step 3.7: Installing research engine (research-mcp Python venv)...');
-              setSetupStatus({
-                step: 'mcp-server',
-                message: 'Installing research engine (this may take a few minutes)...',
-                progress: 60,
-              });
-              // Bridge per-stage progress into FRE status so user sees activity.
-              const offProgress = researchApi.onProgress?.((p: any) => {
-                if (p?.message) {
-                  setSetupStatus({
-                    step: 'mcp-server',
-                    message: `Research engine: ${p.message}`,
-                    progress: 60 + Math.min(15, Math.floor((p.percent || 0) * 0.15)),
-                  });
-                }
-              });
-              try {
-                const r = await researchApi.install();
-                if (r?.ok) {
-                  console.log(`[FRE][SettingUp] Step 3.7: research-mcp installed in ${Date.now() - researchStartTime}ms`);
-                } else {
-                  console.warn('[FRE][SettingUp] Step 3.7: research-mcp install returned error:', r?.error);
-                }
-              } finally {
-                if (typeof offProgress === 'function') offProgress();
-              }
-            }
-          }
-        } catch (e) {
-          console.warn('[FRE][SettingUp] Step 3.7: research-mcp install threw (non-fatal):', e);
-        }
-      }
+      // Step 3.7: research-mcp Python venv — handled by background auto-install
+      // in runPostLoginSeeders (no manual FRE step needed).
 
       // Steps 4-6 depend on setupFlowType
       let agentResult: { chatId?: string; chatSessionId?: string } = { chatId: '', chatSessionId: '' };

@@ -29,6 +29,8 @@ export enum KosmosPlaceholder {
   RESEARCH_TUSHARE_TOKEN = '@KOSMOS_RESEARCH_TUSHARE_TOKEN',
   /** Research MCP user data directory */
   RESEARCH_USER_DATA_DIR = '@KOSMOS_RESEARCH_USER_DATA_DIR',
+  /** Portfolio root directory (investment-studio knowledge base) */
+  PORTFOLIO_DIR = '@KOSMOS_PORTFOLIO_DIR',
 }
 
 /**
@@ -50,6 +52,7 @@ const PLACEHOLDER_METADATA: Record<string, { type: PlaceholderType }> = {
   [KosmosPlaceholder.RESEARCH_RESOURCES_DIR]: { type: PlaceholderType.PATH },
   [KosmosPlaceholder.RESEARCH_TUSHARE_TOKEN]: { type: PlaceholderType.STRING },
   [KosmosPlaceholder.RESEARCH_USER_DATA_DIR]: { type: PlaceholderType.PATH },
+  [KosmosPlaceholder.PORTFOLIO_DIR]: { type: PlaceholderType.PATH },
 };
 
 /**
@@ -121,6 +124,9 @@ export class KosmosPlaceholderManager {
         break;
       case KosmosPlaceholder.RESEARCH_USER_DATA_DIR:
         value = getUserDataPath();
+        break;
+      case KosmosPlaceholder.PORTFOLIO_DIR:
+        value = path.join(getUserDataPath(), 'portfolio');
         break;
       default:
         console.warn(`[KosmosPlaceholderManager] Unknown placeholder: ${placeholder}`);

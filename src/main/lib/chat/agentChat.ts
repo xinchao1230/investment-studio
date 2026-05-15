@@ -510,7 +510,12 @@ export class AgentChat {
           }
           const hasChatSessionFiles = chatSessionFilesPath.length > 0;
 
-          if (hasKnowledgeBase || hasChatSessionFiles) {
+          // === Research Target Scope (read early for outer condition) ===
+          const targetCode = this.currentChatSession?.targetCode;
+          const targetDir = this.currentChatSession?.targetDir;
+          const hasTargetScope = !!(targetCode && targetDir);
+
+          if (hasKnowledgeBase || hasChatSessionFiles || hasTargetScope) {
             const sections: string[] = [];
             sections.push('\n---');
 
@@ -528,19 +533,26 @@ export class AgentChat {
 
             // === Research Target Scope (set when this chat is bound to a target) ===
             // When ChatSession is bound to a research target, narrow the working
-            // directory to that target's folder under the knowledge base. The
-            // research workspace UI binds chats to targets via `targetCode`/`targetDir`.
-            const targetCode = this.currentChatSession?.targetCode;
-            const targetDir = this.currentChatSession?.targetDir;
-            const hasTargetScope = !!(targetCode && targetDir && hasKnowledgeBase);
+            // directory to that target's folder. targetDir may be an absolute path
+            // (from research workspace) or relative to knowledgeBase.
             let targetAbsDir = '';
             let targetName = '';
             if (hasTargetScope) {
-              const sep = (knowledgeBasePath as string).includes('\\') ? '\\' : '/';
-              targetAbsDir = `${knowledgeBasePath}${sep}${targetDir}`;
+              const tdStr = targetDir as string;
+              const isAbsolute = /^[A-Za-z]:[\\/]|^\//.test(tdStr);
+              if (isAbsolute) {
+                targetAbsDir = tdStr;
+              } else if (hasKnowledgeBase) {
+                const sep = (knowledgeBasePath as string).includes('\\') ? '\\' : '/';
+                targetAbsDir = `${knowledgeBasePath}${sep}${tdStr}`;
+              } else {
+                targetAbsDir = tdStr; // fallback: use as-is
+              }
               // Dir name pattern: `${name}_${stockCode}` (see portfolioTools.ts).
-              const lastUnderscore = (targetDir as string).lastIndexOf('_');
-              targetName = lastUnderscore > 0 ? (targetDir as string).slice(0, lastUnderscore) : (targetDir as string);
+              const sepIdx = Math.max(targetAbsDir.lastIndexOf('/'), targetAbsDir.lastIndexOf('\\'));
+              const dirBaseName = sepIdx >= 0 ? targetAbsDir.slice(sepIdx + 1) : targetAbsDir;
+              const lastUnderscore = dirBaseName.lastIndexOf('_');
+              targetName = lastUnderscore > 0 ? dirBaseName.slice(0, lastUnderscore) : dirBaseName;
               sections.push(`\n**Research Target:** ${targetName} (${targetCode})`);
               sections.push(`- Target Directory: \`${targetAbsDir}\``);
               sections.push(`- All file/command operations for this conversation should default to this directory.`);

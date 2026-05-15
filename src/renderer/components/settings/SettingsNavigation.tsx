@@ -163,16 +163,6 @@ const SettingsNavigation: React.FC<SettingsNavigationProps> = ({ onBack }) => {
             ariaLabel="Research API tokens"
           />
 
-          {BRAND_NAME === 'investment-studio' && (
-            <NavItem
-              icon={<Terminal size={20} />}
-              label="投研引擎"
-              isActive={activeView === 'research-engine'}
-              onClick={() => navigate('/settings/research-engine')}
-              ariaLabel="Research Engine (research-mcp) install/reset"
-            />
-          )}
-
           <NavItem
             icon={<McpIcon />}
             label="MCP"

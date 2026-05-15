@@ -12,7 +12,12 @@
  */
 export const BUILTIN_SKILL_NAMES: string[] = [
   'skill-creator',
-  'stock-analyze', // investment-studio only (skipped at seed time for other brands)
+  'stock-analyze',    // investment-studio only
+  'earnings-forecast', // investment-studio only
+  'earnings-review',  // investment-studio only
+  'industry-comparison', // investment-studio only
+  'marginal-tracking', // investment-studio only
+  'stock-screening',  // investment-studio only
 ];
 
 /**
@@ -20,7 +25,15 @@ export const BUILTIN_SKILL_NAMES: string[] = [
  */
 export function getBuiltinSkillNamesForBrand(brandName: string): string[] {
   if (brandName === 'investment-studio') {
-    return ['skill-creator', 'stock-analyze'];
+    return [
+      'skill-creator',
+      'stock-analyze',
+      'earnings-forecast',
+      'earnings-review',
+      'industry-comparison',
+      'marginal-tracking',
+      'stock-screening',
+    ];
   }
   return ['skill-creator'];
 }

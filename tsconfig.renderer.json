@@ -34,6 +34,10 @@
   "exclude": [
     "node_modules",
     "dist",
-    "src/main"
+    "src/main/lib",
+    "src/main/bootstrap.ts",
+    "src/main/main.ts",
+    "src/main/investmentStudio",
+    "src/main/preload-screenshot"
   ]
 }

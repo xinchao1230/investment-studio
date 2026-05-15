@@ -492,6 +492,21 @@ export class VscodeMcpClient extends EventEmitter {
   
   private setState(newState: ConnectionState): void {
     this.currentState = newState;
+
+    // When entering error or stopped state, reject all pending requests to prevent
+    // sendRequestNoTimeout promises from hanging forever (which causes the
+    // MCPClientManager status to be stuck at 'connecting' indefinitely).
+    if (newState.state === 'error' || newState.state === 'stopped') {
+      const errorMsg = newState.message || 'Connection closed';
+      this.pendingRequests.forEach((pending) => {
+        if (pending.timeout) {
+          clearTimeout(pending.timeout);
+        }
+        pending.reject(new Error(errorMsg));
+      });
+      this.pendingRequests.clear();
+    }
+
     this.emit('stateChange', newState);
   }
   

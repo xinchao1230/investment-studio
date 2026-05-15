@@ -16,6 +16,7 @@ import * as path from 'path';
 import { skillManager } from './skillManager';
 import { profileCacheManager } from '../userDataADO/profileCacheManager';
 import { getBuiltinSkillNamesForBrand } from '../../../shared/constants/builtinSkills';
+import { isBuiltinAgent } from '../userDataADO/types/profile';
 import { createLogger } from '../unifiedLogger';
 
 const logger = createLogger();
@@ -137,17 +138,34 @@ export async function seedBuiltinSkills(
     }
   }
 
-  // After seeding, also ensure the active builtin agent has the freshly installed
-  // skills attached (profileCacheManager.ensureV2ProfileIntegrity does this on next
-  // load; we trigger a no-op profile refresh to apply immediately).
-  try {
-    const profile = profileCacheManager.getCachedProfile(userAlias);
-    if (profile) {
-      // Touch updatedAt to force re-sanitization on next read.
-      profile.updatedAt = new Date().toISOString();
+  // After seeding, ensure builtin agents have the freshly installed skills attached
+  // in their chat.agent.skills array (not just the global profile.skills list).
+  // sanitizeProfile does this on initial load, but addSkill only updates profile.skills.
+  if (result.installed.length > 0) {
+    try {
+      const profile = profileCacheManager.getCachedProfile(userAlias) as any;
+      if (profile && Array.isArray(profile.chats)) {
+        const installedNames = result.installed;
+        let changed = false;
+        for (const chat of profile.chats) {
+          if (chat.agent && isBuiltinAgent(chat.agent.name, brandName)) {
+            const agentSkills: string[] = Array.isArray(chat.agent.skills) ? chat.agent.skills : [];
+            const missing = installedNames.filter(s => !agentSkills.includes(s));
+            if (missing.length > 0) {
+              chat.agent.skills = [...agentSkills, ...missing];
+              changed = true;
+            }
+          }
+        }
+        if (changed) {
+          profile.updatedAt = new Date().toISOString();
+          // Persist + notify renderer immediately
+          await profileCacheManager.forceNotifyProfileDataManager(userAlias);
+        }
+      }
+    } catch {
+      // best effort
     }
-  } catch {
-    // best effort
   }
 
   logger.info(

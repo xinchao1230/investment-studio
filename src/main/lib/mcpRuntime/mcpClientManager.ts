@@ -1156,6 +1156,32 @@ export class MCPClientManager {
           advancedLogger?.info('[MCPClientManager] Replaced KOSMOS placeholders in env', '_performConnect', { serverName });
         }
       }
+
+      // Replace placeholders in command
+      if (serverConfig.command && typeof serverConfig.command === 'string' && containsKosmosPlaceholder(serverConfig.command)) {
+        serverConfig.command = kosmosPlaceholderManager.replacePlaceholders(serverConfig.command, { alias: this.currentUserAlias });
+        advancedLogger?.info('[MCPClientManager] Replaced KOSMOS placeholders in command', '_performConnect', { serverName });
+      }
+
+      // Replace placeholders in args
+      if (Array.isArray(serverConfig.args)) {
+        const alias = this.currentUserAlias;
+        let hasPlaceholder = false;
+        for (const arg of serverConfig.args) {
+          if (typeof arg === 'string' && containsKosmosPlaceholder(arg)) {
+            hasPlaceholder = true;
+            break;
+          }
+        }
+        if (hasPlaceholder) {
+          serverConfig.args = serverConfig.args.map(arg =>
+            typeof arg === 'string' && containsKosmosPlaceholder(arg)
+              ? kosmosPlaceholderManager.replacePlaceholders(arg, { alias })
+              : arg
+          );
+          advancedLogger?.info('[MCPClientManager] Replaced KOSMOS placeholders in args', '_performConnect', { serverName });
+        }
+      }
     }
 
     // 🆕 Refactor: Use internal methods to update state
