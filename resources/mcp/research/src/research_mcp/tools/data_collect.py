@@ -245,3 +245,64 @@ def peer_collect(
         return ok(paths=paths, summary=summary)
     except Exception as e:
         return fail(error=f"peer_collect failed: {e}", retryable=True)
+
+
+# ---------------------------------------------------------------------------
+# Tool 4: capital_flow
+# ---------------------------------------------------------------------------
+
+def _build_akshare_module():
+    """Return the akshare module."""
+    import akshare as ak
+    return ak
+
+
+def capital_flow(
+    symbol: str,
+    out_dir: str,
+    *,
+    _client=None,
+) -> dict:
+    """Fetch capital flow data for an A-share ticker via akshare (no token needed).
+
+    Fetches individual stock fund flow (main force net inflow) and market-wide
+    fund flow ranking data.
+
+    Args:
+        symbol: A-share ticker code (digits only, e.g. '600036' or with suffix '600036.SH').
+        out_dir: Absolute output directory.
+        _client: Injected akshare-like module for testing.
+
+    Returns:
+        Result dict with ok, paths, summary or error fields.
+    """
+    try:
+        os.makedirs(out_dir, exist_ok=True)
+        ak = _client or _build_akshare_module()
+        paths: list[str] = []
+        summary: dict = {"symbol": symbol}
+
+        # Normalize: strip suffix if present (akshare uses bare codes)
+        bare_code = symbol.split(".")[0]
+
+        # Individual stock fund flow
+        df_flow = ak.stock_individual_fund_flow(stock=bare_code, market="sh" if bare_code.startswith("6") else "sz")
+        if df_flow is None:
+            df_flow = pd.DataFrame()
+        p = Path(out_dir) / "individual_fund_flow.csv"
+        df_flow.to_csv(p, index=False)
+        paths.append("individual_fund_flow.csv")
+        summary["flow_rows"] = len(df_flow)
+
+        # Fund flow ranking (market-wide, latest day)
+        df_rank = ak.stock_individual_fund_flow_rank(indicator="today")
+        if df_rank is None:
+            df_rank = pd.DataFrame()
+        p = Path(out_dir) / "fund_flow_rank.csv"
+        df_rank.to_csv(p, index=False)
+        paths.append("fund_flow_rank.csv")
+        summary["rank_rows"] = len(df_rank)
+
+        return ok(paths=paths, summary=summary)
+    except Exception as e:
+        return fail(error=f"capital_flow failed: {e}", retryable=False)

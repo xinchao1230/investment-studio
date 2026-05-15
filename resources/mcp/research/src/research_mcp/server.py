@@ -54,6 +54,18 @@ async def list_tools() -> list[types.Tool]:
                 "required": ["ts_code", "peer_codes", "out_dir"],
             },
         ),
+        types.Tool(
+            name="capital_flow",
+            description="Fetch capital flow data for an A-share ticker via akshare (no token needed).",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "symbol": {"type": "string", "description": "A-share ticker, e.g. 600036 or 600036.SH"},
+                    "out_dir": {"type": "string", "description": "Absolute output directory"},
+                },
+                "required": ["symbol", "out_dir"],
+            },
+        ),
     ]
 
 @app.call_tool()
@@ -79,6 +91,12 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent]:
         result = peer_collect(
             ts_code=arguments["ts_code"],
             peer_codes=arguments["peer_codes"],
+            out_dir=arguments["out_dir"],
+        )
+    elif name == "capital_flow":
+        from .tools.data_collect import capital_flow
+        result = capital_flow(
+            symbol=arguments["symbol"],
             out_dir=arguments["out_dir"],
         )
     else:

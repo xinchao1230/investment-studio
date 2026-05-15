@@ -130,3 +130,45 @@ def test_peer_collect_handles_failure_gracefully(tmp_path):
     out = peer_collect("600036.SH", ["601166.SH"], str(tmp_path), _client=BoomClient())
     assert out["ok"] is False
     assert "peer_boom" in out["error"]
+
+from research_mcp.tools.data_collect import capital_flow
+
+
+# ===========================================================================
+# capital_flow
+# ===========================================================================
+
+class FakeAkshare:
+    def stock_individual_fund_flow(self, stock=None, market=None):
+        return pd.DataFrame({
+            "\u65e5\u671f": ["2023-12-29"],
+            "\u4e3b\u529b\u51c0\u6d41\u5165-\u51c0\u989d": [1.5e7],
+        })
+
+    def stock_individual_fund_flow_rank(self, indicator=None):
+        return pd.DataFrame({
+            "\u4ee3\u7801": ["600036", "601166"],
+            "\u540d\u79f0": ["\u62db\u5546\u94f6\u884c", "\u5174\u4e1a\u94f6\u884c"],
+            "\u6700\u65b0\u4ef7": [35.0, 18.0],
+        })
+
+
+def test_capital_flow_writes_expected_output(tmp_path):
+    out = capital_flow("600036.SH", str(tmp_path), _client=FakeAkshare())
+    assert out["ok"] is True
+    assert "individual_fund_flow.csv" in out["paths"]
+    assert "fund_flow_rank.csv" in out["paths"]
+    assert out["summary"]["flow_rows"] == 1
+    assert out["summary"]["rank_rows"] == 2
+    assert (tmp_path / "individual_fund_flow.csv").exists()
+
+
+def test_capital_flow_handles_failure_gracefully(tmp_path):
+    class BoomAk:
+        def stock_individual_fund_flow(self, **kw):
+            raise RuntimeError("ak_boom")
+
+    out = capital_flow("600036.SH", str(tmp_path), _client=BoomAk())
+    assert out["ok"] is False
+    assert "ak_boom" in out["error"]
+    assert out["retryable"] is False
