@@ -314,6 +314,14 @@ export interface ProfileV2 {
    * Used to auto-restore the right chat when re-selecting a target.
    */
   lastActiveChatByTarget?: Record<string, string>;
+  /**
+   * Research workspace: per-provider API tokens (plain text, same security
+   * level as mcp_servers[].env). Missing or empty string ⇒ not configured.
+   */
+  researchApiTokens?: {
+    tushare?: string;
+    eastmoney?: string;
+  };
 }
 
 /**
