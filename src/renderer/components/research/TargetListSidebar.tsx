@@ -78,6 +78,28 @@ export const TargetListSidebar: React.FC<TargetListSidebarProps> = ({
   onRenameChat,
 }) => {
   const [expandedCats, setExpandedCats] = useState<Set<string>>(new Set());
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const searchInputRef = React.useRef<HTMLInputElement | null>(null);
+
+  const toggleSearch = useCallback(() => {
+    setSearchOpen((open) => {
+      const next = !open;
+      if (!next) setSearchQuery('');
+      else setTimeout(() => searchInputRef.current?.focus(), 0);
+      return next;
+    });
+  }, []);
+
+  const q = searchQuery.trim().toLowerCase();
+  const filteredTargets = q
+    ? targets.filter(
+        (t) =>
+          t.name.toLowerCase().includes(q) ||
+          t.stock_code.toLowerCase().includes(q) ||
+          (t.industry ?? '').toLowerCase().includes(q),
+      )
+    : targets;
 
   const toggleCat = useCallback((key: string) => {
     setExpandedCats((prev) => {
@@ -115,9 +137,11 @@ export const TargetListSidebar: React.FC<TargetListSidebarProps> = ({
         <div className="flex-1" />
         <button
           type="button"
-          className="rw-side-icon-btn"
-          title="Search (coming soon)"
-          onClick={() => console.log('[Research] search clicked (placeholder)')}
+          className={`rw-side-icon-btn ${searchOpen ? 'is-active' : ''}`}
+          title="Search targets"
+          aria-label="Search targets"
+          aria-pressed={searchOpen}
+          onClick={toggleSearch}
         >
           <Search size={14} />
         </button>
@@ -141,6 +165,20 @@ export const TargetListSidebar: React.FC<TargetListSidebarProps> = ({
 
       {topSlot}
 
+      {searchOpen && (
+        <div className="px-3 py-2 rw-divider">
+          <input
+            ref={searchInputRef}
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Escape') toggleSearch(); }}
+            placeholder="名称 / 代码 / 行业"
+            className="w-full text-xs px-2 py-1 border border-[var(--rw-border)] rounded bg-white focus:outline-none focus:border-blue-500"
+          />
+        </div>
+      )}
+
       {/* Tree */}
       <div className="flex-1 overflow-y-auto pt-1">
         {targets.length === 0 && (
@@ -148,8 +186,13 @@ export const TargetListSidebar: React.FC<TargetListSidebarProps> = ({
             No targets yet
           </div>
         )}
+        {targets.length > 0 && filteredTargets.length === 0 && (
+          <div className="px-3 py-4 text-xs text-[var(--rw-text-3)] text-center">
+            无匹配结果
+          </div>
+        )}
 
-        {targets.map((target) => {
+        {filteredTargets.map((target) => {
           const code = target.stock_code;
           const isExpanded = expandedCodes.has(code);
           const files = filesByCode[code];
