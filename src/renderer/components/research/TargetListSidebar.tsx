@@ -87,30 +87,30 @@ export const TargetListSidebar: React.FC<TargetListSidebarProps> = ({
   onRenameChat,
 }) => {
   const [expandedCats, setExpandedCats] = useState<Set<string>>(new Set());
-  const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const searchInputRef = React.useRef<HTMLInputElement | null>(null);
 
-  const toggleSearch = useCallback(() => {
-    setSearchOpen((open) => {
-      const next = !open;
-      if (!next) setSearchQuery('');
-      else {
-        setTimeout(() => searchInputRef.current?.focus(), 0);
-        onOpenSearch?.();
-      }
-      return next;
-    });
-  }, [onOpenSearch]);
+  // Search is owned locally; add-form open state is owned by parent. We
+  // derive `searchOpen` so that whenever the parent shows the add-form,
+  // search is hidden in the same render — no useEffect, no race.
+  const [searchOpenLocal, setSearchOpenLocal] = useState(false);
+  const searchOpen = searchOpenLocal && !addFormOpen;
 
-  // When the add-target form opens, auto-close the search input so only
-  // one of the two stays visible.
-  React.useEffect(() => {
-    if (addFormOpen && searchOpen) {
-      setSearchOpen(false);
-      setSearchQuery('');
-    }
-  }, [addFormOpen, searchOpen]);
+  const openSearch = useCallback(() => {
+    if (addFormOpen) onOpenSearch?.();   // ask parent to close add-form
+    setSearchOpenLocal(true);
+    setTimeout(() => searchInputRef.current?.focus(), 0);
+  }, [addFormOpen, onOpenSearch]);
+
+  const closeSearch = useCallback(() => {
+    setSearchOpenLocal(false);
+    setSearchQuery('');
+  }, []);
+
+  const toggleSearch = useCallback(() => {
+    if (searchOpen) closeSearch();
+    else openSearch();
+  }, [searchOpen, openSearch, closeSearch]);
 
   const q = searchQuery.trim().toLowerCase();
   const filteredTargets = q
@@ -193,7 +193,7 @@ export const TargetListSidebar: React.FC<TargetListSidebarProps> = ({
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Escape') toggleSearch(); }}
+            onKeyDown={(e) => { if (e.key === 'Escape') closeSearch(); }}
             placeholder="名称 / 代码 / 行业"
             className="w-full text-xs px-2 py-1 border border-[var(--rw-border)] rounded bg-white focus:outline-none focus:border-blue-500"
           />
