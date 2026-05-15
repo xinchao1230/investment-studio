@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef, useEffect } from 'react';
+import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react';
 import { PanelLeftOpen } from 'lucide-react';
 import { TargetListSidebar } from './TargetListSidebar';
 import { ContentTabs, Tab } from './ContentTabs';
@@ -6,9 +6,18 @@ import { ResearchChatPane } from './ResearchChatPane';
 import { AddTargetSearch } from './AddTargetSearch';
 import { usePortfolio, TargetFile } from './usePortfolio';
 import { useTargetChats } from './useTargetChats';
+import { useTabsByCode } from './useTabsByCode';
+import {
+  openTab as openTabRec,
+  closeTab as closeTabRec,
+  activateTab as activateTabRec,
+  reconcileWithFileSystem,
+  sortedTabs,
+} from './tabState';
 import { LayoutProvider } from '../layout/LayoutProvider';
 import { PasteToWorkspaceProvider } from '../chat/workspace/PasteToWorkspaceProvider';
 import { agentChatSessionCacheManager } from '../../lib/chat/agentChatSessionCacheManager';
+import { profileDataManager } from '@renderer/lib/userData';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../ui/dialog';
 import { Button } from '../ui/button';
 import ResizableDivider from '../ui/ResizableDivider';
@@ -45,15 +54,27 @@ const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(v, hi
 export const ResearchPage: React.FC = () => {
   const { targets, loading, initTarget, deleteTarget, getTargetFiles } = usePortfolio();
   const [selectedCode, setSelectedCode] = useState<string | null>(null);
-  const [tabs, setTabs] = useState<Tab[]>([]);
-  const [activeTabId, setActiveTabId] = useState<string>('');
+  // Per-target tab state (persisted to localStorage). Each entry holds an
+  // ordered list of TabRecord (absPath + fractional sortKey) plus the
+  // currently-active absPath. Switching targets restores both order and
+  // active selection.
+  const profileAlias = profileDataManager.getCurrentUserAlias() ?? '';
+  const knownCodes = useMemo(
+    () => new Set(targets.map((t) => t.stock_code)),
+    [targets],
+  );
+  // Pass `null` until the portfolio finishes loading (so orphan cleanup
+  // doesn't fire with an empty knownCodes set and wipe valid state).
+  const { tabsByCode, setTabsByCode, flushNow } = useTabsByCode(
+    profileAlias,
+    loading ? null : knownCodes,
+  );
   const [showAddForm, setShowAddForm] = useState(false);
   const [addError, setAddError] = useState<string | null>(null);
   const [addBusy, setAddBusy] = useState(false);
 
   const [expandedCodes, setExpandedCodes] = useState<Set<string>>(new Set());
   const [filesByCode, setFilesByCode] = useState<Record<string, TargetFile[]>>({});
-  const [activeFileAbsPath, setActiveFileAbsPath] = useState<string | null>(null);
   // In-app confirm dialog state for delete-target. We avoid window.confirm()
   // because the native modal steals focus from the renderer; when the
   // following <AddTargetSearch> auto-mounts, its input.focus() becomes a
@@ -61,12 +82,24 @@ export const ResearchPage: React.FC = () => {
   const [pendingDelete, setPendingDelete] = useState<{ code: string; name: string } | null>(null);
   const [deleteBusy, setDeleteBusy] = useState(false);
 
+  // File-content cache, keyed by absPath. Populated lazily when a tab
+  // becomes visible. Not persisted (intentional — too big and re-readable).
+  // Bumping `contentCacheVersion` after a write triggers a re-render so
+  // visibleTabs picks up the new content.
+  const fileContentCacheRef = useRef<Map<string, { content: string; mtime: number }>>(new Map());
+  const [contentCacheVersion, setContentCacheVersion] = useState(0);
+  // Track in-flight reads to avoid duplicate fetches when visibleTabs churns.
+  const inflightReadsRef = useRef<Set<string>>(new Set());
+
   const filesByCodeRef = useRef(filesByCode);
   filesByCodeRef.current = filesByCode;
 
   const targetChats = useTargetChats();
   const targetsRef = useRef(targets);
   targetsRef.current = targets;
+  // Ref mirror of selectedCode so async effects can race-check it.
+  const selectedCodeRef = useRef(selectedCode);
+  selectedCodeRef.current = selectedCode;
 
   // --- 3-pane resizable layout state -----------------------------------
   const [leftWidth, setLeftWidth] = useState<number>(() => {
@@ -307,70 +340,63 @@ export const ResearchPage: React.FC = () => {
     [loadFiles, targetChats],
   );
 
+  // Reverse-lookup the target that owns an arbitrary absPath. Returns the
+  // stock_code or null if no target matches (e.g. the file's target was
+  // deleted between persistence and rehydration).
+  const findOwningCode = useCallback((absPath: string): string | null => {
+    const t = targetsRef.current.find((tt) => absPath.startsWith(tt.directory));
+    return t?.stock_code ?? null;
+  }, []);
+
+  // Async-load file content into the in-memory cache. Idempotent and
+  // de-duplicates concurrent reads of the same path.
+  const ensureContentLoaded = useCallback(async (absPath: string) => {
+    if (fileContentCacheRef.current.has(absPath)) return;
+    if (inflightReadsRef.current.has(absPath)) return;
+    inflightReadsRef.current.add(absPath);
+    try {
+      const result: any = await window.electronAPI.fs!.readFile(absPath, 'utf-8');
+      let text: string;
+      let mtime = 0;
+      if (result && result.success && typeof result.content === 'string') {
+        text = result.content;
+        if (typeof result.mtime === 'number') mtime = result.mtime;
+      } else {
+        const errMsg = result?.error ?? '请求失败';
+        text = `(无法读取文件: ${errMsg})`;
+      }
+      fileContentCacheRef.current.set(absPath, { content: text, mtime });
+    } catch (err: any) {
+      const msg = err?.message ?? String(err);
+      fileContentCacheRef.current.set(absPath, {
+        content: `(无法读取文件: ${msg})`,
+        mtime: 0,
+      });
+    } finally {
+      inflightReadsRef.current.delete(absPath);
+      setContentCacheVersion((v) => v + 1);
+    }
+  }, []);
+
   const handleOpenFile = useCallback(
     (file: TargetFile) => {
-      const tabId = file.absPath;
-      // Derive the breadcrumb prefix from whichever target this file belongs to.
-      // Format mirrors the screenshot reference: "<name>.<market>" (e.g. "携程集团.HK").
-      const owningTarget = targetsRef.current.find((t) => file.absPath.startsWith(t.directory));
-      const pathPrefix = owningTarget
-        ? `${owningTarget.name}.${owningTarget.stock_code.split('.').pop() ?? owningTarget.stock_code}`
-        : undefined;
-
-      let isNew = false;
-      setTabs((prev) => {
-        const existing = prev.find((t) => t.id === tabId);
-        if (existing) return prev;
-        isNew = true;
-        const newTab: Tab = {
-          id: tabId,
-          label: file.relPath.split('/').pop() ?? file.relPath,
-          filePath: file.absPath,
-          // Start with empty content; if the file is missing or empty it will
-          // simply render as an empty document (consistent across key-drivers.md,
-          // notes.md and tracking.md).
-          content: '',
-          type: 'markdown',
-          mtime: file.mtime,
-          pathPrefix,
-        };
-        return [...prev, newTab];
-      });
-      setActiveTabId(tabId);
-      setActiveFileAbsPath(file.absPath);
-
-      // Always (re)load file content on open so HMR / stale tabs never get
-      // stuck with empty content. Local file reads are cheap.
-      void (async () => {
-        try {
-          const result: any = await window.electronAPI.fs!.readFile(file.absPath, 'utf-8');
-          // eslint-disable-next-line no-console
-          console.debug('[ResearchPage] fs:readFile', file.absPath, {
-            success: result?.success,
-            size: result?.size,
-            contentLen: typeof result?.content === 'string' ? result.content.length : -1,
-            error: result?.error,
-          });
-          let text: string;
-          if (result && result.success && typeof result.content === 'string') {
-            text = result.content;
-          } else {
-            const errMsg = result?.error ?? '请求失败';
-            text = `(无法读取文件: ${errMsg})`;
-          }
-          setTabs((prev) => prev.map((t) => (t.id === tabId ? { ...t, content: text } : t)));
-        } catch (err: any) {
-          const msg = err?.message ?? String(err);
-          setTabs((prev) =>
-            prev.map((t) => (t.id === tabId ? { ...t, content: `(无法读取文件: ${msg})` } : t)),
-          );
-        }
-      })();
-      // Silence unused-var warning when not in dev; isNew is intentionally tracked
-      // for potential future use (e.g. focus management on new tabs).
-      void isNew;
+      const owningCode = findOwningCode(file.absPath);
+      if (!owningCode) {
+        console.warn('[ResearchPage] handleOpenFile: no owning target for', file.absPath);
+        return;
+      }
+      // If the file belongs to a different target than the currently-selected
+      // one, auto-switch so the user sees the tab they just opened.
+      if (selectedCodeRef.current !== owningCode) {
+        void handleSelectTarget(owningCode);
+      }
+      setTabsByCode((prev) => ({
+        ...prev,
+        [owningCode]: openTabRec(prev[owningCode], file.absPath),
+      }));
+      void ensureContentLoaded(file.absPath);
     },
-    [],
+    [findOwningCode, ensureContentLoaded, setTabsByCode, handleSelectTarget],
   );
 
   const handleOpenAddForm = useCallback(() => {
@@ -393,18 +419,35 @@ export const ResearchPage: React.FC = () => {
       setAddError(result.error || '添加失败');
       return;
     }
+    // Layer 2 of the anti-bug defense: even if a previous delete didn't flush
+    // (crash, race, etc.), defensively clear any persisted tab state for
+    // this stock_code so the newly-recreated target starts clean.
+    setTabsByCode((prev) => {
+      if (!(c in prev)) return prev;
+      const next = { ...prev };
+      delete next[c];
+      return next;
+    });
+    flushNow();
     setShowAddForm(false);
-  }, [initTarget]);
+  }, [initTarget, setTabsByCode, flushNow]);
 
   const handleCancelAddTarget = useCallback(() => {
     setShowAddForm(false);
     setAddError(null);
   }, []);
 
-  const handleTabSelect = useCallback((id: string) => {
-    setActiveTabId(id);
-    setActiveFileAbsPath(id);
-  }, []);
+  const handleTabSelect = useCallback(
+    (id: string) => {
+      const code = findOwningCode(id);
+      if (!code) return;
+      setTabsByCode((prev) => ({
+        ...prev,
+        [code]: activateTabRec(prev[code], id),
+      }));
+    },
+    [findOwningCode, setTabsByCode],
+  );
 
   const handleDeleteTarget = useCallback(
     async (code: string, name: string) => {
@@ -438,15 +481,24 @@ export const ResearchPage: React.FC = () => {
           ),
         );
       }
-      // Cleanup: close any open tabs belonging to this target, drop cached files,
-      // collapse the row, and clear selection if it was active.
-      const files = filesByCodeRef.current[code];
-      const absPathsToClose = new Set<string>(
-        (files ?? []).map((f) => f.absPath),
-      );
-      setTabs((prev) => prev.filter((t) => !absPathsToClose.has(t.id)));
-      setActiveTabId((prev) => (absPathsToClose.has(prev) ? '' : prev));
-      setActiveFileAbsPath((prev) => (prev && absPathsToClose.has(prev) ? null : prev));
+      // Cleanup: clear this target's tab state entirely (Layer 1 of the
+      // anti-bug defense against recreated same-stockCode targets) and flush
+      // synchronously so a quick re-add can't race with the debounced write.
+      setTabsByCode((prev) => {
+        if (!(code in prev)) return prev;
+        const next = { ...prev };
+        delete next[code];
+        return next;
+      });
+      flushNow();
+      // Drop cached file content belonging to this target's directory.
+      const owningTarget = targetsRef.current.find((t) => t.stock_code === code);
+      if (owningTarget) {
+        const prefix = owningTarget.directory;
+        for (const absPath of Array.from(fileContentCacheRef.current.keys())) {
+          if (absPath.startsWith(prefix)) fileContentCacheRef.current.delete(absPath);
+        }
+      }
       setFilesByCode((prev) => {
         const next = { ...prev };
         delete next[code];
@@ -460,21 +512,97 @@ export const ResearchPage: React.FC = () => {
       });
       setSelectedCode((prev) => (prev === code ? null : prev));
     },
-    [pendingDelete, deleteTarget, targetChats],
+    [pendingDelete, deleteTarget, targetChats, setTabsByCode, flushNow],
   );
 
   const handleTabClose = useCallback(
     (id: string) => {
-      setTabs((prev) => prev.filter((t) => t.id !== id));
-      if (activeTabId === id) {
-        const remaining = tabs.filter((t) => t.id !== id);
-        const nextId = remaining.length > 0 ? remaining[0].id : '';
-        setActiveTabId(nextId);
-        setActiveFileAbsPath(nextId || null);
-      }
+      const code = findOwningCode(id);
+      if (!code) return;
+      setTabsByCode((prev) => ({
+        ...prev,
+        [code]: closeTabRec(prev[code], id),
+      }));
     },
-    [activeTabId, tabs],
+    [findOwningCode, setTabsByCode],
   );
+
+  // Derived: tabs visible in the center pane (subset for the selected target).
+  // Reads from fileContentCacheRef; `contentCacheVersion` is in the deps so
+  // we re-derive whenever an async content read completes.
+  const visibleTabs: Tab[] = useMemo(() => {
+    if (!selectedCode) return [];
+    const target = targets.find((t) => t.stock_code === selectedCode);
+    if (!target) return [];
+    const state = tabsByCode[selectedCode];
+    if (!state) return [];
+    const pathPrefix = `${target.name}.${target.stock_code.split('.').pop() ?? target.stock_code}`;
+    return sortedTabs(state).map((rec) => {
+      const cached = fileContentCacheRef.current.get(rec.absPath);
+      return {
+        id: rec.absPath,
+        label: rec.absPath.split(/[\\/]/).pop() ?? rec.absPath,
+        filePath: rec.absPath,
+        content: cached?.content ?? '',
+        type: 'markdown' as const,
+        mtime: cached?.mtime ?? 0,
+        pathPrefix,
+      };
+    });
+    // contentCacheVersion intentionally tracked to refresh content cells.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedCode, tabsByCode, targets, contentCacheVersion]);
+
+  const activeTabId = (selectedCode && tabsByCode[selectedCode]?.activeAbsPath) || '';
+  const activeFileAbsPath: string | null = activeTabId || null;
+
+  // Lazily load file content for any visible tab that hasn't been read yet.
+  useEffect(() => {
+    for (const t of visibleTabs) {
+      if (!fileContentCacheRef.current.has(t.id)) {
+        void ensureContentLoaded(t.id);
+      }
+    }
+  }, [visibleTabs, ensureContentLoaded]);
+
+  // Reconcile persisted tab state with the filesystem when the user switches
+  // target. Files that no longer exist are dropped; if the active tab was
+  // dropped, fall back right-first-then-left over the original sort order.
+  useEffect(() => {
+    if (!selectedCode) return;
+    const state = tabsByCode[selectedCode];
+    if (!state || state.tabs.length === 0) return;
+    const absPaths = state.tabs.map((r) => r.absPath);
+    let cancelled = false;
+    (async () => {
+      const checks = await Promise.all(
+        absPaths.map(async (p) => {
+          try {
+            const exists = await window.electronAPI.fs!.exists(p);
+            return { p, ok: exists === true };
+          } catch {
+            return { p, ok: false };
+          }
+        }),
+      );
+      if (cancelled) return;
+      if (selectedCodeRef.current !== selectedCode) return;
+      const validPaths = new Set(checks.filter((c) => c.ok).map((c) => c.p));
+      if (validPaths.size === absPaths.length) return; // all good
+      setTabsByCode((prev) => {
+        const cur = prev[selectedCode];
+        if (!cur) return prev;
+        const next = reconcileWithFileSystem(cur, validPaths);
+        if (next === cur) return prev;
+        return { ...prev, [selectedCode]: next };
+      });
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // tabsByCode intentionally omitted; we only re-check on target switch.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedCode, setTabsByCode]);
 
   if (loading) {
     return (
@@ -557,7 +685,7 @@ export const ResearchPage: React.FC = () => {
         />
       )}
       <ContentTabs
-        tabs={tabs}
+        tabs={visibleTabs}
         activeTabId={activeTabId}
         onTabSelect={handleTabSelect}
         onTabClose={handleTabClose}
