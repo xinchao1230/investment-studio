@@ -81,7 +81,7 @@ export function useTargetChats(): UseTargetChatsApi {
     async (code: string, target: Target | undefined): Promise<ActiveChat | null> => {
       try {
         const created = await researchChatIpc.create(code, {
-          title: 'New chat',
+          title: 'New Chat',
           targetDir: target?.directory,
         });
         const { sessions } = await researchChatIpc.listByTarget(code);

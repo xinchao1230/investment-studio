@@ -4696,7 +4696,7 @@ class ElectronApp {
         const { ChatSessionUtils } = await import('./lib/userDataADO/types/profile');
         const sessionId = ChatSessionUtils.generateChatSessionId();
         const nowIso = new Date().toISOString();
-        const title = (opts?.title?.trim()) || 'New chat';
+        const title = (opts?.title?.trim()) || 'New Chat';
 
         const sessionMeta = {
           chatSession_id: sessionId,
