@@ -36,8 +36,18 @@ export interface StockSuggestion {
 }
 
 const ENDPOINT = 'https://searchapi.eastmoney.com/api/suggest/get';
-const TOKEN = 'D43BF722C8E33BDC906FB84D85E326E8';
+const FALLBACK_TOKEN = 'D43BF722C8E33BDC906FB84D85E326E8';
 const REQUEST_TIMEOUT_MS = 5000;
+
+async function resolveToken(): Promise<string> {
+  try {
+    const api = (window as any).electronAPI?.researchApi;
+    const t = await api?.getToken('eastmoney');
+    return typeof t === 'string' && t.length > 0 ? t : FALLBACK_TOKEN;
+  } catch {
+    return FALLBACK_TOKEN;
+  }
+}
 
 function mapMarket(mktnum: string): StockSuggestion['market'] {
   switch (mktnum) {
@@ -59,9 +69,10 @@ async function fetchSuggest(query: string): Promise<any> {
   // The endpoint requires a `cb` parameter — without it the response body is
   // empty. We pass a unique callback name and strip the JSONP wrapper.
   const cb = `__rwStockSuggest_${Date.now()}_${++jsonpSeq}`;
+  const token = await resolveToken();
   const url =
     `${ENDPOINT}?input=${encodeURIComponent(query)}` +
-    `&type=14&token=${TOKEN}&count=20&cb=${cb}`;
+    `&type=14&token=${token}&count=20&cb=${cb}`;
 
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), REQUEST_TIMEOUT_MS);
