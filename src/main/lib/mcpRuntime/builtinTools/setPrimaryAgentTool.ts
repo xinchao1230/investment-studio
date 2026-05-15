@@ -8,6 +8,7 @@
 
 import { BuiltinToolDefinition } from './types';
 import { profileCacheManager } from '../../userDataADO';
+import { getDefaultPrimaryAgentName } from '../../userDataADO/types/profile';
 
 /**
  * Tool input arguments interface
@@ -107,7 +108,7 @@ export class SetPrimaryAgentTool {
       // Read the current primaryAgent property
       const previousPrimaryAgent = typeof profile.primaryAgent === 'string'
         ? profile.primaryAgent
-        : 'Kobi';
+        : getDefaultPrimaryAgentName(process.env.BRAND_NAME);
 
       // If already the primary agent, return success directly
       if (previousPrimaryAgent === agentName) {

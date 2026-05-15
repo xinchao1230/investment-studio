@@ -12,6 +12,11 @@
  width: 100%;
  padding: 0 24px; /* left right 24px padding */
  margin-bottom: 20px; /* with ChatInput between 's spacing */
+ /* Establish an inline-size container so child layout can react to the
+    actual pane width (e.g. narrow Research chat pane) regardless of the
+    viewport width. */
+ container-type: inline-size;
+ container-name: chat-zero-states;
 }
 
 /* Greeting */
@@ -146,4 +151,88 @@
  -webkit-box-orient: vertical;
  overflow: hidden;
  text-overflow: ellipsis;
+}
+
+/* ============================================================
+ * Narrow-pane adaptation (e.g. Research chat side panel)
+ *
+ * When the .chat-zero-states container is below ~480px wide,
+ * switch the quick-start cards from a horizontally-scrolling
+ * row of fixed-width (240px) cards to a vertical stack of
+ * full-width compact cards. The card image area is hidden
+ * (it's optional and most agents don't provide one), and
+ * paddings / radii / line clamps are tightened so the cards
+ * feel native at narrow widths rather than cramped.
+ * ============================================================ */
+@container chat-zero-states (max-width: 480px) {
+ .quick-start-list {
+  flex-direction: column;
+  flex-wrap: nowrap;
+  gap: 8px;
+  overflow-x: visible;
+  overflow-y: visible;
+  padding-bottom: 0;
+ }
+
+ .quick-start-card {
+  width: 100%;
+  min-width: 0; /* allow shrink */
+  padding: 12px 16px;
+  border-radius: 16px;
+  align-items: stretch;
+  gap: 4px;
+ }
+
+ /* Hide the (often empty) image area to reclaim vertical space */
+ .quick-start-card-image {
+  display: none;
+ }
+
+ .quick-start-card-description {
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+ }
+
+ .chat-zero-states-greeting {
+  font-size: 18px;
+ }
+}
+
+/* ============================================================
+ * Medium / wide adaptation
+ *
+ * Once the container is wider than the narrow threshold,
+ * switch from a horizontal-scrolling row of fixed-width cards
+ * to a fluid CSS grid that auto-reflows: more columns appear
+ * as the pane grows, and cards stretch to share the row evenly.
+ * This removes horizontal scrolling at all sizes and lets the
+ * layout adapt continuously as the Assistant area is resized.
+ *
+ *   ~480 –  ~700px : 2 columns
+ *   ~700 –  ~920px : 3 columns
+ *   ~920px+        : 4+ columns (or wider cards if fewer items)
+ * ============================================================ */
+@container chat-zero-states (min-width: 481px) {
+ .quick-start-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 16px;
+  overflow-x: visible;
+  overflow-y: visible;
+  padding-bottom: 0;
+ }
+
+ .quick-start-card {
+  width: 100%;
+  min-width: 0; /* allow grid to size the card */
+ }
+}
+
+/* ============================================================
+ * Research pane: hide the zero-states (greeting + quick_starts)
+ * when a research target is selected. Only show when the user
+ * has not picked any target yet (or the global "未选择标的" state).
+ * ============================================================ */
+.rw-pane-right[data-target-selected="true"] .chat-zero-states {
+ display: none;
 }

@@ -39,6 +39,8 @@ import {
 import { agentChatIpc } from '../../lib/chat/agentChatIpc';
 import { profileDataManager } from '../../lib/userData';
 import { AgentContextType } from '../../types/agentContextTypes';
+import { BRAND_NAME } from '@shared/constants/branding';
+import { getDefaultPrimaryAgentName } from '../../../main/lib/userDataADO/types/profile';
 
 // Compact (embedded) mode: ensure the backend has an active chat session.
 // If not, pick the primary agent (or first chat) from the profile and start
@@ -55,7 +57,7 @@ async function ensureCompactChatSession(): Promise<void> {
     }
     const profile = profileDataManager.getProfile() as any;
     if (!profile) return;
-    const primaryAgentName = profile.primaryAgent || 'Kobi';
+    const primaryAgentName = profile.primaryAgent || getDefaultPrimaryAgentName(BRAND_NAME);
     const chats = profile.chats || [];
     if (chats.length === 0) return;
     const primaryChat = chats.find((c: any) => c.agent?.name === primaryAgentName);

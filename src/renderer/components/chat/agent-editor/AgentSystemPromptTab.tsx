@@ -4,6 +4,8 @@ import '../../../styles/Agent.css';
 import { TabComponentProps } from './types'
 import MarkdownEditor from './MarkdownEditor'
 import { useToast } from '../../ui/ToastProvider'
+import { BRAND_NAME } from '@shared/constants/branding'
+import { getDefaultPrimaryAgentName } from '../../../../main/lib/userDataADO/types/profile'
 
 const AgentSystemPromptTab: React.FC<TabComponentProps> = ({
   mode,
@@ -14,11 +16,11 @@ const AgentSystemPromptTab: React.FC<TabComponentProps> = ({
   cachedData,
   readOnly = false
 }) => {
-  // Check if this is a Kobi Agent (system prompt modification disabled)
-  const isKobiAgent = agentData?.name?.toLowerCase() === 'kobi'
+  // Check if this is the brand's default built-in Agent (system prompt modification disabled)
+  const isDefaultBuiltinAgent = agentData?.name?.toLowerCase() === getDefaultPrimaryAgentName(BRAND_NAME).toLowerCase()
   
-  // Check if editing is disabled (read-only mode or Kobi Agent)
-  const isEditDisabled = readOnly || isKobiAgent
+  // Check if editing is disabled (read-only mode or the brand's default built-in agent)
+  const isEditDisabled = readOnly || isDefaultBuiltinAgent
   
   const [systemPrompt, setSystemPrompt] = useState('')
   const [showPreview, setShowPreview] = useState(false)

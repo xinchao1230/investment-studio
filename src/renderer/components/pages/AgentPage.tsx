@@ -8,6 +8,8 @@ import { useAgentConfig } from '../userData/userDataProvider';
 import { useToast } from '../ui/ToastProvider';
 import { profileDataManager } from '../../lib/userData';
 import { FreOverlay } from '../fre';
+import { BRAND_NAME } from '@shared/constants/branding';
+import { getDefaultPrimaryAgentName } from '../../../main/lib/userDataADO/types/profile';
 // Read data from AgentChatSessionCacheManager
 import {
   useMessages,
@@ -145,7 +147,7 @@ export const AgentPage: React.FC = () => {
         return;
       }
       
-      const primaryAgentName = (profile as any).primaryAgent || 'Kobi';
+      const primaryAgentName = (profile as any).primaryAgent || getDefaultPrimaryAgentName(BRAND_NAME);
       const chats = (profile as any).chats || [];
       console.log('[AgentPage] Primary agent name:', primaryAgentName, 'Chats count:', chats.length);
       

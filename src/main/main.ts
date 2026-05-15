@@ -4657,7 +4657,8 @@ class ElectronApp {
       const pcManager = await getProfileCacheManager();
       const profile = pcManager.getCachedProfile(this.currentUserAlias) as any;
       if (!profile || !Array.isArray(profile.chats) || profile.chats.length === 0) return null;
-      const primaryAgentName = profile.primaryAgent || 'Kobi';
+      const { getDefaultPrimaryAgentName } = await import('./lib/userDataADO/types/profile');
+      const primaryAgentName = profile.primaryAgent || getDefaultPrimaryAgentName(process.env.BRAND_NAME);
       const primary = profile.chats.find((c: any) => c?.agent?.name === primaryAgentName);
       return primary?.chat_id || profile.chats[0]?.chat_id || null;
     };

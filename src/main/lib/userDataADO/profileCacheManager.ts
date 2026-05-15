@@ -16,6 +16,8 @@ import {
   BrowserControlSettings,
   DEFAULT_PROFILE_V2,
   DEFAULT_CHAT_AGENT,
+  getDefaultChatAgent,
+  getDefaultPrimaryAgentName,
   DEFAULT_MCP_SERVER,
   DEFAULT_CHAT_SESSION,
   DEFAULT_VOICE_INPUT_SETTINGS,
@@ -309,7 +311,7 @@ export class ProfileCacheManager {
         updatedAt: profile.updatedAt || new Date().toISOString(),
         alias: profile.alias || '',
         freDone: typeof profile.freDone === 'boolean' ? profile.freDone : false,
-        primaryAgent: profile.primaryAgent || 'Kobi',
+        primaryAgent: profile.primaryAgent || getDefaultPrimaryAgentName(BRAND_NAME),
         mcp_servers: cleanMcpServers,
         skills: Array.isArray(profile.skills) ? profile.skills.map(skill => ({
           name: skill.name || '',
@@ -330,7 +332,7 @@ export class ProfileCacheManager {
         updatedAt: new Date().toISOString(),
         alias: profile.alias || '',
         freDone: false,
-        primaryAgent: 'Kobi',
+        primaryAgent: getDefaultPrimaryAgentName(BRAND_NAME),
         mcp_servers: [],
         skills: [],
         chats: [this.createDefaultChat()],
@@ -482,13 +484,20 @@ export class ProfileCacheManager {
       
       // 🔧 Check and ensure primaryAgent field exists (new field migration)
       if (!profileCopy.primaryAgent || typeof profileCopy.primaryAgent !== 'string') {
-        profileCopy.primaryAgent = 'Kobi';
+        profileCopy.primaryAgent = getDefaultPrimaryAgentName(BRAND_NAME);
         needsSave = true;
       }
       
-      // 🔧 Migrate old primaryAgent value from "Kosmos" to "Kobi"
+      // 🔧 Migrate old primaryAgent value from "Kosmos" to brand-specific default
       if (profileCopy.primaryAgent === 'Kosmos') {
-        profileCopy.primaryAgent = 'Kobi';
+        profileCopy.primaryAgent = getDefaultPrimaryAgentName(BRAND_NAME);
+        needsSave = true;
+      }
+
+      // 🔧 investment-studio brand: migrate Kobi → Stella for the primaryAgent field.
+      // Idempotent — only flips when the existing value is exactly 'Kobi'.
+      if (BRAND_NAME === 'investment-studio' && profileCopy.primaryAgent === 'Kobi') {
+        profileCopy.primaryAgent = 'Stella';
         needsSave = true;
       }
       
@@ -753,6 +762,27 @@ export class ProfileCacheManager {
             updatedAgent.emoji = '🐬';
             agentNeedsUpdate = true;
           }
+
+          // 🔧 Step 4.1: investment-studio brand — migrate the bundled Kobi default agent to Stella.
+          // Guarded so we only rewrite agents that still look like the pristine Kobi default:
+          //   • brand === 'investment-studio'
+          //   • current name is exactly 'Kobi'
+          //   • current system_prompt matches DEFAULT_CHAT_AGENT.system_prompt verbatim
+          //     (so user-customized Kobi agents are left untouched)
+          if (
+            BRAND_NAME === 'investment-studio' &&
+            updatedAgent.name === 'Kobi' &&
+            updatedAgent.system_prompt === DEFAULT_CHAT_AGENT.system_prompt
+          ) {
+            const stellaTemplate = getDefaultChatAgent('investment-studio');
+            updatedAgent.name = stellaTemplate.name;
+            updatedAgent.emoji = stellaTemplate.emoji;
+            updatedAgent.role = stellaTemplate.role;
+            updatedAgent.system_prompt = stellaTemplate.system_prompt;
+            updatedAgent.skills = [...(stellaTemplate.skills || [])];
+            updatedAgent.zero_states = stellaTemplate.zero_states;
+            agentNeedsUpdate = true;
+          }
           
           // 🆕 Step 4.5: Ensure builtin agents include all builtin skills
           if (isBuiltinAgent(updatedAgent.name, BRAND_NAME)) {
@@ -796,7 +826,7 @@ export class ProfileCacheManager {
         updatedAt: new Date().toISOString(),
         alias: profile.alias || alias,
         freDone: false,
-        primaryAgent: 'Kobi',
+        primaryAgent: getDefaultPrimaryAgentName(BRAND_NAME),
         mcp_servers: profile.mcp_servers || [],
         skills: profile.skills || [],
         chats: [this.createDefaultChat()]
@@ -812,7 +842,7 @@ export class ProfileCacheManager {
     return {
       chat_id: this.generateChatId(),
       chat_type: 'single_agent',
-      agent: { ...DEFAULT_CHAT_AGENT, workspace: '' }
+      agent: { ...getDefaultChatAgent(BRAND_NAME), workspace: '' }
     };
   }
 
@@ -1044,13 +1074,14 @@ export class ProfileCacheManager {
   private isDefaultChatConfig(chat: ChatConfig): boolean {
     // Characteristics of a default chat:
     // 1. agent.role is "Default Assistant"
-    // 2. agent.name is "Kobi"
+    // 2. agent.name is the brand's default primary agent (Kobi for openkosmos, Stella for investment-studio)
     // 3. agent has no custom mcp_servers (only the default builtin-tools or empty)
     // Note: chatSessions are no longer part of ChatConfig; they are loaded at runtime.
     
     if (!chat.agent) return true;
     
-    const isDefaultAgent = chat.agent.role === 'Default Assistant' && chat.agent.name === 'Kobi';
+    const defaultPrimaryAgentName = getDefaultPrimaryAgentName(BRAND_NAME);
+    const isDefaultAgent = chat.agent.role === 'Default Assistant' && chat.agent.name === defaultPrimaryAgentName;
     const hasNoCustomMcpServers = !chat.agent.mcp_servers ||
       chat.agent.mcp_servers.length === 0 ||
       (chat.agent.mcp_servers.length === 1 && chat.agent.mcp_servers[0].name === 'builtin-tools');
@@ -1161,7 +1192,7 @@ export class ProfileCacheManager {
       updatedAt: now,
       alias,
       freDone: false,
-      primaryAgent: 'Kobi',
+      primaryAgent: getDefaultPrimaryAgentName(BRAND_NAME),
       mcp_servers: [],
       skills: [],
       chats: [this.createDefaultChat()]
@@ -1951,9 +1982,9 @@ export class ProfileCacheManager {
           ...agentUpdates
         };
       } else {
-        // No existing agent — create a new one
+        // No existing agent — create a new one (brand-aware default template)
         profile.chats[chatIndex].agent = {
-          ...DEFAULT_CHAT_AGENT,
+          ...getDefaultChatAgent(BRAND_NAME),
           ...agentUpdates
         };
       }

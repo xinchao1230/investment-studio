@@ -12,7 +12,8 @@
  * - Error handling and validation
  */
 
-import { ChatConfig, ChatAgent, DEFAULT_CHAT_AGENT } from '../../../main/lib/userDataADO/types/profile';
+import { ChatConfig, ChatAgent, DEFAULT_CHAT_AGENT, getDefaultChatAgent } from '../../../main/lib/userDataADO/types/profile';
+import { BRAND_NAME } from '@shared/constants/branding';
 
 /**
  * Chat operation result interface
@@ -128,7 +129,7 @@ export class ChatOpsManager {
 
       // Ensure agent exists for single_agent type
       if (finalChatConfig.chat_type === 'single_agent' && !finalChatConfig.agent) {
-        finalChatConfig.agent = { ...DEFAULT_CHAT_AGENT, workspace: '' };
+        finalChatConfig.agent = { ...getDefaultChatAgent(BRAND_NAME), workspace: '' };
       }
 
       const result = await (window as any).electronAPI.profile.addChatConfig(finalChatConfig);
@@ -409,7 +410,7 @@ export class ChatOpsManager {
       chat_id: generateChatId(),
       chat_type: 'single_agent',
       agent: {
-        ...DEFAULT_CHAT_AGENT,
+        ...getDefaultChatAgent(BRAND_NAME),
         workspace: '', // 🔄 workspace is now at the agent level, backend will auto-set the default path
         ...customAgent
       }

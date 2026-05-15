@@ -7,6 +7,8 @@ import { TabComponentProps, AgentMcpServer } from './types';
 import { useMCPServers } from '../../userData/userDataProvider';
 import { useLayout } from '../../layout/LayoutProvider';
 import { useToast } from '../../ui/ToastProvider';
+import { BRAND_NAME } from '@shared/constants/branding';
+import { getDefaultPrimaryAgentName } from '../../../../main/lib/userDataADO/types/profile';
 
 // Built-in server name constant
 const BUILTIN_SERVER_NAME = 'builtin-tools';
@@ -131,12 +133,14 @@ const AgentMcpServersTab: React.FC<TabComponentProps> = ({
     }
   }, [serverSelections, hasChanges, isInitialized, onDataChange]);
 
-  // Check if this is a Kobi Agent (default agent, builtin-tools modification disabled)
-  const isKobiAgent = useMemo(() => {
-    return agentData?.name?.toLowerCase() === 'kobi';
+  // Check if this is the brand's default built-in Agent (Kobi for openkosmos, Stella for
+  // investment-studio). For these agents we lock down the builtin-tools server so users
+  // cannot deselect / modify the core MCP toolset.
+  const isDefaultBuiltinAgent = useMemo(() => {
+    return agentData?.name?.toLowerCase() === getDefaultPrimaryAgentName(BRAND_NAME).toLowerCase();
   }, [agentData?.name]);
   
-  // Check if editing is disabled (read-only mode or Kobi Agent built-in tools)
+  // Check if editing is disabled (read-only mode or default built-in agent's built-in tools)
   const isEditDisabled = readOnly;
 
   // Check if server is selected (fully or partially)
@@ -298,7 +302,7 @@ const AgentMcpServersTab: React.FC<TabComponentProps> = ({
   // Toggle server selection state
   const handleServerToggle = useCallback(
     (serverName: string, serverTools: any[]) => {
-      if (isKobiAgent && serverName === BUILTIN_SERVER_NAME) {
+      if (isDefaultBuiltinAgent && serverName === BUILTIN_SERVER_NAME) {
         return;
       }
 
@@ -361,7 +365,7 @@ const AgentMcpServersTab: React.FC<TabComponentProps> = ({
         return newSelections;
       });
     },
-    [isKobiAgent, getAllSelectedToolNames, showError],
+    [isDefaultBuiltinAgent, getAllSelectedToolNames, showError],
   );
 
   // Toggle tool selection state
@@ -600,7 +604,7 @@ const AgentMcpServersTab: React.FC<TabComponentProps> = ({
                   const serverTools = server.tools || [];
                   const currentState = getCurrentState(server);
                   const isBuiltinServer = server.name === BUILTIN_SERVER_NAME;
-                  const isDisabled = isEditDisabled || (isKobiAgent && isBuiltinServer);
+                  const isDisabled = isEditDisabled || (isDefaultBuiltinAgent && isBuiltinServer);
                   const isSelected = isServerSelected(server.name);
                   const isFullySelected = isServerFullySelected(
                     server.name,

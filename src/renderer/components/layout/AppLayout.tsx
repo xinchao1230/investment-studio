@@ -13,7 +13,8 @@ import { WorkspaceMenuActions } from '../chat/workspace/WorkspaceExplorerSidepan
 import { PasteToWorkspaceProvider } from '../chat/workspace/PasteToWorkspaceProvider';
 import { OverlayImageViewer } from '../ui/OverlayImageViewer';
 import { OverlayFileViewer, OverlayFileDescriptor } from '../ui/OverlayFileViewer';
-import { BRAND_CONFIG } from '@shared/constants/branding';
+import { BRAND_CONFIG, BRAND_NAME } from '@shared/constants/branding';
+import { getDefaultPrimaryAgentName } from '../../../main/lib/userDataADO/types/profile';
 import ApplySkillToAgentsDialog from '../skills/ApplySkillToAgentsDialog';
 import {
   AgentDropdownMenu,
@@ -868,7 +869,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({
             // 🔧 Refresh profile data to get latest chats list
             await profileDataManager.refresh();
             const profileCache = profileDataManager.getCache();
-            const primaryAgentName = profileCache?.profile?.primaryAgent || 'Kobi';
+            const primaryAgentName = profileCache?.profile?.primaryAgent || getDefaultPrimaryAgentName(BRAND_NAME);
             
             // 🔧 Get chats from latest profileCache instead of using stale chats from closure
             const latestChats = profileCache?.chats || [];

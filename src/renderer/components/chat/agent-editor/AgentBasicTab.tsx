@@ -7,6 +7,8 @@ import EmojiPicker from './EmojiPicker'
 import { useToast } from '../../ui/ToastProvider'
 import { useChats } from '../../userData/userDataProvider'
 import { AgentAvatar } from '../../common/AgentAvatar'
+import { BRAND_NAME } from '@shared/constants/branding'
+import { getDefaultPrimaryAgentName } from '../../../../main/lib/userDataADO/types/profile'
 
 const AgentBasicTab: React.FC<TabComponentProps> = ({
   mode,
@@ -45,13 +47,14 @@ const AgentBasicTab: React.FC<TabComponentProps> = ({
   const [loadedAgentId, setLoadedAgentId] = useState<string | null>(null)
   const [nameWarning, setNameWarning] = useState<string>('')
   
-  // Check if this is a Kobi Agent (emoji modification disabled)
-  const isKobiAgent = agentData?.name?.toLowerCase() === 'kobi'
+  // Check if this is the brand's default built-in Agent (emoji / name / avatar locked)
+  const defaultAgentName = getDefaultPrimaryAgentName(BRAND_NAME)
+  const isDefaultBuiltinAgent = agentData?.name?.toLowerCase() === defaultAgentName.toLowerCase()
   
   // Editing permissions:
-  // - avatar/emoji/name: not editable for Kobi
+  // - avatar/emoji/name: not editable for the brand's default built-in agent
   // - model: editable
-  const isAvatarNameDisabled = readOnly || isKobiAgent
+  const isAvatarNameDisabled = readOnly || isDefaultBuiltinAgent
   const isModelDisabled = readOnly
   
   // Initial data for comparing changes
@@ -265,7 +268,7 @@ const AgentBasicTab: React.FC<TabComponentProps> = ({
             <div
               className={`emoji-display ${isAvatarNameDisabled ? 'disabled' : ''}`}
               onClick={() => !isAvatarNameDisabled && setShowEmojiPicker(true)}
-              title={readOnly ? "Avatar cannot be modified" : isKobiAgent ? "Kobi Agent's avatar cannot be modified" : "Click to change avatar"}
+              title={readOnly ? "Avatar cannot be modified" : isDefaultBuiltinAgent ? `${defaultAgentName} Agent's avatar cannot be modified` : "Click to change avatar"}
               style={isAvatarNameDisabled ? { cursor: 'not-allowed', opacity: 0.6 } : undefined}
             >
               {/* Use AgentAvatar component */}
@@ -278,7 +281,7 @@ const AgentBasicTab: React.FC<TabComponentProps> = ({
               />
             </div>
             <span className="emoji-hint">
-              {readOnly ? "Avatar cannot be modified" : isKobiAgent ? "Kobi Agent's avatar cannot be modified" : "Click to choose avatar"}
+              {readOnly ? "Avatar cannot be modified" : isDefaultBuiltinAgent ? `${defaultAgentName} Agent's avatar cannot be modified` : "Click to choose avatar"}
             </span>
           </div>
         </div>

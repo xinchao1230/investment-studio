@@ -67,8 +67,14 @@ export const ResearchChatPane: React.FC<ResearchChatPaneProps> = ({
     );
   }, []);
 
+  const hasTarget = Boolean(targetName || targetCode);
+
   return (
-    <aside className="rw-pane-right flex flex-col h-full" style={{ width: 380, flex: '0 0 380px' }}>
+    <aside
+      className="rw-pane-right flex flex-col h-full"
+      style={{ width: 380, flex: '0 0 380px' }}
+      data-target-selected={hasTarget ? 'true' : 'false'}
+    >
       <header
         className="flex items-center justify-between h-10 px-3 rw-divider gap-2"
         style={{ background: 'var(--rw-bg-chat-header)' }}
