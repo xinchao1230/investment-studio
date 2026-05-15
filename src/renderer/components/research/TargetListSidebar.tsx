@@ -1,4 +1,5 @@
 import React, { useState, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Plus,
   ChevronRight,
@@ -12,6 +13,7 @@ import {
   MoreHorizontal,
   MessageSquare,
   Pencil,
+  Settings,
 } from 'lucide-react';
 import type { TargetFile } from './usePortfolio';
 import type { ResearchChatSessionMeta } from './researchChatIpc';
@@ -86,11 +88,25 @@ export const TargetListSidebar: React.FC<TargetListSidebarProps> = ({
     });
   }, []);
 
+  const navigate = useNavigate();
+
   return (
     <div className="rw-pane-left flex flex-col h-full" style={{ width: 240 }}>
       {/* Header — Workspace title */}
       <div className="flex items-center justify-between px-3 pt-3 pb-2">
         <span className="rw-side-title">Workspace</span>
+        <button
+          type="button"
+          className="rw-side-icon-btn"
+          title="Settings"
+          aria-label="Open Settings"
+          onClick={() => {
+            sessionStorage.setItem('previousPath', window.location.hash.replace(/^#/, '') || '/research');
+            navigate('/settings');
+          }}
+        >
+          <Settings size={14} />
+        </button>
       </div>
 
       {/* Secondary tab row */}
