@@ -28,6 +28,19 @@ async def list_tools() -> list[types.Tool]:
                 "required": ["ts_code", "out_dir"],
             },
         ),
+        types.Tool(
+            name="yfinance_collect",
+            description="Fetch financials and price history for a US equity via yfinance and dump to CSV in out_dir.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "symbol": {"type": "string", "description": "US ticker, e.g. AAPL"},
+                    "out_dir": {"type": "string", "description": "Absolute output directory"},
+                    "period": {"type": "string", "description": "Price history period, e.g. 5y", "default": "5y"},
+                },
+                "required": ["symbol", "out_dir"],
+            },
+        ),
     ]
 
 @app.call_tool()
@@ -40,6 +53,13 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent]:
             ts_code=arguments["ts_code"],
             out_dir=arguments["out_dir"],
             start_date=arguments.get("start_date", ""),
+        )
+    elif name == "yfinance_collect":
+        from .tools.data_collect import yfinance_collect
+        result = yfinance_collect(
+            symbol=arguments["symbol"],
+            out_dir=arguments["out_dir"],
+            period=arguments.get("period", "5y"),
         )
     else:
         result = {"ok": False, "error": f"unknown tool: {name}", "retryable": False}
