@@ -1,6 +1,6 @@
 import React from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Camera, Terminal } from 'lucide-react';
+import { Camera, Key, Terminal } from 'lucide-react';
 import NavItem from '../ui/navigation/NavItem';
 import '../../styles/LeftNavigation.css';
 import { APP_NAME, BRAND_CONFIG } from '@shared/constants/branding';
@@ -95,6 +95,7 @@ const SettingsNavigation: React.FC<SettingsNavigationProps> = ({ onBack }) => {
     if (path.includes('/settings/screenshot')) return 'screenshot';
     if (path.includes('/settings/about')) return 'about';
     if (path.includes('/settings/browser-control')) return 'browser-control';
+    if (path.includes('/settings/research-api')) return 'research-api';
     return 'mcp'; // Default to mcp
   };
 
@@ -186,6 +187,14 @@ const SettingsNavigation: React.FC<SettingsNavigationProps> = ({ onBack }) => {
             isActive={activeView === 'runtime'}
             onClick={() => navigate('/settings/runtime')}
             ariaLabel="Runtime Environment"
+          />
+
+          <NavItem
+            icon={<Key size={20} />}
+            label="Research API"
+            isActive={activeView === 'research-api'}
+            onClick={() => navigate('/settings/research-api')}
+            ariaLabel="Research API tokens"
           />
           
           {/* Browser Control entry controlled by feature flag */}
