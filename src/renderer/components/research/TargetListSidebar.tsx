@@ -240,15 +240,19 @@ export const TargetListSidebar: React.FC<TargetListSidebarProps> = ({
                   onClick={() => onSelectTarget(code)}
                 />
                 <span
-                  className="ml-1.5 truncate flex-1 cursor-pointer"
+                  className="ml-1.5 truncate cursor-pointer"
                   style={{ fontWeight: 700 }}
                   onClick={() => onSelectTarget(code)}
                 >
                   {target.name}
                 </span>
-                <span className="ml-1.5 flex-shrink-0 text-[11px] text-[var(--rw-text-3)]">
+                <span
+                  className="ml-1.5 flex-shrink-0 text-[11px] text-[var(--rw-text-3)] cursor-pointer"
+                  onClick={() => onSelectTarget(code)}
+                >
                   {code}
                 </span>
+                <div className="flex-1" />
                 <button
                   type="button"
                   onClick={(e) => { e.stopPropagation(); onDeleteTarget(code, target.name); }}
@@ -277,7 +281,7 @@ export const TargetListSidebar: React.FC<TargetListSidebarProps> = ({
                       >
                         <span style={{ width: 13 }} className="flex-shrink-0" />
                         <MessageSquare size={13} className="flex-shrink-0 mr-1" />
-                        <span className="truncate flex-1" style={{ fontWeight: 700, color: 'var(--rw-text)' }}>对话</span>
+                        <span className="truncate flex-1" style={{ color: 'var(--rw-text)' }}>对话</span>
                         {onNewChat && (
                           <button
                             type="button"
@@ -370,7 +374,7 @@ export const TargetListSidebar: React.FC<TargetListSidebarProps> = ({
                             ? (isCatExpanded ? <ChevronDown size={13} /> : <ChevronRight size={13} />)
                             : <span style={{ width: 13 }} />}
                           <Folder size={13} className="flex-shrink-0 mr-1" />
-                          <span className="truncate" style={{ fontWeight: 700, color: 'var(--rw-text)' }}>{cat}</span>
+                          <span className="truncate" style={{ color: 'var(--rw-text)' }}>{cat}</span>
                         </div>
 
                         {hasFiles && isCatExpanded && catFiles.map((file) => {
