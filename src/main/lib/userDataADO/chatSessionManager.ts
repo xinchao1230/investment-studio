@@ -1046,30 +1046,33 @@ export class ChatSessionManager {
    */
   private async notifyFrontend(alias: string, chatId: string): Promise<void> {
     try {
-      const windows = BrowserWindow.getAllWindows();
-      const mainWindow = windows.find((window: BrowserWindow) => window.title === 'OpenKosmos');
-      
-      if (mainWindow && !mainWindow.isDestroyed() && mainWindow.webContents) {
-        // Get latest chatSessions list (using paginated load result)
-        const result = await this.getChatSessions(alias, chatId);
-        
-        mainWindow.webContents.send('chatSession:updated', {
-          alias,
-          chatId,
-          sessions: result.sessions,
-          loadedMonths: result.loadedMonths,
-          hasMore: result.hasMore,
-          nextMonthIndex: result.nextMonthIndex,
-          timestamp: Date.now()
-        });
-        
-        logger.info('[ChatSessionManager] Notified frontend of ChatSession update', 'notifyFrontend', {
-          alias,
-          chatId,
-          sessionCount: result.sessions.length,
-          hasMore: result.hasMore
-        });
+      const windows = BrowserWindow.getAllWindows().filter(
+        (w) => !w.isDestroyed() && w.webContents && !w.webContents.isDestroyed(),
+      );
+      if (windows.length === 0) return;
+
+      // Get latest chatSessions list (using paginated load result)
+      const result = await this.getChatSessions(alias, chatId);
+      const payload = {
+        alias,
+        chatId,
+        sessions: result.sessions,
+        loadedMonths: result.loadedMonths,
+        hasMore: result.hasMore,
+        nextMonthIndex: result.nextMonthIndex,
+        timestamp: Date.now(),
+      };
+      for (const w of windows) {
+        w.webContents.send('chatSession:updated', payload);
       }
+
+      logger.info('[ChatSessionManager] Notified frontend of ChatSession update', 'notifyFrontend', {
+        alias,
+        chatId,
+        sessionCount: result.sessions.length,
+        hasMore: result.hasMore,
+        windowCount: windows.length,
+      });
     } catch (error) {
       logger.error('[ChatSessionManager] Failed to notify frontend', 'notifyFrontend', {
         alias,
@@ -1084,23 +1087,22 @@ export class ChatSessionManager {
    */
   private async notifyAutoSelectChatSession(alias: string, chatId: string, chatSessionId: string): Promise<void> {
     try {
-      const windows = BrowserWindow.getAllWindows();
-      const mainWindow = windows.find((window: BrowserWindow) => window.title === 'OpenKosmos');
-      
-      if (mainWindow && !mainWindow.isDestroyed() && mainWindow.webContents) {
-        mainWindow.webContents.send('chatSession:autoSelect', {
-          alias,
-          chatId,
-          chatSessionId,
-          timestamp: Date.now()
-        });
-        
-        logger.info('[ChatSessionManager] Sent auto-select notification', 'notifyAutoSelectChatSession', {
-          alias,
-          chatId,
-          chatSessionId
-        });
+      const windows = BrowserWindow.getAllWindows().filter(
+        (w) => !w.isDestroyed() && w.webContents && !w.webContents.isDestroyed(),
+      );
+      if (windows.length === 0) return;
+
+      const payload = { alias, chatId, chatSessionId, timestamp: Date.now() };
+      for (const w of windows) {
+        w.webContents.send('chatSession:autoSelect', payload);
       }
+
+      logger.info('[ChatSessionManager] Sent auto-select notification', 'notifyAutoSelectChatSession', {
+        alias,
+        chatId,
+        chatSessionId,
+        windowCount: windows.length,
+      });
     } catch (error) {
       logger.error('[ChatSessionManager] Failed to send auto-select notification', 'notifyAutoSelectChatSession', {
         alias,
