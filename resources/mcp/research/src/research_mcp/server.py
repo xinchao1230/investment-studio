@@ -130,6 +130,20 @@ async def list_tools() -> list[types.Tool]:
                 "required": ["out_dir"],
             },
         ),
+        types.Tool(
+            name="assemble_report",
+            description="Generate a markdown report from a snapshot.json file with sections for metrics, audit, technicals, and capital flow.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "snapshot_json_path": {"type": "string", "description": "Path to snapshot.json"},
+                    "out_dir": {"type": "string", "description": "Absolute output directory"},
+                    "ticker": {"type": "string", "description": "Ticker symbol", "default": ""},
+                    "company_name": {"type": "string", "description": "Company name", "default": ""},
+                },
+                "required": ["snapshot_json_path", "out_dir"],
+            },
+        ),
     ]
 
 @app.call_tool()
@@ -196,6 +210,14 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent]:
         result = data_snapshot(
             out_dir=arguments["out_dir"],
             sources=arguments.get("sources"),
+        )
+    elif name == "assemble_report":
+        from .tools.report import assemble_report
+        result = assemble_report(
+            snapshot_json_path=arguments["snapshot_json_path"],
+            out_dir=arguments["out_dir"],
+            ticker=arguments.get("ticker", ""),
+            company_name=arguments.get("company_name", ""),
         )
     else:
         result = {"ok": False, "error": f"unknown tool: {name}", "retryable": False}
