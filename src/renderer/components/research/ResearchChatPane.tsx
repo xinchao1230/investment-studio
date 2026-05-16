@@ -39,9 +39,14 @@ interface ResearchChatPaneProps {
 function buildSuggestions(targetName?: string | null, targetCode?: string | null): string[] {
   const hasTarget = Boolean(targetName || targetCode);
   if (hasTarget) {
-    const label = targetName && targetCode
-      ? `${targetCode} ${targetName}`
-      : (targetCode || targetName || '');
+    // For unlisted targets the persisted stock_code equals the name (synthetic
+    // placeholder). Avoid duplicating `${name} ${name}` in prompt suggestions.
+    const isUnlisted = !!targetName && !!targetCode && targetName === targetCode;
+    const label = isUnlisted
+      ? (targetName as string)
+      : (targetName && targetCode
+          ? `${targetCode} ${targetName}`
+          : (targetCode || targetName || ''));
     return [
       `请对 ${label} 做一份深度基本面分析报告（公司概况、业务结构、财务、估值、风险）`,
       `请点评 ${label} 最新一期财报，重点关注收入结构、利润率与现金流变化`,
@@ -234,9 +239,17 @@ export const ResearchChatPane: React.FC<ResearchChatPaneProps> = ({
                 {targetName}
               </span>
               {targetCode && (
-                <span className="text-[11px] text-[var(--rw-text-3)] flex-shrink-0">
-                  {targetCode}
-                </span>
+                targetCode === targetName ? (
+                  // Unlisted target: stock_code === name. Show a "未上市" pill
+                  // instead of duplicating the company name on the right.
+                  <span className="px-1 rounded bg-gray-100 text-gray-500 text-[10px] flex-shrink-0">
+                    未上市
+                  </span>
+                ) : (
+                  <span className="text-[11px] text-[var(--rw-text-3)] flex-shrink-0">
+                    {targetCode}
+                  </span>
+                )
               )}
               {chatTitle && (
                 <span className="text-[11px] text-[var(--rw-text-3)] truncate" title={chatTitle}>

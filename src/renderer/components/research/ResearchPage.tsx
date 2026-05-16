@@ -560,12 +560,14 @@ export const ResearchPage: React.FC = () => {
   const handleSubmitAddTarget = useCallback(async (code: string, name: string) => {
     const c = code.trim();
     const n = name.trim();
-    if (!c || !n) {
-      setAddError('请选择股票');
+    if (!n) {
+      setAddError('请输入名称');
       return;
     }
     setAddBusy(true);
     setAddError(null);
+    // For unlisted/private companies `c` is empty; initTarget → portfolioTools
+    // will treat that as `listed: false` and synthesize stock_code = name.
     const result = await initTarget(c, n);
     setAddBusy(false);
     if (!result.success) {
@@ -576,9 +578,12 @@ export const ResearchPage: React.FC = () => {
     // (crash, race, etc.), defensively clear any persisted tab state for
     // this stock_code so the newly-recreated target starts clean.
     setTabsByCode((prev) => {
-      if (!(c in prev)) return prev;
+      // For unlisted targets, the effective key is the company name (since
+      // portfolioTools stores stock_code === name in that case).
+      const effectiveKey = c || n;
+      if (!(effectiveKey in prev)) return prev;
       const next = { ...prev };
-      delete next[c];
+      delete next[effectiveKey];
       return next;
     });
     flushNow();

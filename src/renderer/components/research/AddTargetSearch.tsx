@@ -91,21 +91,43 @@ export const AddTargetSearch: React.FC<AddTargetSearchProps> = ({
     onSubmit(fullCode, s.name);
   }, [onSubmit]);
 
+  const submitUnlisted = useCallback(() => {
+    const n = query.trim();
+    if (!n) return;
+    // Empty stock_code signals an unlisted/private company. ResearchPage will
+    // pass that through to portfolio_init_target; portfolioTools handles the
+    // listed=false branch and synthesizes a stock_code === name placeholder
+    // so the renderer's stock_code-keyed maps stay unique.
+    onSubmit('', n);
+  }, [query, onSubmit]);
+
   const onKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
+    // CTA is rendered as a virtual extra row at index === results.length.
+    // It is reachable whenever the user has typed something (query.trim() !== '').
+    const ctaVisible = query.trim().length > 0;
+    const maxIdx = (results.length - 1) + (ctaVisible ? 1 : 0);
     if (e.key === 'ArrowDown') {
       e.preventDefault();
-      setHighlight((h) => Math.min(h + 1, Math.max(0, results.length - 1)));
+      setHighlight((h) => Math.min(h + 1, Math.max(0, maxIdx)));
     } else if (e.key === 'ArrowUp') {
       e.preventDefault();
       setHighlight((h) => Math.max(h - 1, 0));
     } else if (e.key === 'Enter') {
       e.preventDefault();
-      if (results[highlight]) pick(results[highlight]);
+      if (ctaVisible && highlight === results.length) {
+        submitUnlisted();
+      } else if (results[highlight]) {
+        pick(results[highlight]);
+      } else if (ctaVisible) {
+        // No selectable suggestion yet → fall back to the CTA so Enter
+        // never silently no-ops while the user is mid-typing.
+        submitUnlisted();
+      }
     } else if (e.key === 'Escape') {
       e.preventDefault();
       onCancel();
     }
-  }, [results, highlight, pick, onCancel]);
+  }, [results, highlight, pick, onCancel, submitUnlisted, query]);
 
   return (
     <div
@@ -135,7 +157,7 @@ export const AddTargetSearch: React.FC<AddTargetSearchProps> = ({
         )}
       </div>
 
-      {results.length > 0 && (
+      {(results.length > 0 || (query.trim() && !loading)) && (
         <div
           className="rounded border max-h-64 overflow-y-auto"
           style={{ borderColor: 'var(--rw-border)', background: '#fff' }}
@@ -160,11 +182,30 @@ export const AddTargetSearch: React.FC<AddTargetSearchProps> = ({
               <span className="truncate flex-1 text-[var(--rw-text)]">{s.name}</span>
             </div>
           ))}
-        </div>
-      )}
 
-      {!loading && query.trim() && results.length === 0 && (
-        <div className="text-[11px] text-[var(--rw-text-3)] px-1">无匹配结果</div>
+          {/* CTA: add as unlisted/private company. Rendered whenever the user
+              has typed something — gives a path forward even when Eastmoney
+              returns zero suggestions (private startups, custom watch items). */}
+          {query.trim() && (
+            <div
+              role="button"
+              onMouseDown={(e) => { e.preventDefault(); submitUnlisted(); }}
+              onMouseEnter={() => setHighlight(results.length)}
+              className={`flex items-center gap-2 px-2 py-1.5 text-[13px] cursor-pointer ${results.length > 0 ? 'border-t' : ''} ${highlight === results.length ? 'bg-[var(--rw-accent-soft)]' : ''}`}
+              style={{ borderTopColor: 'var(--rw-border)' }}
+            >
+              <span
+                className="text-[10px] px-1 rounded bg-gray-100 text-gray-600"
+                style={{ minWidth: 16, textAlign: 'center' }}
+              >
+                +
+              </span>
+              <span className="truncate flex-1 text-[var(--rw-text)]">
+                添加未上市公司：「<span className="font-medium">{query.trim()}</span>」
+              </span>
+            </div>
+          )}
+        </div>
       )}
 
       <div className="flex items-center justify-between pt-1">

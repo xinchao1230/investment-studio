@@ -16,12 +16,13 @@ describe('PortfolioTools', () => {
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 
-  describe('init_target', () => {
+  describe('init_target (listed)', () => {
     it('creates all expected files and directories', async () => {
       const result = await PortfolioTools.executeInitTarget({ stock_code: '603993', name: '洛阳钼业', industry: '有色金属' });
       expect(result.success).toBe(true);
 
-      const targetDir = path.join(tmpDir, '洛阳钼业_603993');
+      // New dirname scheme: just the company name (no `_${code}` suffix).
+      const targetDir = path.join(tmpDir, '洛阳钼业');
       expect(fs.existsSync(targetDir)).toBe(true);
       expect(fs.existsSync(path.join(targetDir, 'earnings'))).toBe(true);
       expect(fs.existsSync(path.join(targetDir, 'models'))).toBe(true);
@@ -31,33 +32,111 @@ describe('PortfolioTools', () => {
       expect(fs.existsSync(path.join(targetDir, 'tracking.md'))).toBe(true);
     });
 
-    it('profile.yaml has correct content', async () => {
+    it('profile.yaml has correct content with listed=true', async () => {
       await PortfolioTools.executeInitTarget({ stock_code: '603993', name: '洛阳钼业', industry: '有色金属' });
-      const profilePath = path.join(tmpDir, '洛阳钼业_603993', 'profile.yaml');
-      const profile = yaml.load(fs.readFileSync(profilePath, 'utf-8')) as Record<string, string>;
+      const profilePath = path.join(tmpDir, '洛阳钼业', 'profile.yaml');
+      const profile = yaml.load(fs.readFileSync(profilePath, 'utf-8')) as Record<string, unknown>;
       expect(profile.stock_code).toBe('603993');
       expect(profile.name).toBe('洛阳钼业');
       expect(profile.industry).toBe('有色金属');
-      expect(profile.follow_date).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+      expect(profile.listed).toBe(true);
+      expect(profile.follow_date as string).toMatch(/^\d{4}-\d{2}-\d{2}$/);
     });
 
-    it('rejects duplicates', async () => {
+    it('rejects duplicate name', async () => {
       await PortfolioTools.executeInitTarget({ stock_code: '603993', name: '洛阳钼业' });
       const result = await PortfolioTools.executeInitTarget({ stock_code: '603993', name: '洛阳钼业' });
       expect(result.success).toBe(false);
       expect(result.error).toContain('already exists');
     });
+
+    it('rejects duplicate stock_code with market suffix variant', async () => {
+      await PortfolioTools.executeInitTarget({ stock_code: '600036', name: '招商银行' });
+      const result = await PortfolioTools.executeInitTarget({ stock_code: '600036.SH', name: '招商银行A' });
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('600036');
+    });
+
+    it('rejects names with path separators or reserved chars', async () => {
+      for (const bad of ['Foo/Bar', 'Foo\\Bar', 'A:B', 'A*', 'A?', 'A"', 'A<', 'A>', 'A|', '.hidden', '-flag', 'CON']) {
+        const r = await PortfolioTools.executeInitTarget({ stock_code: '600000', name: bad });
+        expect(r.success).toBe(false);
+      }
+    });
+
+    it('rejects empty/whitespace-only name', async () => {
+      const r1 = await PortfolioTools.executeInitTarget({ stock_code: '600000', name: '' });
+      expect(r1.success).toBe(false);
+      const r2 = await PortfolioTools.executeInitTarget({ stock_code: '600000', name: '   ' });
+      expect(r2.success).toBe(false);
+    });
+  });
+
+  describe('init_target (unlisted)', () => {
+    it('creates target with synthetic stock_code === name when stock_code is empty', async () => {
+      const result = await PortfolioTools.executeInitTarget({ stock_code: '', name: '私募基金A' });
+      expect(result.success).toBe(true);
+
+      const targetDir = path.join(tmpDir, '私募基金A');
+      expect(fs.existsSync(targetDir)).toBe(true);
+
+      const profilePath = path.join(targetDir, 'profile.yaml');
+      const profile = yaml.load(fs.readFileSync(profilePath, 'utf-8')) as Record<string, unknown>;
+      expect(profile.stock_code).toBe('私募基金A');
+      expect(profile.name).toBe('私募基金A');
+      expect(profile.listed).toBe(false);
+    });
+
+    it('renders unlisted key-drivers without empty parens and includes 现金跑道', async () => {
+      await PortfolioTools.executeInitTarget({ stock_code: '', name: '私募基金A' });
+      const kdPath = path.join(tmpDir, '私募基金A', 'key-drivers.md');
+      const content = fs.readFileSync(kdPath, 'utf-8');
+      expect(content).toContain('# 私募基金A - Key Drivers');
+      expect(content).not.toMatch(/\(\s*\)/);
+      expect(content).toContain('现金跑道');
+    });
+
+    it('notes.md / tracking.md titles drop empty parens for unlisted', async () => {
+      await PortfolioTools.executeInitTarget({ stock_code: '', name: '私募基金A' });
+      const notes = fs.readFileSync(path.join(tmpDir, '私募基金A', 'notes.md'), 'utf-8');
+      const tracking = fs.readFileSync(path.join(tmpDir, '私募基金A', 'tracking.md'), 'utf-8');
+      expect(notes).toContain('# 私募基金A - Research Notes');
+      expect(notes).not.toMatch(/\(\s*\)/);
+      expect(tracking).toContain('# 私募基金A - Marginal Change Tracking');
+      expect(tracking).not.toMatch(/\(\s*\)/);
+    });
+
+    it('rejects unlisted target sharing same name as listed', async () => {
+      await PortfolioTools.executeInitTarget({ stock_code: '603993', name: '洛阳钼业' });
+      const result = await PortfolioTools.executeInitTarget({ stock_code: '', name: '洛阳钼业' });
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('already exists');
+    });
+
+    it('allows omitting stock_code entirely (undefined)', async () => {
+      const result = await PortfolioTools.executeInitTarget({ name: '某创业公司' } as { name: string });
+      expect(result.success).toBe(true);
+      const profile = yaml.load(
+        fs.readFileSync(path.join(tmpDir, '某创业公司', 'profile.yaml'), 'utf-8'),
+      ) as Record<string, unknown>;
+      expect(profile.listed).toBe(false);
+      expect(profile.stock_code).toBe('某创业公司');
+    });
   });
 
   describe('list_targets', () => {
-    it('lists multiple targets', async () => {
+    it('lists multiple targets with listed flag', async () => {
       await PortfolioTools.executeInitTarget({ stock_code: '603993', name: '洛阳钼业' });
-      await PortfolioTools.executeInitTarget({ stock_code: '600519', name: '贵州茅台' });
+      await PortfolioTools.executeInitTarget({ stock_code: '', name: '私募基金A' });
       const result = await PortfolioTools.executeListTargets();
       expect(result.success).toBe(true);
       const targets = JSON.parse(result.data);
       expect(targets).toHaveLength(2);
-      expect(targets.map((t: any) => t.stock_code).sort()).toEqual(['600519', '603993']);
+      const byName = Object.fromEntries(targets.map((t: { name: string }) => [t.name, t]));
+      expect(byName['洛阳钼业'].listed).toBe(true);
+      expect(byName['洛阳钼业'].stock_code).toBe('603993');
+      expect(byName['私募基金A'].listed).toBe(false);
+      expect(byName['私募基金A'].stock_code).toBe('私募基金A');
     });
 
     it('returns empty array when none', async () => {
@@ -65,18 +144,61 @@ describe('PortfolioTools', () => {
       expect(result.success).toBe(true);
       expect(JSON.parse(result.data)).toEqual([]);
     });
+
+    it('defaults legacy profile (no `listed` field) to listed=true', async () => {
+      // Simulate a target created under an older version of the tool.
+      const legacyDir = path.join(tmpDir, '老标的');
+      fs.mkdirSync(legacyDir, { recursive: true });
+      fs.writeFileSync(
+        path.join(legacyDir, 'profile.yaml'),
+        yaml.dump({ stock_code: '600000', name: '老标的', industry: '', follow_date: '2024-01-01', notes: '' }),
+        'utf-8',
+      );
+      const result = await PortfolioTools.executeListTargets();
+      const targets = JSON.parse(result.data);
+      expect(targets[0].listed).toBe(true);
+    });
   });
 
-  describe('get_target_files', () => {
-    it('returns file paths', async () => {
+  describe('findTargetDir / get_target_files', () => {
+    it('returns file paths for listed target', async () => {
       await PortfolioTools.executeInitTarget({ stock_code: '603993', name: '洛阳钼业' });
       const result = await PortfolioTools.executeGetTargetFiles({ stock_code: '603993' });
       expect(result.success).toBe(true);
-      const files = JSON.parse(result.data) as string[];
-      expect(files).toContain('profile.yaml');
-      expect(files).toContain('key-drivers.md');
-      expect(files).toContain('notes.md');
-      expect(files).toContain('tracking.md');
+      const files = JSON.parse(result.data) as Array<{ relPath: string }>;
+      const rels = files.map((f) => f.relPath);
+      expect(rels).toContain('profile.yaml');
+      expect(rels).toContain('key-drivers.md');
+      expect(rels).toContain('notes.md');
+      expect(rels).toContain('tracking.md');
+    });
+
+    it('finds unlisted target by name (stock_code === name)', async () => {
+      await PortfolioTools.executeInitTarget({ stock_code: '', name: '私募基金A' });
+      // Lookup with the synthetic placeholder code (== name) succeeds via name match.
+      const result = await PortfolioTools.executeGetTargetFiles({ stock_code: '私募基金A', name: '私募基金A' });
+      expect(result.success).toBe(true);
+    });
+
+    it('finds unlisted target when only stock_code (== name placeholder) is passed', async () => {
+      // Matches the renderer\'s deleteTarget(code) call signature, which only
+      // forwards `stock_code`. For unlisted targets this equals the name.
+      await PortfolioTools.executeInitTarget({ stock_code: '', name: '某创业公司' });
+      const result = await PortfolioTools.executeGetTargetFiles({ stock_code: '某创业公司' });
+      expect(result.success).toBe(true);
+    });
+
+    it('still discovers legacy `${name}_${code}` directories', async () => {
+      // Simulate a target created under the old naming scheme.
+      const legacyDir = path.join(tmpDir, '老标的_600000');
+      fs.mkdirSync(legacyDir, { recursive: true });
+      fs.writeFileSync(
+        path.join(legacyDir, 'profile.yaml'),
+        yaml.dump({ stock_code: '600000', name: '老标的', industry: '', follow_date: '2024-01-01', notes: '' }),
+        'utf-8',
+      );
+      const result = await PortfolioTools.executeGetTargetFiles({ stock_code: '600000' });
+      expect(result.success).toBe(true);
     });
 
     it('fails for missing target', async () => {
@@ -87,16 +209,19 @@ describe('PortfolioTools', () => {
   });
 
   describe('get_tracking_status', () => {
-    it('returns status array with stock_code', async () => {
+    it('returns status array with stock_code and listed flag', async () => {
       await PortfolioTools.executeInitTarget({ stock_code: '603993', name: '洛阳钼业' });
+      await PortfolioTools.executeInitTarget({ stock_code: '', name: '私募基金A' });
       const result = await PortfolioTools.executeGetTrackingStatus();
       expect(result.success).toBe(true);
       const statuses = JSON.parse(result.data);
-      expect(statuses).toHaveLength(1);
-      expect(statuses[0].stock_code).toBe('603993');
-      expect(statuses[0].name).toBe('洛阳钼业');
-      expect(statuses[0]).toHaveProperty('last_tracking_update');
-      expect(statuses[0]).toHaveProperty('note_lines');
+      expect(statuses).toHaveLength(2);
+      const byName = Object.fromEntries(statuses.map((s: { name: string }) => [s.name, s]));
+      expect(byName['洛阳钼业'].stock_code).toBe('603993');
+      expect(byName['洛阳钼业'].listed).toBe(true);
+      expect(byName['洛阳钼业']).toHaveProperty('last_tracking_update');
+      expect(byName['洛阳钼业']).toHaveProperty('note_lines');
+      expect(byName['私募基金A'].listed).toBe(false);
     });
   });
 
@@ -107,7 +232,7 @@ describe('PortfolioTools', () => {
       const result = await PortfolioTools.executeUpdateKeyDrivers({ stock_code: '603993', content: newContent });
       expect(result.success).toBe(true);
 
-      const targetDir = path.join(tmpDir, '洛阳钼业_603993');
+      const targetDir = path.join(tmpDir, '洛阳钼业');
       const content = fs.readFileSync(path.join(targetDir, 'key-drivers.md'), 'utf-8');
       expect(content).toBe(newContent);
     });
@@ -119,7 +244,7 @@ describe('PortfolioTools', () => {
       const result = await PortfolioTools.executeAppendNote({ stock_code: '603993', content: 'First note' });
       expect(result.success).toBe(true);
 
-      const notesPath = path.join(tmpDir, '洛阳钼业_603993', 'notes.md');
+      const notesPath = path.join(tmpDir, '洛阳钼业', 'notes.md');
       const content = fs.readFileSync(notesPath, 'utf-8');
       expect(content).toContain('First note');
       expect(content).toMatch(/## \d{4}-\d{2}-\d{2}/);
@@ -130,7 +255,7 @@ describe('PortfolioTools', () => {
       await PortfolioTools.executeAppendNote({ stock_code: '603993', content: 'Note 1' });
       await PortfolioTools.executeAppendNote({ stock_code: '603993', content: 'Note 2' });
 
-      const notesPath = path.join(tmpDir, '洛阳钼业_603993', 'notes.md');
+      const notesPath = path.join(tmpDir, '洛阳钼业', 'notes.md');
       const content = fs.readFileSync(notesPath, 'utf-8');
       expect(content).toContain('Note 1');
       expect(content).toContain('Note 2');

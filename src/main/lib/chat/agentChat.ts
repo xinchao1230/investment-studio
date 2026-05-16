@@ -548,12 +548,49 @@ export class AgentChat {
               } else {
                 targetAbsDir = tdStr; // fallback: use as-is
               }
-              // Dir name pattern: `${name}_${stockCode}` (see portfolioTools.ts).
+              // Source of truth: profile.yaml inside the target directory. The
+              // directory base name is informational only (new scheme = `${name}`,
+              // legacy = `${name}_${stockCode}`). When profile.yaml is unreadable
+              // we fall back to parsing the directory name with `lastIndexOf('_')`
+              // for backward compatibility.
+              let targetListed = !!targetCode; // default: listed when we have a code
+              let profileName = '';
+              try {
+                // eslint-disable-next-line @typescript-eslint/no-var-requires
+                const fsLocal = require('fs');
+                const profilePath = `${targetAbsDir}${targetAbsDir.includes('\\') ? '\\' : '/'}profile.yaml`;
+                if (fsLocal.existsSync(profilePath)) {
+                  const raw = fsLocal.readFileSync(profilePath, 'utf-8');
+                  for (const line of raw.split(/\r?\n/)) {
+                    const m = /^([a-zA-Z_]+):\s*(.*)$/.exec(line.trim());
+                    if (!m) continue;
+                    const [, k, vRaw] = m;
+                    const v = vRaw.replace(/^['"]|['"]$/g, '').trim();
+                    if (k === 'name' && v) profileName = v;
+                    else if (k === 'listed') targetListed = v === 'true';
+                  }
+                }
+              } catch { /* fall through to dir-name parse */ }
+
               const sepIdx = Math.max(targetAbsDir.lastIndexOf('/'), targetAbsDir.lastIndexOf('\\'));
               const dirBaseName = sepIdx >= 0 ? targetAbsDir.slice(sepIdx + 1) : targetAbsDir;
-              const lastUnderscore = dirBaseName.lastIndexOf('_');
-              targetName = lastUnderscore > 0 ? dirBaseName.slice(0, lastUnderscore) : dirBaseName;
-              sections.push(`\n**Research Target:** ${targetName} (${targetCode})`);
+              if (profileName) {
+                targetName = profileName;
+              } else {
+                // Legacy fallback: parse `${name}_${code}` directory name. New
+                // scheme directories don't have a `_${code}` suffix so
+                // `lastIndexOf('_')` for them either returns -1 or splits at a
+                // genuine underscore in the name — either way, falling back
+                // to the full base name is the safer choice when there's no
+                // profile.yaml to anchor on.
+                const lastUnderscore = dirBaseName.lastIndexOf('_');
+                targetName = lastUnderscore > 0 ? dirBaseName.slice(0, lastUnderscore) : dirBaseName;
+              }
+              // Header: drop `(code)` for unlisted targets — show "未上市" instead.
+              const headerSuffix = targetListed
+                ? (targetCode ? ` (${targetCode})` : '')
+                : ' (未上市)';
+              sections.push(`\n**Research Target:** ${targetName}${headerSuffix}`);
               sections.push(`- Target Directory: \`${targetAbsDir}\``);
               sections.push(`- All file/command operations for this conversation should default to this directory.`);
               sections.push(`- DO NOT call \`portfolio_init_target\` for this target — it already exists. Write any new files (财报/分析/笔记等) directly under the Target Directory above. Creating a new target folder for the same company will produce a duplicate in the workspace sidebar.`);
@@ -561,12 +598,24 @@ export class AgentChat {
               // Soft directory conventions — recommend, don't enforce.
               sections.push(`\n**Target Directory Conventions (推荐结构，可创建其他目录但请尽量复用):**`);
               sections.push(`- \`inputs/\` — User-attached files (PDFs, research reports, notes). Auto-populated when user attaches files in chat.`);
-              sections.push(`- \`earnings/\` — Financial CSV data from \`tushare_collect\` / \`yfinance_collect\`.`);
+              if (targetListed) {
+                sections.push(`- \`earnings/\` — Financial CSV data from \`tushare_collect\` / \`yfinance_collect\`.`);
+              } else {
+                sections.push(`- \`earnings/\` — Comparable-company financial CSV data (二级市场可比公司). Use \`tushare_collect\` / \`yfinance_collect\` to fetch comparables, NOT the target itself — this is an unlisted/private company.`);
+              }
               sections.push(`- \`research/\` — AI-generated analysis reports.`);
               sections.push(`- \`models/\` — Valuation models and scripts.`);
               sections.push(`- \`profile.yaml\`, \`key-drivers.md\`, \`notes.md\`, \`tracking.md\` — pre-created templates; update in place.`);
               sections.push(`- Naming: reports use \`{date}-{topic}.md\` (e.g. \`2026Q1-earnings-review.md\`); scripts use \`fetch_*.py\` (download) / \`analyze_*.py\` (process).`);
               sections.push(`- Prefer reusing existing subdirectories. Only create new top-level directories when none of the above fit.`);
+
+              if (!targetListed) {
+                sections.push(`\n**Unlisted Company Research Guidance:**`);
+                sections.push(`- 该标的为**未上市公司**（私募 / 创业公司 / 拟 IPO），不要尝试用股票代码抓取其本身的财务数据。`);
+                sections.push(`- 重点研究维度：商业模式 / PMF / 单位经济（LTV、CAC、毛利率）/ 融资历史 / 现金跑道 / 客户集中度 / 团队 / 退出路径（IPO / 战略并购 / 老股转让）。`);
+                sections.push(`- 估值锚：选 3-5 家二级市场可比公司，使用 \`tushare_collect\` / \`yfinance_collect\` 抓其财务，整理为 \`earnings/comparables_*.csv\`，在 \`research/\` 下输出估值参考报告。`);
+                sections.push(`- 信息来源：公司官网、招股书 / 路演稿 / 创始人公开演讲、行业研报、IT 桔子 / 36 氪等创投数据库。`);
+              }
             }
 
             // Command Execution cwd — narrowed to target dir when bound, else session/KB.
@@ -3060,17 +3109,23 @@ export class AgentChat {
     } catch {
       return;
     }
-    const stockCode: string | undefined = args.stock_code;
+    const stockCodeRaw: string | undefined = args.stock_code;
     const name: string | undefined = args.name;
-    if (!stockCode || !name) return;
+    if (!name) return;
+    // Unlisted targets are saved with `stock_code === name` (see
+    // portfolioTools.executeInitTarget). Apply the same convention here so
+    // the bound chat carries a non-empty targetCode (renderer keys by it).
+    const stockCode = (stockCodeRaw && stockCodeRaw.trim()) ? stockCodeRaw.trim() : name;
 
-    // Mirror portfolioTools.executeInitTarget directory layout:
-    //   {userData}/portfolio/{name}_{stock_code}
+    // Resolve the freshly-created directory via PortfolioTools (single source
+    // of truth for naming + legacy compat). Dynamic require keeps this file
+    // free of static circular-dep concerns and matches the existing pattern
+    // for fs/path/electron below.
     const fs = require('fs');
-    const path = require('path');
-    const { app } = require('electron');
-    const targetDir = path.join(app.getPath('userData'), 'portfolio', `${name}_${stockCode}`);
-    if (!fs.existsSync(targetDir)) return;
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { PortfolioTools } = require('../mcpRuntime/builtinTools/portfolioTools');
+    const targetDir: string | null = PortfolioTools.findTargetDir(stockCode, name);
+    if (!targetDir || !fs.existsSync(targetDir)) return;
 
     (this.currentChatSession as any).targetCode = stockCode;
     (this.currentChatSession as any).targetDir = targetDir;

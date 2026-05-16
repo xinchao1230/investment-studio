@@ -27,6 +27,15 @@ export interface Target {
   industry: string;
   follow_date: string;
   directory: string;
+  /**
+   * True when this target tracks a publicly-listed company (has a real
+   * stock ticker). False when it tracks an unlisted/private company.
+   * For unlisted targets, `stock_code` is a synthetic placeholder equal
+   * to `name` (chosen so the renderer's stock_code-keyed maps keep
+   * non-empty unique keys). UI should render "未上市" instead of the
+   * code in those cases.
+   */
+  listed?: boolean;
 }
 
 interface TargetListSidebarProps {
@@ -413,7 +422,11 @@ export const TargetListSidebar: React.FC<TargetListSidebarProps> = ({
                   className="ml-1.5 flex-shrink-0 text-[11px] text-[var(--rw-text-3)] cursor-pointer"
                   onClick={() => onSelectTarget(code)}
                 >
-                  {code}
+                  {/* Unlisted targets carry `stock_code === name`; show a "未上市"
+                      pill instead of the synthetic placeholder code. */}
+                  {target.listed === false || target.stock_code === target.name
+                    ? <span className="px-1 rounded bg-gray-100 text-gray-500 text-[10px]">未上市</span>
+                    : code}
                 </span>
                 <div className="flex-1" />
                 <button

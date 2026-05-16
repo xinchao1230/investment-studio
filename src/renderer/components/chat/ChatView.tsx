@@ -555,9 +555,16 @@ const ChatView: React.FC<ChatViewProps> = memo(({ mode = 'full' }) => {
 
   const zeroStates = useMemo(() => {
     if (!sessionTarget?.targetCode) return baseZeroStates;
-    const label = sessionTarget.targetName
-      ? `${sessionTarget.targetCode} ${sessionTarget.targetName}`
-      : sessionTarget.targetCode;
+    // For unlisted targets, postProcessForPortfolioInitTarget stores
+    // `targetCode === name` so the chat session retains a non-empty code.
+    // Avoid rendering `"我的私募基金 我的私募基金"` by collapsing the label.
+    const isUnlisted = !!sessionTarget.targetName
+      && sessionTarget.targetName === sessionTarget.targetCode;
+    const label = isUnlisted
+      ? (sessionTarget.targetName as string)
+      : (sessionTarget.targetName
+          ? `${sessionTarget.targetCode} ${sessionTarget.targetName}`
+          : sessionTarget.targetCode);
     return {
       greeting: baseZeroStates?.greeting || '',
       quick_starts: [
