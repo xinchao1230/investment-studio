@@ -18,6 +18,8 @@ import {
 } from 'lucide-react';
 import type { TargetFile } from './usePortfolio';
 import type { ResearchChatSessionMeta } from './researchChatIpc';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../ui/dialog';
+import { Button } from '../ui/button';
 
 export interface Target {
   stock_code: string;
@@ -121,6 +123,47 @@ export const TargetListSidebar: React.FC<TargetListSidebarProps> = ({
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const searchInputRef = React.useRef<HTMLInputElement | null>(null);
+
+  // In-app confirm/rename dialog state. We avoid window.confirm() and
+  // window.prompt() because on Electron + Windows those native dialogs
+  // briefly steal OS-level keyboard focus and don't fully release it back
+  // to the BrowserWindow on close. The visible symptom is: after deleting
+  // a chat, clicking the chat input shows a focus ring but no caret blinks
+  // and keystrokes are dropped — switching to any other OS window and back
+  // restores keyboard input. Using an in-app <Dialog> keeps focus inside
+  // the same WebContents and avoids the bug entirely.
+  type ChatRef = { kind: 'stella' | 'workspace'; code?: string; sessionId: string; title: string };
+  const [pendingDeleteChat, setPendingDeleteChat] = useState<ChatRef | null>(null);
+  const [pendingRenameChat, setPendingRenameChat] = useState<ChatRef | null>(null);
+  const [renameDraft, setRenameDraft] = useState('');
+
+  const openRename = useCallback((ref: ChatRef) => {
+    setRenameDraft(ref.title || '');
+    setPendingRenameChat(ref);
+  }, []);
+
+  const confirmRename = useCallback(() => {
+    if (!pendingRenameChat) return;
+    const next = renameDraft.trim();
+    if (next && next !== pendingRenameChat.title) {
+      if (pendingRenameChat.kind === 'stella') {
+        onRenameStellaChat?.(pendingRenameChat.sessionId, next);
+      } else if (pendingRenameChat.code) {
+        onRenameChat?.(pendingRenameChat.code, pendingRenameChat.sessionId, next);
+      }
+    }
+    setPendingRenameChat(null);
+  }, [pendingRenameChat, renameDraft, onRenameStellaChat, onRenameChat]);
+
+  const confirmDeleteChat = useCallback(() => {
+    if (!pendingDeleteChat) return;
+    if (pendingDeleteChat.kind === 'stella') {
+      onDeleteStellaChat?.(pendingDeleteChat.sessionId);
+    } else if (pendingDeleteChat.code) {
+      onDeleteChat?.(pendingDeleteChat.code, pendingDeleteChat.sessionId);
+    }
+    setPendingDeleteChat(null);
+  }, [pendingDeleteChat, onDeleteStellaChat, onDeleteChat]);
 
   // Search is owned locally; add-form open state is owned by parent. We
   // derive `searchOpen` so that whenever the parent shows the add-form,
@@ -293,10 +336,7 @@ export const TargetListSidebar: React.FC<TargetListSidebarProps> = ({
                     type="button"
                     onClick={(e) => {
                       e.stopPropagation();
-                      const next = window.prompt('Rename chat', chat.title || '');
-                      if (next && next.trim() && next.trim() !== chat.title) {
-                        onRenameStellaChat(chat.chatSession_id, next.trim());
-                      }
+                      openRename({ kind: 'stella', sessionId: chat.chatSession_id, title: chat.title || '' });
                     }}
                     className="ml-1 p-0.5 rounded opacity-0 group-hover:opacity-100 hover:bg-black/10 text-[var(--rw-text-3)] transition-opacity"
                     title="Rename"
@@ -309,9 +349,7 @@ export const TargetListSidebar: React.FC<TargetListSidebarProps> = ({
                     type="button"
                     onClick={(e) => {
                       e.stopPropagation();
-                      if (window.confirm(`Delete chat "${chat.title || 'Untitled'}"?`)) {
-                        onDeleteStellaChat(chat.chatSession_id);
-                      }
+                      setPendingDeleteChat({ kind: 'stella', sessionId: chat.chatSession_id, title: chat.title || 'Untitled' });
                     }}
                     className="ml-1 p-0.5 rounded opacity-0 group-hover:opacity-100 hover:bg-black/10 text-[var(--rw-text-3)] hover:text-red-500 transition-opacity"
                     title="Delete chat"
@@ -435,10 +473,7 @@ export const TargetListSidebar: React.FC<TargetListSidebarProps> = ({
                               type="button"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                const next = window.prompt('Rename chat', chat.title || '');
-                                if (next && next.trim() && next.trim() !== chat.title) {
-                                  onRenameChat(code, chat.chatSession_id, next.trim());
-                                }
+                                openRename({ kind: 'workspace', code, sessionId: chat.chatSession_id, title: chat.title || '' });
                               }}
                               className="ml-1 p-0.5 rounded opacity-0 group-hover:opacity-100 hover:bg-black/10 text-[var(--rw-text-3)] transition-opacity"
                               title="Rename"
@@ -451,9 +486,7 @@ export const TargetListSidebar: React.FC<TargetListSidebarProps> = ({
                               type="button"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                if (window.confirm(`Delete chat "${chat.title || 'Untitled'}"?`)) {
-                                  onDeleteChat(code, chat.chatSession_id);
-                                }
+                                setPendingDeleteChat({ kind: 'workspace', code, sessionId: chat.chatSession_id, title: chat.title || 'Untitled' });
                               }}
                               className="ml-1 p-0.5 rounded opacity-0 group-hover:opacity-100 hover:bg-black/10 text-[var(--rw-text-3)] hover:text-red-500 transition-opacity"
                               title="Delete chat"
@@ -529,6 +562,48 @@ export const TargetListSidebar: React.FC<TargetListSidebarProps> = ({
         })}
       </div>
       )}
+
+      {/* Delete-chat confirm dialog (in-app to avoid Electron focus bug). */}
+      <Dialog open={!!pendingDeleteChat} onOpenChange={(open) => { if (!open) setPendingDeleteChat(null); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete chat?</DialogTitle>
+          </DialogHeader>
+          <div className="text-sm text-gray-600 py-2">
+            {pendingDeleteChat ? `Delete chat "${pendingDeleteChat.title}"? This cannot be undone.` : null}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPendingDeleteChat(null)}>Cancel</Button>
+            <Button variant="destructive" onClick={confirmDeleteChat}>Delete</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Rename-chat dialog (in-app to avoid Electron focus bug). */}
+      <Dialog open={!!pendingRenameChat} onOpenChange={(open) => { if (!open) setPendingRenameChat(null); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Rename chat</DialogTitle>
+          </DialogHeader>
+          <div className="py-2">
+            <input
+              autoFocus
+              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500"
+              value={renameDraft}
+              onChange={(e) => setRenameDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') { e.preventDefault(); confirmRename(); }
+                else if (e.key === 'Escape') { e.preventDefault(); setPendingRenameChat(null); }
+              }}
+              placeholder="Chat title"
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPendingRenameChat(null)}>Cancel</Button>
+            <Button onClick={confirmRename} disabled={!renameDraft.trim()}>Rename</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
