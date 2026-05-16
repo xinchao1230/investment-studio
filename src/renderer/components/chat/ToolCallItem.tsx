@@ -4,7 +4,7 @@
 import React, { useState, useRef, useCallback } from 'react';
 import { Loader2, ChevronRight } from 'lucide-react';
 import { ToolCall, Message as MessageType } from '../../types/chatTypes';
-import { getToolCallDisplayText, getToolCallIcon } from './toolCallDisplayConfig';
+import { getToolCallDisplayText, getToolCallIcon, getToolCallCategoryLabel } from './toolCallDisplayConfig';
 import { getToolCallView, hasCustomView } from './toolCallViews';
 
 /**
@@ -62,6 +62,9 @@ export const ToolCallItem: React.FC<ToolCallItemProps> = ({
 
   // Get display text
   const displayText = getToolCallDisplayText(toolCall.function.name, toolCall.function.arguments);
+
+  // Resolve high-level category badge (e.g. 互联网搜索 / 快速资料检索)
+  const category = getToolCallCategoryLabel(toolCall.function.name);
 
   // Check if a custom view exists
   const toolName = toolCall.function.name;
@@ -124,6 +127,14 @@ export const ToolCallItem: React.FC<ToolCallItemProps> = ({
           <ToolIcon toolName={toolName} status={executionStatus} />
         </div>
         <div className="tool-calls-text-col">
+          {category && (
+            <span
+              className={`tool-call-category-badge tone-${category.tone}`}
+              title={toolName}
+            >
+              {category.label}
+            </span>
+          )}
           <span className="tool-call-item-text">{displayText}</span>
           {isExpandable && (
             <ChevronRight

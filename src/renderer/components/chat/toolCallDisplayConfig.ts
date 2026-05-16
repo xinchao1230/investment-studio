@@ -87,42 +87,42 @@ const getDescriptionFromArgs = (args: Record<string, unknown> | null): string | 
 
 const getExecuteCommandDisplayText = (args: Record<string, unknown> | null): string => {
   if (args?.command && typeof args.command === 'string' && args.command.trim()) {
-    return `Executed command: ${args.command.trim()}`;
+    return `执行命令: ${args.command.trim()}`;
   }
-  return 'Executed command';
+  return '执行命令';
 };
 
 const getWebSearchDisplayText = (args: Record<string, unknown> | null): string => {
   if (args?.queries && Array.isArray(args.queries) && args.queries.length > 0) {
     const queriesStr = args.queries.join(', ');
-    return `Searched: ${queriesStr}`;
+    return `联网搜索: ${queriesStr}`;
   }
-  return 'Searched the web';
+  return '联网搜索';
 };
 
 const getImageSearchDisplayText = (args: Record<string, unknown> | null): string => {
   if (args?.queries && Array.isArray(args.queries) && args.queries.length > 0) {
     const queriesStr = args.queries.join(', ');
-    return `Searched images: ${queriesStr}`;
+    return `图片搜索: ${queriesStr}`;
   }
-  return 'Searched images';
+  return '图片搜索';
 };
 
 const getFetchWebContentDisplayText = (args: Record<string, unknown> | null): string => {
   if (args?.urls && Array.isArray(args.urls) && args.urls.length > 0) {
     const urlsStr = args.urls.join(', ');
-    return `Fetched: ${urlsStr}`;
+    return `浏览网页: ${urlsStr}`;
   }
-  return 'Fetched web content';
+  return '浏览网页';
 };
 
 const getWriteFileDisplayText = (args: Record<string, unknown> | null): string => {
   if (args?.filePath && typeof args.filePath === 'string' && args.filePath.trim()) {
     const filePath = args.filePath.trim();
     const fileName = filePath.split(/[/\\]/).pop() || filePath;
-    return `Wrote file: ${fileName}`;
+    return `写入文件: ${fileName}`;
   }
-  return 'Wrote file';
+  return '写入文件';
 };
 
 const getPresentDisplayText = (args: Record<string, unknown> | null): string => {
@@ -131,18 +131,18 @@ const getPresentDisplayText = (args: Record<string, unknown> | null): string => 
   }
   if (args?.filePaths && Array.isArray(args.filePaths) && args.filePaths.length > 0) {
     const count = args.filePaths.length;
-    return count === 1 ? 'Presented 1 file' : `Presented ${count} files`;
+    return count === 1 ? '展示 1 个文件' : `展示 ${count} 个文件`;
   }
-  return 'Presented deliverable';
+  return '展示成果';
 };
 
 const getReadFileDisplayText = (args: Record<string, unknown> | null): string => {
   if (args?.filePath && typeof args.filePath === 'string' && args.filePath.trim()) {
     const filePath = args.filePath.trim();
     const fileName = filePath.split(/[/\\]/).pop() || filePath;
-    return `Read file: ${fileName}`;
+    return `读取文件: ${fileName}`;
   }
-  return 'Read file';
+  return '读取文件';
 };
 
 const getReadHtmlDisplayText = (args: Record<string, unknown> | null): string => {
@@ -150,34 +150,34 @@ const getReadHtmlDisplayText = (args: Record<string, unknown> | null): string =>
     const filePath = args.filePath.trim();
     const fileName = filePath.split(/[/\\]/).pop() || filePath;
     const mode = args.mode && typeof args.mode === 'string' ? ` (${args.mode})` : '';
-    return `Read HTML: ${fileName}${mode}`;
+    return `读取 HTML: ${fileName}${mode}`;
   }
-  return 'Read HTML';
+  return '读取 HTML';
 };
 
 const getReadOfficeFileDisplayText = (args: Record<string, unknown> | null): string => {
   if (args?.filePath && typeof args.filePath === 'string' && args.filePath.trim()) {
     const filePath = args.filePath.trim();
     const fileName = filePath.split(/[/\\]/).pop() || filePath;
-    return `Read document: ${fileName}`;
+    return `读取文档: ${fileName}`;
   }
-  return 'Read office document';
+  return '读取文档';
 };
 
 const getSearchFilesDisplayText = (args: Record<string, unknown> | null): string => {
   if (args?.pattern && typeof args.pattern === 'string' && args.pattern.trim()) {
-    return `Searched files: ${args.pattern.trim()}`;
+    return `查找文件: ${args.pattern.trim()}`;
   }
-  return 'Searched files';
+  return '查找文件';
 };
 
 const getSearchTextInFilesDisplayText = (args: Record<string, unknown> | null): string => {
   if (args?.patterns && Array.isArray(args.patterns) && args.patterns.length > 0) {
     const patternsStr = args.patterns.slice(0, 2).join(', ');
     const suffix = args.patterns.length > 2 ? '...' : '';
-    return `Searched text: ${patternsStr}${suffix}`;
+    return `查找内容: ${patternsStr}${suffix}`;
   }
-  return 'Searched text in files';
+  return '查找内容';
 };
 
 /**
@@ -227,7 +227,7 @@ export const getToolCallDisplayText = (toolName: string, toolArgs?: string): str
 
     // ===== File operation tools =====
     case 'move_file':
-      return 'Moved file';
+      return '移动文件';
 
     // ===== File search tools =====
     case 'search_files':
@@ -237,43 +237,43 @@ export const getToolCallDisplayText = (toolName: string, toolArgs?: string): str
 
     // ===== Download tools =====
     case 'download_and_save_as':
-      return 'Downloaded file';
+      return '下载文件';
 
     // ===== Time tools =====
     case 'get_current_datetime':
-      return 'Got current time';
+      return '获取当前时间';
 
     // ===== MCP management tools =====
     case 'get_mcp_config_from_lib':
-      return 'Got MCP config from library';
+      return '获取 MCP 配置';
     case 'add_mcp_by_config':
-      return 'Added MCP server';
+      return '添加 MCP 服务';
     case 'update_mcp_by_config':
-      return 'Updated MCP server';
+      return '更新 MCP 服务';
     case 'check_mcp_status':
-      return 'Checked MCP status';
+      return '检查 MCP 状态';
     case 'toggle_mcp_by_name':
-      return 'Toggled MCP server';
+      return '切换 MCP 服务';
 
     // ===== Agent management tools =====
     case 'get_agent_config_from_lib':
-      return 'Got agent config from library';
+      return '获取 Agent 配置';
     case 'add_agent_by_config':
-      return 'Added agent';
+      return '添加 Agent';
     case 'update_agent_by_config':
-      return 'Updated agent';
+      return '更新 Agent';
     case 'check_agent_status':
-      return 'Checked agent status';
+      return '检查 Agent 状态';
     case 'get_all_agents':
-      return 'Got all agents';
+      return '获取全部 Agent';
     case 'set_primary_agent':
-      return 'Set primary agent';
+      return '设置主 Agent';
 
     // ===== Skill management tools =====
     case 'add_skill_from_lib_by_name':
-      return 'Added skill from library';
+      return '添加技能';
     case 'check_skill_status':
-      return 'Checked skill status';
+      return '检查技能状态';
 
     // ===== Presentation tools =====
     case 'present_deliverables':
@@ -281,7 +281,7 @@ export const getToolCallDisplayText = (toolName: string, toolArgs?: string): str
 
     // ===== Default =====
     default:
-      return `Used ${toolName}`;
+      return `调用工具: ${toolName}`;
   }
 };
 
@@ -292,9 +292,9 @@ export const getToolCallDisplayText = (toolName: string, toolArgs?: string): str
  */
 export const getToolCallsSummaryText = (count: number): string => {
   if (count === 1) {
-    return 'Used 1 tool';
+    return '使用了 1 个工具';
   }
-  return `Used ${count} tools`;
+  return `使用了 ${count} 个工具`;
 };
 
 /**
@@ -439,4 +439,129 @@ const inferIconTypeFromName = (toolName: string): ToolIconType => {
 export const getToolCallIcon = (toolName: string): LucideIcon => {
   const iconType = getToolCallIconType(toolName);
   return iconTypeToComponent[iconType];
+};
+
+/**
+ * Category badge tone — drives the pill color in the UI.
+ */
+export type ToolCategoryTone =
+  | 'blue'
+  | 'sky'
+  | 'cyan'
+  | 'green'
+  | 'amber'
+  | 'rose'
+  | 'purple'
+  | 'indigo'
+  | 'slate'
+  | 'gray';
+
+export interface ToolCallCategory {
+  /** Localized short label shown in the pill (e.g. "互联网搜索"). */
+  label: string;
+  /** Color tone for the pill background/text. */
+  tone: ToolCategoryTone;
+}
+
+/**
+ * Resolve a high-level Chinese category for the tool call.
+ * Returns null for tools we don't want to badge (kept clean for unknowns).
+ */
+export const getToolCallCategoryLabel = (toolName: string): ToolCallCategory | null => {
+  switch (toolName) {
+    // ===== Web =====
+    case 'bing_web_search':
+    case 'google_web_search':
+      return { label: '互联网搜索', tone: 'blue' };
+    case 'bing_image_search':
+    case 'google_image_search':
+      return { label: '图片搜索', tone: 'blue' };
+    case 'fetch_web_content':
+    case 'read_html':
+      return { label: '浏览网页', tone: 'sky' };
+
+    // ===== Command execution =====
+    case 'execute_command':
+      return { label: '执行命令', tone: 'slate' };
+
+    // ===== Local file search =====
+    case 'search_files':
+    case 'search_text_in_files':
+      return { label: '快速资料检索', tone: 'amber' };
+
+    // ===== Document read =====
+    case 'read_file':
+    case 'read_office_file':
+      return { label: '文档读取', tone: 'purple' };
+
+    // ===== File mutation =====
+    case 'write_file':
+    case 'create_file':
+    case 'append_to_file':
+      return { label: '编辑文件', tone: 'green' };
+    case 'move_file':
+      return { label: '编辑文件', tone: 'green' };
+
+    // ===== Download =====
+    case 'download_and_save_as':
+      return { label: '下载文件', tone: 'cyan' };
+
+    // ===== Skill management =====
+    case 'add_skill_from_lib_by_name':
+    case 'check_skill_status':
+      return { label: '技能读取', tone: 'rose' };
+
+    // ===== MCP / Agent service management =====
+    case 'get_mcp_config_from_lib':
+    case 'add_mcp_by_config':
+    case 'update_mcp_by_config':
+    case 'check_mcp_status':
+    case 'toggle_mcp_by_name':
+    case 'get_agent_config_from_lib':
+    case 'add_agent_by_config':
+    case 'update_agent_by_config':
+    case 'check_agent_status':
+    case 'get_all_agents':
+    case 'set_primary_agent':
+      return { label: '服务管理', tone: 'gray' };
+
+    // ===== Time =====
+    case 'get_current_datetime':
+      return { label: '时间查询', tone: 'sky' };
+
+    // ===== Deliverable presentation =====
+    case 'present_deliverables':
+      return { label: '成果展示', tone: 'green' };
+
+    default:
+      break;
+  }
+
+  // ===== Portfolio (research target) tools =====
+  if (toolName.startsWith('portfolio_')) {
+    return { label: '投研管理', tone: 'indigo' };
+  }
+
+  // ===== research-mcp tools (Tushare / yfinance / financial audit / report) =====
+  // See resources/mcp/research/src/research_mcp/server.py
+  switch (toolName) {
+    case 'tushare_collect':
+    case 'yfinance_collect':
+    case 'peer_collect':
+    case 'capital_flow':
+    case 'pdf_download_extract':
+    case 'data_snapshot':
+      return { label: '快速财务查询', tone: 'amber' };
+    case 'derived_metrics':
+    case 'financial_audit_11':
+    case 'technical_analysis':
+    case 'monitor_compare':
+      return { label: '财务计算', tone: 'amber' };
+    case 'assemble_report':
+      return { label: '研报生成', tone: 'rose' };
+    case 'check_env':
+      return { label: '环境检查', tone: 'gray' };
+    default:
+      return null;
+  }
 };
