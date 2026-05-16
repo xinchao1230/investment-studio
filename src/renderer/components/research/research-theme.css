@@ -110,6 +110,7 @@
   border-right: 0;
   border-top: 0;
   cursor: pointer;
+  white-space: nowrap;
   transition: color 0.15s ease, border-color 0.15s ease;
 }
 [data-theme="research"] .rw-side-tab:hover {
@@ -462,25 +463,34 @@
   width: 170px !important;
 }
 
-/* Make the model dropdown wider than the trigger and right-align so names
-   like "Claude Opus 4.6" don't wrap awkwardly inside a 170px column. */
+/* Model dropdown — wider than the trigger so full model names fit;
+   right edge aligned with the trigger button's right edge (not the send
+   button), so the menu floats above the model selector without overflowing. */
 [data-theme="research"] .chat-view--compact .chat-input-container .model-dropdown {
   left: auto;
-  right: 0;
+  right: -8px;
   width: 200px;
+  min-width: 200px;
   max-height: 360px;
+  bottom: calc(100% + 4px);
+  border-radius: 8px;
 }
 
 [data-theme="research"] .chat-view--compact .chat-input-container .model-list {
-  max-height: 360px;
-  padding: 6px;
+  max-height: 380px;
+  padding: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 
 [data-theme="research"] .chat-view--compact .chat-input-container .model-option {
-  padding: 8px 10px;
-  border-radius: 8px;
+  padding: 12px 10px;
+  border-radius: 6px;
   align-items: center;
   gap: 8px;
+  margin: 0;
+  min-height: 0;
 }
 
 [data-theme="research"] .chat-view--compact .chat-input-container .model-info.chat-input-vertical {
@@ -525,3 +535,120 @@
 /* TODO(research-compact): once ChatView exposes hooks like
    [data-role="user-bubble"], [data-role="assistant-message"], [data-role="tool-call"],
    restyle message bubbles + tool-call chips here. */
+
+/* ============================================================
+ * Compact ChatInput — tighten the chat composer for the narrow
+ * research pane (defaults target the standalone /agent window).
+ * Scope strictly to [data-theme="research"] .chat-view--compact.
+ * ============================================================ */
+
+/* Outer wrapper: less padding so the input sits closer to bottom edge. */
+[data-theme="research"] .chat-view--compact .chat-content-wrapper .chat-content.empty-chat .chat-input-container,
+[data-theme="research"] .chat-view--compact .chat-content-wrapper .chat-content .chat-input-container {
+  padding: 8px 10px 10px 10px;
+}
+
+/* Input area: smaller radius + lighter shadow + tighter min-width. */
+[data-theme="research"] .chat-view--compact .input-area {
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  min-width: 0;
+}
+
+/* Textarea: smaller font / padding / margin. Match the button-area's
+   horizontal padding so the placeholder text aligns with the buttons below. */
+[data-theme="research"] .chat-view--compact .chat-textarea {
+  height: 52px;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 0 8px;
+  margin-top: 8px;
+}
+
+/* Button row: tighter padding and gap. */
+[data-theme="research"] .chat-view--compact .button-area {
+  padding: 6px 8px 8px 8px;
+  gap: 6px;
+}
+
+/* Hide the Edit Agent menu button (MCP Tools / Skills / System Prompt / Context
+   Enhancement) in the research workspace — those are managed elsewhere. */
+[data-theme="research"] .chat-view--compact .edit-agent-button {
+  display: none !important;
+}
+
+/* Attachment / settings buttons in the left group: shrink from 36-40px → 28px.
+   Scope tightly so we don't accidentally hit `.model-option` buttons inside
+   the model dropdown (which is also rendered under .button-area > .model-selector). */
+[data-theme="research"] .chat-view--compact .button-area > .attachment-button,
+[data-theme="research"] .chat-view--compact .button-area > button:not(.send-button):not(.model-button) {
+  width: 28px;
+  height: 28px;
+  min-width: 28px;
+  min-height: 28px;
+  border-radius: 8px;
+}
+
+[data-theme="research"] .chat-view--compact .button-area > .attachment-button svg,
+[data-theme="research"] .chat-view--compact .button-area > button:not(.send-button):not(.model-button) svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* Send / stop button: 40px → 28px, smaller radius, smaller icon. */
+[data-theme="research"] .chat-view--compact .send-button {
+  width: 28px;
+  min-width: 28px;
+  height: 28px;
+  min-height: 28px;
+  border-radius: 8px;
+  font-size: 12px;
+}
+
+[data-theme="research"] .chat-view--compact .send-button .send-icon,
+[data-theme="research"] .chat-view--compact .send-button svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* Model selector trigger: smaller text + tighter padding. */
+[data-theme="research"] .chat-view--compact .chat-input-container .model-selector,
+[data-theme="research"] .chat-view--compact .chat-input-container .model-button {
+  width: 150px !important;
+  height: 28px;
+  min-height: 28px;
+  font-size: 12px;
+  border-radius: 8px;
+  padding: 0 8px;
+}
+
+/* The model-info / model name shown inside the trigger button.
+   ChatInput.tsx renders a <span class="model-option-name"> here too,
+   inheriting the default 14-15px. Force it down to 12px to match. */
+[data-theme="research"] .chat-view--compact .chat-input-container .model-button .model-info,
+[data-theme="research"] .chat-view--compact .chat-input-container .model-button .model-option-name,
+[data-theme="research"] .chat-view--compact .chat-input-container .model-button span,
+[data-theme="research"] .chat-view--compact .chat-input-container .model-button {
+  font-size: 12px !important;
+  line-height: 1.3;
+}
+
+/* The dropdown chevron next to the model name. */
+[data-theme="research"] .chat-view--compact .chat-input-container .model-button svg {
+  width: 12px;
+  height: 12px;
+}
+
+/* User message bubble: smaller radius + tighter padding to match denser layout.
+   The actual element is `.message.user-message` (Message.tsx returns
+   className "message user-message"), styled by .message { padding: 16px 20px;
+   border-radius: 20px; } in Message.css. */
+[data-theme="research"] .rw-pane-right .message.user-message {
+  padding: 8px 12px;
+  border-radius: 12px;
+}
+[data-theme="research"] .rw-pane-right .message.user-message p,
+[data-theme="research"] .rw-pane-right .message.user-message {
+  font-size: 13px;
+  line-height: 1.5;
+}

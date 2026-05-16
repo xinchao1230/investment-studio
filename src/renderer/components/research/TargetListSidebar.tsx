@@ -245,7 +245,7 @@ export const TargetListSidebar: React.FC<TargetListSidebarProps> = ({
           className={`rw-side-tab ${activeMode === 'stella' ? 'is-active' : ''}`}
           onClick={() => onModeChange('stella')}
         >
-          Ask Stella
+          Ask
         </button>
         <div className="flex-1" />
         {activeMode === 'workspace' ? (
