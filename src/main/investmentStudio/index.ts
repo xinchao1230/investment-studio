@@ -21,6 +21,7 @@
  */
 
 import { app, ipcMain, shell } from 'electron';
+import * as fs from 'fs';
 import * as path from 'path';
 
 export interface InvestmentStudioDeps {
@@ -76,6 +77,19 @@ export async function runPostLoginSeeders(
     seedLog(`[builtin-skills] installed=[${r.installed.join(',')}] skipped=[${r.skipped.join(',')}] failed=[${r.failed.map(f => `${f.name}:${f.error}`).join('|')}]`);
   } catch (e) {
     seedLog(`[builtin-skills] EXCEPTION: ${e instanceof Error ? e.message : String(e)}`);
+  }
+
+  // 2.5) Ensure portfolio/_shared/ subdirs exist (cross-target shared resources).
+  if (brand === BRAND_INVESTMENT_STUDIO) {
+    try {
+      const sharedRoot = path.join(app.getPath('userData'), 'portfolio', '_shared');
+      for (const sub of ['methodology', 'macro', 'templates']) {
+        fs.mkdirSync(path.join(sharedRoot, sub), { recursive: true });
+      }
+      seedLog('[portfolio/_shared] ensured');
+    } catch (e) {
+      seedLog(`[portfolio/_shared] EXCEPTION: ${e instanceof Error ? e.message : String(e)}`);
+    }
   }
 
   // 3) Auto-install the research-mcp Python venv in the background.
@@ -364,6 +378,32 @@ function registerResearchChatIpc(deps: InvestmentStudioDeps): void {
       const pcManager = await deps.getProfileCacheManager();
       const sessionId = pcManager.getLastActiveChatByTarget(alias, targetCode);
       return { success: true, data: sessionId };
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+    }
+  });
+
+  // Research workspace: persistent "currently selected target" — used to
+  // restore the selection on app restart so users land back where they left off.
+  ipcMain.handle('researchTarget:getLastActive', async () => {
+    try {
+      const alias = deps.getCurrentUserAlias();
+      if (!alias) return { success: false, error: 'No current user session' };
+      const pcManager = await deps.getProfileCacheManager();
+      const code = pcManager.getLastActiveTargetCode(alias);
+      return { success: true, data: code };
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+    }
+  });
+
+  ipcMain.handle('researchTarget:setLastActive', async (_event, targetCode: string | null) => {
+    try {
+      const alias = deps.getCurrentUserAlias();
+      if (!alias) return { success: false, error: 'No current user session' };
+      const pcManager = await deps.getProfileCacheManager();
+      const ok = await pcManager.setLastActiveTargetCode(alias, targetCode);
+      return ok ? { success: true } : { success: false, error: 'Failed to set last active target' };
     } catch (error) {
       return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
     }

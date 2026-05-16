@@ -315,6 +315,12 @@ export interface ProfileV2 {
    */
   lastActiveChatByTarget?: Record<string, string>;
   /**
+   * Research workspace: most-recently-active target code.
+   * Used to auto-restore the selected target on app restart.
+   * `null` or missing ⇒ no target selected (show empty state).
+   */
+  lastActiveTargetCode?: string | null;
+  /**
    * Research workspace: per-provider API tokens (plain text, same security
    * level as mcp_servers[].env). Missing or empty string ⇒ not configured.
    */

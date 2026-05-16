@@ -31,7 +31,7 @@ export class PortfolioTools {
   static getInitTargetDefinition(): BuiltinToolDefinition {
     return {
       name: 'portfolio_init_target',
-      description: 'Create a new research target folder with standard template files (profile.yaml, key-drivers.md, notes.md, tracking.md, earnings/, models/)',
+      description: 'Create a new research target folder with standard template files (profile.yaml, key-drivers.md, notes.md, tracking.md, inputs/, earnings/, research/, models/)',
       inputSchema: {
         type: 'object',
         properties: {
@@ -164,7 +164,9 @@ export class PortfolioTools {
     }
 
     fs.mkdirSync(targetDir, { recursive: true });
+    fs.mkdirSync(path.join(targetDir, 'inputs'), { recursive: true });
     fs.mkdirSync(path.join(targetDir, 'earnings'), { recursive: true });
+    fs.mkdirSync(path.join(targetDir, 'research'), { recursive: true });
     fs.mkdirSync(path.join(targetDir, 'models'), { recursive: true });
 
     const now = new Date().toISOString().split('T')[0];
