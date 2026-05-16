@@ -31,10 +31,13 @@ interface TargetListSidebarProps {
   targets: Target[];
   selectedCode: string | null;
   expandedCodes: Set<string>;
+  /** Expanded sub-category folder keys, shaped `<code>::<category>`. */
+  expandedCats: Set<string>;
   filesByCode: Record<string, TargetFile[] | undefined>;
   activeFileAbsPath: string | null;
   onSelectTarget: (code: string) => void;
   onToggleExpand: (code: string) => void;
+  onToggleCat: (key: string) => void;
   onOpenFile: (file: TargetFile) => void;
   onAddTarget: () => void;
   onDeleteTarget: (code: string, name: string) => void;
@@ -74,10 +77,12 @@ export const TargetListSidebar: React.FC<TargetListSidebarProps> = ({
   targets,
   selectedCode,
   expandedCodes,
+  expandedCats,
   filesByCode,
   activeFileAbsPath,
   onSelectTarget,
   onToggleExpand,
+  onToggleCat,
   onOpenFile,
   onAddTarget,
   onDeleteTarget,
@@ -93,7 +98,6 @@ export const TargetListSidebar: React.FC<TargetListSidebarProps> = ({
   width = 240,
   onCollapse,
 }) => {
-  const [expandedCats, setExpandedCats] = useState<Set<string>>(new Set());
   const [searchQuery, setSearchQuery] = useState('');
   const searchInputRef = React.useRef<HTMLInputElement | null>(null);
 
@@ -128,15 +132,6 @@ export const TargetListSidebar: React.FC<TargetListSidebarProps> = ({
           (t.industry ?? '').toLowerCase().includes(q),
       )
     : targets;
-
-  const toggleCat = useCallback((key: string) => {
-    setExpandedCats((prev) => {
-      const next = new Set(prev);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      return next;
-    });
-  }, []);
 
   const navigate = useNavigate();
 
@@ -390,7 +385,7 @@ export const TargetListSidebar: React.FC<TargetListSidebarProps> = ({
                         <div
                           className={`rw-tree-row ${!hasFiles ? 'is-disabled' : ''}`}
                           style={{ paddingLeft: 12 }}
-                          onClick={hasFiles ? () => toggleCat(catKey) : undefined}
+                          onClick={hasFiles ? () => onToggleCat(catKey) : undefined}
                         >
                           {hasFiles
                             ? (isCatExpanded ? <ChevronDown size={13} /> : <ChevronRight size={13} />)

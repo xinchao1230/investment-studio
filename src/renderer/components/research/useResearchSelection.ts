@@ -1,5 +1,6 @@
 // React hook persisting the Research workspace's left-sidebar selection
-// (currently-selected target + expanded rows) to localStorage.
+// (currently-selected target + expanded rows + expanded sub-category
+// folders inside each target) to localStorage.
 //
 // Persistence scope:
 //   - localStorage (durable across app restarts) — matches `tabsByCode`
@@ -15,10 +16,16 @@
 //   - beforeunload / pagehide / unmount → flush.
 //
 // Storage key: `rw:selection:<profileAlias>` — per-profile isolation.
-// Payload: { version: 1, selectedCode: string|null, expandedCodes: string[] }
+// Payload: {
+//   version: 1,
+//   selectedCode: string|null,
+//   expandedCodes: string[],
+//   expandedCats: string[]            // entries shaped as `<code>::<category>`
+// }
 //
-// Orphan cleanup: on first knownCodes load, drop selectedCode and
-// expandedCodes entries whose stockCode is no longer in the portfolio.
+// Orphan cleanup: on first knownCodes load, drop selectedCode +
+// expandedCodes + expandedCats entries whose stockCode is no longer in
+// the portfolio.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
@@ -29,11 +36,14 @@ type Persisted = {
   version: number;
   selectedCode: string | null;
   expandedCodes: string[];
+  /** Sub-category folder expansion, keyed as `<stockCode>::<category>`. */
+  expandedCats?: string[];
 };
 
 type Snapshot = {
   selectedCode: string | null;
   expandedCodes: Set<string>;
+  expandedCats: Set<string>;
 };
 
 function storageKey(profileAlias: string): string {
@@ -41,7 +51,11 @@ function storageKey(profileAlias: string): string {
 }
 
 function emptySnapshot(): Snapshot {
-  return { selectedCode: null, expandedCodes: new Set<string>() };
+  return {
+    selectedCode: null,
+    expandedCodes: new Set<string>(),
+    expandedCats: new Set<string>(),
+  };
 }
 
 function readFromStorage(profileAlias: string): Snapshot {
@@ -63,7 +77,14 @@ function readFromStorage(profileAlias: string): Snapshot {
     const expanded = Array.isArray(parsed.expandedCodes)
       ? parsed.expandedCodes.filter((c) => typeof c === 'string')
       : [];
-    return { selectedCode, expandedCodes: new Set(expanded) };
+    const expandedCats = Array.isArray(parsed.expandedCats)
+      ? parsed.expandedCats.filter((c) => typeof c === 'string')
+      : [];
+    return {
+      selectedCode,
+      expandedCodes: new Set(expanded),
+      expandedCats: new Set(expandedCats),
+    };
   } catch (err) {
     console.warn(
       '[useResearchSelection] failed to parse localStorage, starting fresh:',
@@ -79,6 +100,7 @@ function writeToStorage(profileAlias: string, snap: Snapshot): void {
       version: STORAGE_VERSION,
       selectedCode: snap.selectedCode,
       expandedCodes: Array.from(snap.expandedCodes),
+      expandedCats: Array.from(snap.expandedCats),
     };
     localStorage.setItem(storageKey(profileAlias), JSON.stringify(payload));
   } catch (err) {
@@ -91,6 +113,9 @@ export interface UseResearchSelectionReturn {
   setSelectedCode: React.Dispatch<React.SetStateAction<string | null>>;
   expandedCodes: Set<string>;
   setExpandedCodes: React.Dispatch<React.SetStateAction<Set<string>>>;
+  /** Sub-category folder expansion, keyed `<stockCode>::<category>`. */
+  expandedCats: Set<string>;
+  setExpandedCats: React.Dispatch<React.SetStateAction<Set<string>>>;
   /** Force-flush pending state synchronously (bypass debounce). */
   flushNow: () => void;
   /**
@@ -118,6 +143,7 @@ export function useResearchSelection(
 ): UseResearchSelectionReturn {
   const [selectedCode, setSelectedCode] = useState<string | null>(null);
   const [expandedCodes, setExpandedCodes] = useState<Set<string>>(new Set());
+  const [expandedCats, setExpandedCats] = useState<Set<string>>(new Set());
   const [hydrated, setHydrated] = useState(false);
 
   // Track which alias we've hydrated for, so an alias change re-loads.
@@ -131,6 +157,7 @@ export function useResearchSelection(
     const fromDisk = readFromStorage(profileAlias);
     setSelectedCode(fromDisk.selectedCode);
     setExpandedCodes(fromDisk.expandedCodes);
+    setExpandedCats(fromDisk.expandedCats);
     setHydrated(true);
   }, [profileAlias]);
 
@@ -151,12 +178,24 @@ export function useResearchSelection(
       }
       return changed ? next : prev;
     });
+    setExpandedCats((prev) => {
+      let changed = false;
+      const next = new Set<string>();
+      for (const k of prev) {
+        // keys shaped `<code>::<category>` — drop if code is gone
+        const sep = k.indexOf('::');
+        const code = sep >= 0 ? k.slice(0, sep) : k;
+        if (knownCodes.has(code)) next.add(k);
+        else changed = true;
+      }
+      return changed ? next : prev;
+    });
   }, [profileAlias, knownCodes]);
 
   // Debounced persistence on every state change.
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const latestSnapshotRef = useRef<Snapshot>({ selectedCode, expandedCodes });
-  latestSnapshotRef.current = { selectedCode, expandedCodes };
+  const latestSnapshotRef = useRef<Snapshot>({ selectedCode, expandedCodes, expandedCats });
+  latestSnapshotRef.current = { selectedCode, expandedCodes, expandedCats };
 
   useEffect(() => {
     if (!profileAlias) return;
@@ -168,7 +207,7 @@ export function useResearchSelection(
       writeToStorage(profileAlias, latestSnapshotRef.current);
       debounceTimerRef.current = null;
     }, DEBOUNCE_MS);
-  }, [selectedCode, expandedCodes, profileAlias]);
+  }, [selectedCode, expandedCodes, expandedCats, profileAlias]);
 
   // Flush on unmount / page hide so we don't lose in-flight debounced writes.
   useEffect(() => {
@@ -204,9 +243,11 @@ export function useResearchSelection(
       setSelectedCode,
       expandedCodes,
       setExpandedCodes,
+      expandedCats,
+      setExpandedCats,
       flushNow,
       hydrated,
     }),
-    [selectedCode, expandedCodes, flushNow, hydrated],
+    [selectedCode, expandedCodes, expandedCats, flushNow, hydrated],
   );
 }

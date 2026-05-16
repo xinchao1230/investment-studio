@@ -69,15 +69,17 @@ export const ResearchPage: React.FC = () => {
     profileAlias,
     loading ? null : knownCodes,
   );
-  // Left-sidebar selection (selectedCode + expandedCodes) persists to
-  // sessionStorage so that intra-session navigation (e.g. /research →
-  // /settings → Back, which unmounts ResearchPage) preserves selection.
-  // App restart still clears it, by design (sessionStorage scope).
+  // Left-sidebar selection (selectedCode + expandedCodes + expandedCats)
+  // persists to localStorage so it survives both intra-session navigation
+  // (e.g. /research → /settings → Back, which unmounts ResearchPage) and
+  // full app restart.
   const {
     selectedCode,
     setSelectedCode,
     expandedCodes,
     setExpandedCodes,
+    expandedCats,
+    setExpandedCats,
     flushNow: flushSelection,
     hydrated: selectionHydrated,
   } = useResearchSelection(profileAlias, loading ? null : knownCodes);
@@ -309,6 +311,26 @@ export const ResearchPage: React.FC = () => {
     });
   }, [loading, selectionHydrated, selectedCode, targets, loadFiles, targetChats]);
 
+  // Post-hydration: also load files + chat lists for every persisted
+  // expanded target row, not just the selected one. Without this the
+  // restored sub-category folder expansion (expandedCats) for unselected
+  // targets has no files to render → the chevron renders disabled and
+  // the user perceives the expansion state as lost.
+  const expandedHydratedRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (loading) return;
+    if (!selectionHydrated) return;
+    if (expandedHydratedRef.current === profileAlias) return;
+    expandedHydratedRef.current = profileAlias;
+    const known = new Set(targetsRef.current.map((t) => t.stock_code));
+    for (const code of expandedCodes) {
+      if (!known.has(code)) continue;
+      loadFiles(code);
+      targetChats.loadChats(code).catch(() => { /* logged inside */ });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, selectionHydrated, profileAlias, targets]);
+
   const handleSelectTarget = useCallback(
     async (code: string) => {
       setSelectedCode(code);
@@ -373,6 +395,18 @@ export const ResearchPage: React.FC = () => {
       });
     },
     [loadFiles, targetChats],
+  );
+
+  const handleToggleCat = useCallback(
+    (key: string) => {
+      setExpandedCats((prev) => {
+        const next = new Set(prev);
+        if (next.has(key)) next.delete(key);
+        else next.add(key);
+        return next;
+      });
+    },
+    [setExpandedCats],
   );
 
   // Reverse-lookup the target that owns an arbitrary absPath. Returns the
@@ -684,10 +718,12 @@ export const ResearchPage: React.FC = () => {
             targets={targets}
             selectedCode={selectedCode}
             expandedCodes={expandedCodes}
+            expandedCats={expandedCats}
             filesByCode={filesByCode}
             activeFileAbsPath={activeFileAbsPath}
             onSelectTarget={handleSelectTarget}
             onToggleExpand={handleToggleExpand}
+            onToggleCat={handleToggleCat}
             onOpenFile={handleOpenFile}
             onAddTarget={handleOpenAddForm}
             onDeleteTarget={handleDeleteTarget}
