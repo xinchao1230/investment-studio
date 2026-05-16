@@ -21,6 +21,7 @@
  */
 
 import { app, ipcMain, shell } from 'electron';
+import * as fs from 'fs';
 import * as path from 'path';
 
 export interface InvestmentStudioDeps {
@@ -76,6 +77,19 @@ export async function runPostLoginSeeders(
     seedLog(`[builtin-skills] installed=[${r.installed.join(',')}] skipped=[${r.skipped.join(',')}] failed=[${r.failed.map(f => `${f.name}:${f.error}`).join('|')}]`);
   } catch (e) {
     seedLog(`[builtin-skills] EXCEPTION: ${e instanceof Error ? e.message : String(e)}`);
+  }
+
+  // 2.5) Ensure portfolio/_shared/ subdirs exist (cross-target shared resources).
+  if (brand === BRAND_INVESTMENT_STUDIO) {
+    try {
+      const sharedRoot = path.join(app.getPath('userData'), 'portfolio', '_shared');
+      for (const sub of ['methodology', 'macro', 'templates']) {
+        fs.mkdirSync(path.join(sharedRoot, sub), { recursive: true });
+      }
+      seedLog('[portfolio/_shared] ensured');
+    } catch (e) {
+      seedLog(`[portfolio/_shared] EXCEPTION: ${e instanceof Error ? e.message : String(e)}`);
+    }
   }
 
   // 3) Auto-install the research-mcp Python venv in the background.

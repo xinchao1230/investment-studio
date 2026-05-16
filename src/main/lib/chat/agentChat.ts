@@ -557,6 +557,16 @@ export class AgentChat {
               sections.push(`- Target Directory: \`${targetAbsDir}\``);
               sections.push(`- All file/command operations for this conversation should default to this directory.`);
               sections.push(`- DO NOT call \`portfolio_init_target\` for this target — it already exists. Write any new files (财报/分析/笔记等) directly under the Target Directory above. Creating a new target folder for the same company will produce a duplicate in the workspace sidebar.`);
+
+              // Soft directory conventions — recommend, don't enforce.
+              sections.push(`\n**Target Directory Conventions (推荐结构，可创建其他目录但请尽量复用):**`);
+              sections.push(`- \`inputs/\` — User-attached files (PDFs, research reports, notes). Auto-populated when user attaches files in chat.`);
+              sections.push(`- \`earnings/\` — Financial CSV data from \`tushare_collect\` / \`yfinance_collect\`.`);
+              sections.push(`- \`research/\` — AI-generated analysis reports.`);
+              sections.push(`- \`models/\` — Valuation models and scripts.`);
+              sections.push(`- \`profile.yaml\`, \`key-drivers.md\`, \`notes.md\`, \`tracking.md\` — pre-created templates; update in place.`);
+              sections.push(`- Naming: reports use \`{date}-{topic}.md\` (e.g. \`2026Q1-earnings-review.md\`); scripts use \`fetch_*.py\` (download) / \`analyze_*.py\` (process).`);
+              sections.push(`- Prefer reusing existing subdirectories. Only create new top-level directories when none of the above fit.`);
             }
 
             // Command Execution cwd — narrowed to target dir when bound, else session/KB.
@@ -1578,6 +1588,65 @@ export class AgentChat {
   }
   
   /**
+   * 🏷️ Investment-studio brand: copy user-attached files into the bound target's
+   * `inputs/` directory and rewrite the message content to reference the archived
+   * paths. Non-research chats (no target binding) and other brands are no-ops.
+   *
+   * Mutates `userMessage.content` in-place. Each per-file failure is swallowed —
+   * if archiving fails for any reason, the original path is preserved so the
+   * chat continues to work.
+   */
+  private archiveResearchAttachments(userMessage: Message): void {
+    if ((process.env.BRAND_NAME || 'openkosmos') !== 'investment-studio') return;
+    const session = this.currentChatSession as any;
+    const targetDir = session?.targetDir;
+    if (!targetDir || typeof targetDir !== 'string') return;
+    if (!/^[A-Za-z]:[\\/]|^\//.test(targetDir)) return;
+
+    const content = (userMessage as any)?.content;
+    if (!Array.isArray(content) || content.length === 0) return;
+
+    let fs: typeof import('fs');
+    let path: typeof import('path');
+    try { fs = require('fs'); path = require('path'); } catch { return; }
+    const inputsDir = path.join(targetDir, 'inputs');
+    try { fs.mkdirSync(inputsDir, { recursive: true }); } catch { return; }
+
+    const archiveOne = (src: string): string => {
+      try {
+        if (!src || typeof src !== 'string' || !fs.existsSync(src)) return src;
+        const resolvedSrc = path.resolve(src);
+        // Already inside the target's inputs/ — leave alone.
+        if (resolvedSrc.toLowerCase().startsWith(path.resolve(inputsDir).toLowerCase())) {
+          return src;
+        }
+        const baseName = path.basename(src);
+        let dest = path.join(inputsDir, baseName);
+        if (fs.existsSync(dest)) {
+          const ext = path.extname(baseName);
+          const stem = baseName.slice(0, baseName.length - ext.length);
+          for (let i = 2; i < 1000; i++) {
+            const candidate = path.join(inputsDir, `${stem}_${i}${ext}`);
+            if (!fs.existsSync(candidate)) { dest = candidate; break; }
+          }
+        }
+        fs.copyFileSync(src, dest);
+        return dest;
+      } catch {
+        return src;
+      }
+    };
+
+    for (const part of content) {
+      if (!part || typeof part !== 'object') continue;
+      // FileContentPart / OfficeContentPart / OthersContentPart: file.filePath
+      if ((part.type === 'file' || part.type === 'office' || part.type === 'others') && part.file?.filePath) {
+        part.file.filePath = archiveOne(part.file.filePath);
+      }
+    }
+  }
+
+  /**
    * 🔄 Modified: streamMessage supports CancellationToken
    *
    * @param userMessage - User message
@@ -1602,6 +1671,14 @@ export class AgentChat {
         agentName: this.getAgentName()
       });
       throw new CancellationError('Operation was cancelled before it started');
+    }
+
+    // 🏷️ Investment-studio brand: archive user attachments to {targetDir}/inputs/
+    // so they survive across chat sessions and become part of the target's KB.
+    try {
+      this.archiveResearchAttachments(userMessage);
+    } catch (e) {
+      logger.warn(`[AgentChat] archiveResearchAttachments failed (non-fatal): ${e instanceof Error ? e.message : String(e)}`);
     }
     
     // 🔥 Refactored: Use new AddMessageToSession method
