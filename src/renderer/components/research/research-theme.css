@@ -102,9 +102,22 @@
 [data-theme="research"] .rw-side-tab {
   font-size: 13px;
   font-weight: 500;
-  color: var(--rw-text);
+  color: var(--rw-text-3);
   padding: 4px 2px;
-  border-bottom: 2px solid var(--rw-accent);
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  border-left: 0;
+  border-right: 0;
+  border-top: 0;
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+[data-theme="research"] .rw-side-tab:hover {
+  color: var(--rw-text);
+}
+[data-theme="research"] .rw-side-tab.is-active {
+  color: var(--rw-text);
+  border-bottom-color: var(--rw-accent);
 }
 [data-theme="research"] .rw-side-icon-btn {
   display: inline-flex;
@@ -162,6 +175,100 @@
 [data-theme="research"] .rw-pane-right :where(input, textarea) { font-size: 13px; }
 [data-theme="research"] .rw-pane-right:not(.rw-pane-right--collapsed) { min-width: 400px; }
 
+/* ───────────── Empty-state UX contract ─────────────
+ * - Workspace mode (target picked): show the local hardcoded
+ *   EmptySuggestions overlay; hide the agent's ChatZeroStates so the two
+ *   don't stack.
+ * - Stella mode (global Ask Stella): hide the local overlay (handled in
+ *   ResearchChatPane.tsx) and let ChatZeroStates be the welcome screen,
+ *   topped by a small "Ask Stella" landing header (.rw-stella-welcome-header).
+ */
+[data-theme="research"] .rw-pane-right[data-research-mode="workspace"] .chat-zero-states {
+  display: none !important;
+}
+
+/* Stella mode: hide the agent profile's ChatZeroStates so it can't stack on
+ * top of the self-contained StellaWelcome. This is defensive — current
+ * profiles lack zero_states, but if one is added later we still want a
+ * single welcome surface. */
+[data-theme="research"] .rw-pane-right[data-research-mode="stella"] .chat-zero-states {
+  display: none !important;
+}
+
+/* "Ask Stella" landing screen rendered above ChatView in Stella mode.
+ * Self-contained (does not depend on the persisted agent's zero_states),
+ * because legacy profiles may lack that field. */
+[data-theme="research"] .rw-stella-welcome {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  padding: 24px 20px 12px 20px;
+  user-select: none;
+  /* The overlay container has overflow:hidden — if the pane is shorter than
+     the welcome card grid (e.g. small window or many cards), let the welcome
+     itself scroll instead of clipping the bottom cards. */
+  max-height: 100%;
+  overflow-y: auto;
+}
+[data-theme="research"] .rw-stella-welcome-header {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+[data-theme="research"] .rw-stella-welcome-emoji {
+  font-size: 28px;
+  line-height: 1;
+}
+[data-theme="research"] .rw-stella-welcome-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--rw-text-1);
+  letter-spacing: 0.2px;
+}
+[data-theme="research"] .rw-stella-welcome-greeting {
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--rw-text-2);
+  text-align: center;
+  padding: 0 8px;
+  margin-bottom: 16px;
+}
+[data-theme="research"] .rw-stella-welcome-cards {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+[data-theme="research"] .rw-stella-welcome-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--rw-bg-card, rgba(127, 127, 127, 0.06));
+  border: 1px solid var(--rw-border-1, rgba(127, 127, 127, 0.15));
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+[data-theme="research"] .rw-stella-welcome-card:hover {
+  background: var(--rw-bg-card-hover, rgba(127, 127, 127, 0.12));
+  border-color: var(--rw-border-2, rgba(127, 127, 127, 0.25));
+}
+[data-theme="research"] .rw-stella-welcome-card-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--rw-text-1);
+  line-height: 18px;
+}
+[data-theme="research"] .rw-stella-welcome-card-desc {
+  font-size: 12px;
+  color: var(--rw-text-3);
+  line-height: 16px;
+}
+
 /* Zero-states (Stella greeting + quick-start cards) — scale down typography
    in the Research right pane so it matches the surrounding 12-13px UI rather
    than the 18-20px /agent main-window scale. */
@@ -172,6 +279,23 @@
 [data-theme="research"] .rw-pane-right .chat-zero-states {
   gap: 12px;
   padding: 0 16px;
+}
+
+/* In Stella mode the zero-states block IS the welcome screen — give it a bit
+   more breathing room than the cramped workspace defaults.
+   NOTE: chat-zero-states is now hidden in stella mode (see above) in favour
+   of the self-contained StellaWelcome. These two rules are kept as no-ops
+   so that, should a future profile rely on the agent's zero_states UI, the
+   compact-mode override is still present when the hide-rule is removed. */
+[data-theme="research"] .rw-pane-right[data-research-mode="stella"] .chat-zero-states {
+  gap: 16px;
+  padding: 4px 20px 12px 20px;
+}
+[data-theme="research"] .rw-pane-right[data-research-mode="stella"] .chat-zero-states-greeting {
+  font-size: 15px;
+  line-height: 1.55;
+  text-align: center;
+  color: var(--rw-text-2);
 }
 [data-theme="research"] .rw-pane-right .quick-start-card-title {
   font-size: 13px;

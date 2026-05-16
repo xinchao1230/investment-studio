@@ -6,6 +6,7 @@ import { ResearchChatPane } from './ResearchChatPane';
 import { AddTargetSearch } from './AddTargetSearch';
 import { usePortfolio, TargetFile } from './usePortfolio';
 import { useTargetChats } from './useTargetChats';
+import { useStellaChats } from './useStellaChats';
 import { useTabsByCode } from './useTabsByCode';
 import { useResearchSelection } from './useResearchSelection';
 import {
@@ -83,6 +84,11 @@ export const ResearchPage: React.FC = () => {
     flushNow: flushSelection,
     hydrated: selectionHydrated,
   } = useResearchSelection(profileAlias, loading ? null : knownCodes);
+
+  // Top-level Research mode: workspace tree vs Ask Stella global chat.
+  // Not persisted by design — always defaults to 'workspace' on app start.
+  const [activeMode, setActiveMode] = useState<'workspace' | 'stella'>('workspace');
+  const stella = useStellaChats();
   const [showAddForm, setShowAddForm] = useState(false);
   const [addError, setAddError] = useState<string | null>(null);
   const [addBusy, setAddBusy] = useState(false);
@@ -263,6 +269,8 @@ export const ResearchPage: React.FC = () => {
   // When active chat changes, tell the chat engine to switch sessions so
   // the embedded ChatView reflects the right history.
   useEffect(() => {
+    // In Stella mode, the stella effect below owns the active session.
+    if (activeMode === 'stella') return;
     if (!targetChats.active) return;
     const { chatId, chatSessionId } = targetChats.active;
     (async () => {
@@ -275,7 +283,40 @@ export const ResearchPage: React.FC = () => {
         console.error('[ResearchPage] switchToChatSession failed:', err);
       }
     })();
-  }, [targetChats.active]);
+  }, [targetChats.active, activeMode]);
+
+  // Stella mode: when the active Stella session changes, switch the chat
+  // engine to it (mirrors the target effect above).
+  useEffect(() => {
+    if (activeMode !== 'stella') return;
+    if (!stella.active) return;
+    const { chatId, chatSessionId } = stella.active;
+    (async () => {
+      try {
+        await window.electronAPI.agentChat.switchToChatSession(chatId, chatSessionId);
+        agentChatSessionCacheManager.setCurrentChatSessionId(chatId, chatSessionId);
+      } catch (err) {
+        console.error('[ResearchPage] switchToChatSession (stella) failed:', err);
+      }
+    })();
+  }, [stella.active, activeMode]);
+
+  // Mode switch: ensure the right chat session is active for the new mode.
+  // - workspace: re-select the current target's chat (no-op if unchanged).
+  // - stella: select (or auto-create) the most-recent Stella chat.
+  const handleModeChange = useCallback(
+    async (mode: 'workspace' | 'stella') => {
+      if (mode === activeMode) return;
+      setActiveMode(mode);
+      if (mode === 'stella') {
+        await stella.selectChat();
+      } else if (selectedCode) {
+        const target = targetsRef.current.find((t) => t.stock_code === selectedCode);
+        await targetChats.selectChatForTarget(selectedCode, target);
+      }
+    },
+    [activeMode, selectedCode, stella, targetChats],
+  );
 
   const loadFiles = useCallback(
     async (code: string) => {
@@ -367,7 +408,8 @@ export const ResearchPage: React.FC = () => {
 
   const handleDeleteChat = useCallback(
     async (code: string, chatSessionId: string) => {
-      await targetChats.deleteChat(code, chatSessionId);
+      const target = targetsRef.current.find((t) => t.stock_code === code);
+      await targetChats.deleteChat(code, chatSessionId, target);
     },
     [targetChats],
   );
@@ -715,6 +757,8 @@ export const ResearchPage: React.FC = () => {
           }}
         >
           <TargetListSidebar
+            activeMode={activeMode}
+            onModeChange={handleModeChange}
             targets={targets}
             selectedCode={selectedCode}
             expandedCodes={expandedCodes}
@@ -735,6 +779,12 @@ export const ResearchPage: React.FC = () => {
             onNewChat={handleNewChat}
             onDeleteChat={handleDeleteChat}
             onRenameChat={handleRenameChat}
+            stellaChats={stella.chats}
+            stellaActiveSessionId={stella.active?.chatSessionId ?? null}
+            onSelectStellaChat={(sid) => stella.selectChat(sid)}
+            onNewStellaChat={() => stella.createChat()}
+            onDeleteStellaChat={(sid) => stella.deleteChat(sid)}
+            onRenameStellaChat={(sid, t) => stella.renameChat(sid, t)}
             width={leftWidth}
             onCollapse={toggleLeftCollapsed}
             topSlot={showAddForm ? (
@@ -758,13 +808,15 @@ export const ResearchPage: React.FC = () => {
           onDragEnd={handleDragEnd}
         />
       )}
-      <ContentTabs
-        tabs={visibleTabs}
-        activeTabId={activeTabId}
-        onTabSelect={handleTabSelect}
-        onTabClose={handleTabClose}
-      />
-      {!rightCollapsed && (
+      {activeMode === 'workspace' && (
+        <ContentTabs
+          tabs={visibleTabs}
+          activeTabId={activeTabId}
+          onTabSelect={handleTabSelect}
+          onTabClose={handleTabClose}
+        />
+      )}
+      {!rightCollapsed && activeMode === 'workspace' && (
         <ResizableDivider
           onResize={handleRightResize}
           minWidth={RIGHT_MIN}
@@ -777,24 +829,36 @@ export const ResearchPage: React.FC = () => {
       )}
       <div
         style={{
-          flex: `0 0 ${rightCollapsed ? RIGHT_COLLAPSED_WIDTH : rightWidth}px`,
+          flex: activeMode === 'stella'
+            ? '1 1 0'
+            : `0 0 ${rightCollapsed ? RIGHT_COLLAPSED_WIDTH : rightWidth}px`,
+          minWidth: 0,
           transition: isDraggingDivider ? 'none' : 'flex-basis 0.2s ease',
           display: 'flex',
         }}
       >
         <ResearchChatPane
           activeFileAbsPath={activeFileAbsPath}
-          targetName={selectedCode ? (targets.find((t) => t.stock_code === selectedCode)?.name ?? null) : null}
-          targetCode={selectedCode}
+          mode={activeMode}
+          targetName={activeMode === 'stella'
+            ? 'Ask Stella'
+            : (selectedCode ? (targets.find((t) => t.stock_code === selectedCode)?.name ?? null) : null)}
+          targetCode={activeMode === 'stella' ? null : selectedCode}
           chatTitle={(() => {
+            if (activeMode === 'stella') {
+              const sid = stella.active?.chatSessionId;
+              if (!sid || !stella.chats) return null;
+              return stella.chats.find((c) => c.chatSession_id === sid)?.title ?? null;
+            }
             const sid = targetChats.active?.chatSessionId;
             if (!sid || !selectedCode) return null;
             const list = targetChats.chatsByCode[selectedCode];
             return list?.find((c) => c.chatSession_id === sid)?.title ?? null;
           })()}
-          width={rightWidth}
-          collapsed={rightCollapsed}
-          onToggleCollapsed={toggleRightCollapsed}
+          width={activeMode === 'stella' ? undefined : rightWidth}
+          fill={activeMode === 'stella'}
+          collapsed={activeMode === 'stella' ? false : rightCollapsed}
+          onToggleCollapsed={activeMode === 'stella' ? undefined : toggleRightCollapsed}
         />
       </div>
       <Dialog open={!!pendingDelete} onOpenChange={(open) => { if (!open && !deleteBusy) setPendingDelete(null); }}>

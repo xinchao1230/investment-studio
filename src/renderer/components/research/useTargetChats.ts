@@ -51,8 +51,14 @@ export interface UseTargetChatsApi {
     code: string,
     target: Target | undefined,
   ) => Promise<ActiveChat | null>;
-  /** Delete a chat session and update local cache. */
-  deleteChat: (code: string, chatSessionId: string) => Promise<void>;
+  /**
+   * Delete a chat session and update local cache.
+   * If the deleted session was the active one, falls back to the next
+   * most-recent chat for the target — or auto-creates a fresh "New Chat"
+   * when no chats remain — to prevent the right pane from showing stale
+   * messages.
+   */
+  deleteChat: (code: string, chatSessionId: string, target?: Target) => Promise<void>;
   /** Rename a chat session and update local cache. */
   renameChat: (code: string, chatSessionId: string, title: string) => Promise<void>;
 }
@@ -135,19 +141,42 @@ export function useTargetChats(): UseTargetChatsApi {
     [createChatForTarget],
   );
 
-  const deleteChat = useCallback(async (code: string, chatSessionId: string) => {
+  const deleteChat = useCallback(async (code: string, chatSessionId: string, target?: Target) => {
     try {
       await researchChatIpc.delete(chatSessionId);
-      setChatsByCode((prev) => {
-        const cur = prev[code];
-        if (!cur) return prev;
-        return { ...prev, [code]: cur.filter((c) => c.chatSession_id !== chatSessionId) };
-      });
-      setActive((prev) => (prev?.chatSessionId === chatSessionId ? null : prev));
+      const cur = chatsByCodeRef.current[code] ?? [];
+      const remaining = cur.filter((c) => c.chatSession_id !== chatSessionId);
+      setChatsByCode((prev) => ({ ...prev, [code]: remaining }));
+
+      const wasActive = active?.chatSessionId === chatSessionId;
+      if (!wasActive) return;
+
+      // Active chat was deleted — fall back so the right pane doesn't
+      // keep showing stale messages from the deleted session.
+      if (remaining.length > 0) {
+        const next = [...remaining].sort((a, b) =>
+          (b.last_updated || '').localeCompare(a.last_updated || ''),
+        )[0];
+        const { chatId } = await researchChatIpc.listByTarget(code);
+        if (chatId) {
+          await researchChatIpc.setLastActive(code, next.chatSession_id);
+          setActive({ chatId, chatSessionId: next.chatSession_id });
+          return;
+        }
+      }
+      // Empty list → auto-create a fresh "New Chat" so the user lands in
+      // a usable state instead of a ghost pane. Skip this when no target
+      // was supplied (e.g. cascade-delete during target removal — there
+      // is nothing left to attach a new chat to).
+      if (target) {
+        await createChatForTarget(code, target);
+      } else {
+        setActive((prev) => (prev?.chatSessionId === chatSessionId ? null : prev));
+      }
     } catch (err) {
       console.error('[useTargetChats] deleteChat failed:', err);
     }
-  }, []);
+  }, [active, createChatForTarget]);
 
   const renameChat = useCallback(async (code: string, chatSessionId: string, title: string) => {
     const trimmed = title.trim();

@@ -28,6 +28,9 @@ export interface Target {
 }
 
 interface TargetListSidebarProps {
+  /** Top-level mode: workspace tree vs Ask Stella global chat list. */
+  activeMode: 'workspace' | 'stella';
+  onModeChange: (mode: 'workspace' | 'stella') => void;
   targets: Target[];
   selectedCode: string | null;
   expandedCodes: Set<string>;
@@ -63,6 +66,16 @@ interface TargetListSidebarProps {
   width?: number;
   /** When provided, a PanelLeftClose button is rendered next to the Workspace title. */
   onCollapse?: () => void;
+
+  // --- Ask Stella mode ---
+  /** All Stella global chat sessions (undefined = not yet loaded). */
+  stellaChats?: ResearchChatSessionMeta[];
+  /** Currently-active Stella chat session id (highlighted). */
+  stellaActiveSessionId?: string | null;
+  onSelectStellaChat?: (chatSessionId: string) => void;
+  onNewStellaChat?: () => void;
+  onDeleteStellaChat?: (chatSessionId: string) => void;
+  onRenameStellaChat?: (chatSessionId: string, newTitle: string) => void;
 }
 
 const SUBCATEGORIES = ['纪要', '专家交流', '公司交流', '研报', '模型', '公告', '其它'];
@@ -74,6 +87,8 @@ function fileIcon(relPath: string) {
 }
 
 export const TargetListSidebar: React.FC<TargetListSidebarProps> = ({
+  activeMode,
+  onModeChange,
   targets,
   selectedCode,
   expandedCodes,
@@ -97,6 +112,12 @@ export const TargetListSidebar: React.FC<TargetListSidebarProps> = ({
   onRenameChat,
   width = 240,
   onCollapse,
+  stellaChats,
+  stellaActiveSessionId,
+  onSelectStellaChat,
+  onNewStellaChat,
+  onDeleteStellaChat,
+  onRenameStellaChat,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const searchInputRef = React.useRef<HTMLInputElement | null>(null);
@@ -168,40 +189,68 @@ export const TargetListSidebar: React.FC<TargetListSidebarProps> = ({
       </div>
 
       {/* Secondary tab row */}
-      <div className="flex items-center px-3 pb-2 rw-divider">
-        <span className="rw-side-tab">工作区</span>
+      <div className="flex items-center px-3 pb-2 rw-divider gap-3">
+        <button
+          type="button"
+          className={`rw-side-tab ${activeMode === 'workspace' ? 'is-active' : ''}`}
+          onClick={() => onModeChange('workspace')}
+        >
+          工作区
+        </button>
+        <button
+          type="button"
+          className={`rw-side-tab ${activeMode === 'stella' ? 'is-active' : ''}`}
+          onClick={() => onModeChange('stella')}
+        >
+          Ask Stella
+        </button>
         <div className="flex-1" />
-        <button
-          type="button"
-          className={`rw-side-icon-btn ${searchOpen ? 'is-active' : ''}`}
-          title="Search targets"
-          aria-label="Search targets"
-          aria-pressed={searchOpen}
-          onClick={toggleSearch}
-        >
-          <Search size={14} />
-        </button>
-        <button
-          type="button"
-          className="rw-side-icon-btn"
-          onClick={onAddTarget}
-          title="Add target"
-        >
-          <Plus size={14} />
-        </button>
-        <button
-          type="button"
-          className="rw-side-icon-btn"
-          title="More (coming soon)"
-          onClick={() => console.log('[Research] more menu clicked (placeholder)')}
-        >
-          <MoreHorizontal size={14} />
-        </button>
+        {activeMode === 'workspace' ? (
+          <>
+            <button
+              type="button"
+              className={`rw-side-icon-btn ${searchOpen ? 'is-active' : ''}`}
+              title="Search targets"
+              aria-label="Search targets"
+              aria-pressed={searchOpen}
+              onClick={toggleSearch}
+            >
+              <Search size={14} />
+            </button>
+            <button
+              type="button"
+              className="rw-side-icon-btn"
+              onClick={onAddTarget}
+              title="Add target"
+            >
+              <Plus size={14} />
+            </button>
+            <button
+              type="button"
+              className="rw-side-icon-btn"
+              title="More (coming soon)"
+              onClick={() => console.log('[Research] more menu clicked (placeholder)')}
+            >
+              <MoreHorizontal size={14} />
+            </button>
+          </>
+        ) : (
+          onNewStellaChat && (
+            <button
+              type="button"
+              className="rw-side-icon-btn"
+              onClick={onNewStellaChat}
+              title="New chat"
+            >
+              <Plus size={14} />
+            </button>
+          )
+        )}
       </div>
 
       {topSlot}
 
-      {searchOpen && (
+      {activeMode === 'workspace' && searchOpen && (
         <div className="px-3 py-2 rw-divider">
           <input
             ref={searchInputRef}
@@ -215,7 +264,68 @@ export const TargetListSidebar: React.FC<TargetListSidebarProps> = ({
         </div>
       )}
 
-      {/* Tree */}
+      {/* Body — Stella global chat list */}
+      {activeMode === 'stella' && (
+        <div className="flex-1 overflow-y-auto pt-1">
+          {stellaChats === undefined && (
+            <div className="px-3 py-4 text-xs text-[var(--rw-text-3)] text-center">
+              Loading…
+            </div>
+          )}
+          {stellaChats && stellaChats.length === 0 && (
+            <div className="px-3 py-4 text-xs text-[var(--rw-text-3)] text-center">
+              No chats yet
+            </div>
+          )}
+          {stellaChats && [...stellaChats]
+            .sort((a, b) => (b.last_updated || '').localeCompare(a.last_updated || ''))
+            .map((chat) => (
+              <div
+                key={chat.chatSession_id}
+                className={`rw-tree-row rw-chat-row group ${stellaActiveSessionId === chat.chatSession_id ? 'is-active' : ''}`}
+                style={{ paddingLeft: 12 }}
+                onClick={() => onSelectStellaChat?.(chat.chatSession_id)}
+              >
+                <MessageSquare size={13} className="flex-shrink-0 mr-1 text-[var(--rw-text-3)]" />
+                <span className="truncate flex-1">{chat.title || 'Untitled'}</span>
+                {onRenameStellaChat && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      const next = window.prompt('Rename chat', chat.title || '');
+                      if (next && next.trim() && next.trim() !== chat.title) {
+                        onRenameStellaChat(chat.chatSession_id, next.trim());
+                      }
+                    }}
+                    className="ml-1 p-0.5 rounded opacity-0 group-hover:opacity-100 hover:bg-black/10 text-[var(--rw-text-3)] transition-opacity"
+                    title="Rename"
+                  >
+                    <Pencil size={11} />
+                  </button>
+                )}
+                {onDeleteStellaChat && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (window.confirm(`Delete chat "${chat.title || 'Untitled'}"?`)) {
+                        onDeleteStellaChat(chat.chatSession_id);
+                      }
+                    }}
+                    className="ml-1 p-0.5 rounded opacity-0 group-hover:opacity-100 hover:bg-black/10 text-[var(--rw-text-3)] hover:text-red-500 transition-opacity"
+                    title="Delete chat"
+                  >
+                    <Trash2 size={11} />
+                  </button>
+                )}
+              </div>
+            ))}
+        </div>
+      )}
+
+      {/* Body — Workspace tree */}
+      {activeMode === 'workspace' && (
       <div className="flex-1 overflow-y-auto pt-1">
         {targets.length === 0 && (
           <div className="px-3 py-4 text-xs text-[var(--rw-text-3)] text-center">
@@ -418,6 +528,7 @@ export const TargetListSidebar: React.FC<TargetListSidebarProps> = ({
           );
         })}
       </div>
+      )}
     </div>
   );
 };

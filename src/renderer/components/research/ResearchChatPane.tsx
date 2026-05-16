@@ -12,10 +12,21 @@ interface ResearchChatPaneProps {
   chatTitle?: string | null;
   /** Width in pixels when expanded. Caller is responsible for clamping. */
   width?: number;
+  /** When true, pane fills its parent (flex: 1) instead of using fixed width. */
+  fill?: boolean;
   /** When true, render as a narrow icon strip instead of the full chat UI. */
   collapsed?: boolean;
   /** Toggle collapsed state. */
   onToggleCollapsed?: () => void;
+  /**
+   * Active research mode. Drives empty-state UX:
+   * - 'workspace' (target picked): render the local hardcoded EmptySuggestions
+   *   overlay; the agent ChatZeroStates is hidden via CSS.
+   * - 'stella' (global Ask Stella): hide the local overlay; the agent
+   *   ChatZeroStates (Stella greeting + quick_starts) is the welcome screen,
+   *   topped by a small "Ask Stella" landing header.
+   */
+  mode?: 'workspace' | 'stella';
 }
 
 const SUGGESTIONS: string[] = [
@@ -23,6 +34,64 @@ const SUGGESTIONS: string[] = [
   '找到今日蓝宝书排名前5的话题中,开盘后30分钟市场选择的龙头公司',
   '搭建海底捞过去10年的单店模型',
 ];
+
+/**
+ * Stella welcome screen rendered inside the research right pane when in
+ * Stella mode and the active chat has no messages.
+ *
+ * This is intentionally self-contained (does NOT depend on the persisted
+ * agent's `zero_states` field) because legacy profiles created before the
+ * Stella zero_states config existed will lack that field, causing the
+ * shared ChatZeroStates to render nothing.
+ */
+const STELLA_QUICK_STARTS: Array<{ title: string; description: string; prompt: string }> = [
+  {
+    title: '深度分析',
+    description: '对一家上市公司做全面基本面分析',
+    prompt: '请对 600519 贵州茅台 做一份深度基本面分析报告（公司概况、业务结构、财务、估值、风险）。',
+  },
+  {
+    title: '行业对比',
+    description: '对比同行业多家公司的关键指标',
+    prompt: '请对比白酒行业 TOP5（贵州茅台、五粮液、洋河、泸州老窖、山西汾酒）的营收增速、毛利率、ROE 与估值。',
+  },
+  {
+    title: '财报点评',
+    description: '解读单季 / 年度财报',
+    prompt: '请点评 002475 立讯精密 2025Q3 财报，重点关注收入结构、利润率与现金流变化。',
+  },
+  {
+    title: '量化初筛',
+    description: '按多因子条件筛选股票池',
+    prompt: '在 A 股全市场筛选：PE(TTM) < 20、ROE(近 3 年均值) > 15%、营收近 3 年复合增速 > 10%。给出名单与关键指标。',
+  },
+];
+
+const STELLA_GREETING =
+  '你好，我是 Stella 📊 — 你的 AI 投资研究助手。可以帮你做深度分析、行业对比、财报点评、量化初筛。';
+
+const StellaWelcome: React.FC<{ onPick: (text: string) => void }> = ({ onPick }) => (
+  <div className="rw-stella-welcome">
+    <div className="rw-stella-welcome-header">
+      <span className="rw-stella-welcome-emoji" aria-hidden>📊</span>
+      <span className="rw-stella-welcome-title">Ask Stella</span>
+    </div>
+    <div className="rw-stella-welcome-greeting">{STELLA_GREETING}</div>
+    <div className="rw-stella-welcome-cards">
+      {STELLA_QUICK_STARTS.map((q) => (
+        <button
+          key={q.title}
+          type="button"
+          className="rw-stella-welcome-card"
+          onClick={() => onPick(q.prompt)}
+        >
+          <div className="rw-stella-welcome-card-title">{q.title}</div>
+          <div className="rw-stella-welcome-card-desc">{q.description}</div>
+        </button>
+      ))}
+    </div>
+  </div>
+);
 
 const EmptySuggestions: React.FC<{ onPick: (text: string) => void }> = ({ onPick }) => (
   <div className="px-5 py-6">
@@ -65,11 +134,30 @@ export const ResearchChatPane: React.FC<ResearchChatPaneProps> = ({
   targetCode,
   chatTitle,
   width = 380,
+  fill = false,
   collapsed = false,
   onToggleCollapsed,
+  mode = 'workspace',
 }) => {
   const messages = useMessages();
-  const isEmpty = !messages || messages.length === 0;
+  /**
+   * Empty-state check mirrors ChatViewContent.tsx: a chat is "empty" iff it
+   * has no user-visible content AND no frontend-only "say-hi" greeting.
+   *
+   * - Exclude system/tool messages (the agent system prompt is always present)
+   * - The "say-hi-" assistant message is a frontend placeholder; if present,
+   *   the chat is not considered empty (we want the say-hi to show through).
+   *
+   * Single-pass with early-exit to avoid two array traversals.
+   */
+  const isEmpty = React.useMemo(() => {
+    if (!messages || messages.length === 0) return true;
+    for (const m of messages) {
+      if (m.role === 'assistant' && m.id?.startsWith('say-hi-')) return false;
+      if (m.role !== 'system' && m.role !== 'tool') return false;
+    }
+    return true;
+  }, [messages]);
 
   const handlePick = useCallback((text: string) => {
     window.dispatchEvent(
@@ -102,8 +190,11 @@ export const ResearchChatPane: React.FC<ResearchChatPaneProps> = ({
   return (
     <aside
       className="rw-pane-right flex flex-col h-full"
-      style={{ width, flex: `0 0 ${width}px` }}
+      style={fill
+        ? { flex: '1 1 0', minWidth: 0, width: '100%' }
+        : { width, flex: `0 0 ${width}px` }}
       data-target-selected={hasTarget ? 'true' : 'false'}
+      data-research-mode={mode}
     >
       <header
         className="flex items-center justify-between h-10 px-3 rw-divider gap-2"
@@ -144,10 +235,17 @@ export const ResearchChatPane: React.FC<ResearchChatPaneProps> = ({
         )}
       </header>
       <div className="flex-1 min-h-0 overflow-hidden relative">
-        {isEmpty && (
+        {isEmpty && mode === 'workspace' && (
           <div className="absolute inset-x-0 top-0 z-10 pointer-events-none">
             <div className="pointer-events-auto">
               <EmptySuggestions onPick={handlePick} />
+            </div>
+          </div>
+        )}
+        {isEmpty && mode === 'stella' && (
+          <div className="absolute inset-x-0 top-0 z-10 pointer-events-none">
+            <div className="pointer-events-auto">
+              <StellaWelcome onPick={handlePick} />
             </div>
           </div>
         )}
