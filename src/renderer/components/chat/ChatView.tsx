@@ -118,6 +118,18 @@ const ChatView: React.FC<ChatViewProps> = memo(({ mode = 'full' }) => {
     }
   }, []);
 
+  // Cancel handler for compact mode (research workspace etc.). Uses current
+  // chatId from the cache so we don't need to thread an outlet context down.
+  const internalCancelChat = useCallback(async () => {
+    const cid = agentChatSessionCacheManager.getCurrentChatId();
+    if (!cid) return;
+    try {
+      await agentChatIpc.cancelChat(cid);
+    } catch (err) {
+      console.error('[ChatView compact] cancelChat failed:', err);
+    }
+  }, []);
+
   // Compact-mode bootstrap: make sure backend has a current chat session so
   // model selector / sendMessage have something to operate on.
   useEffect(() => {
@@ -130,7 +142,7 @@ const ChatView: React.FC<ChatViewProps> = memo(({ mode = 'full' }) => {
     allMessages = mode === 'compact' ? internalMessages : [],
     streamingMessageId = mode === 'compact' ? internalStreamingMessageId : undefined,
     onSendMessage = mode === 'compact' ? internalSendMessage : () => {},
-    onCancelChat,
+    onCancelChat = mode === 'compact' ? internalCancelChat : undefined,
     onWorkspaceMenuToggle,
     workspaceMenuState,
     onEditAgentMenuToggle: ctxEditAgentMenuToggle,
@@ -500,9 +512,78 @@ const ChatView: React.FC<ChatViewProps> = memo(({ mode = 'full' }) => {
 
   // Get current workspace path
   const workspacePath = currentChat?.agent?.workspace || '';
-  
+
   // Get current Agent's Zero States configuration
-  const zeroStates = currentAgent?.zero_states;
+  const baseZeroStates = currentAgent?.zero_states;
+
+  // Track current chat session's target binding (research workspace). When
+  // a target is bound, swap the agent-level zero_states for target-aware
+  // quick_starts so the new-chat experience speaks to "this company".
+  const [sessionTarget, setSessionTarget] = useState<{
+    targetCode: string | null;
+    targetName: string | null;
+  } | null>(null);
+
+  useEffect(() => {
+    if (!currentChatSessionId) {
+      setSessionTarget(null);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await window.electronAPI.agentChat.getCurrentChatSession();
+        if (cancelled) return;
+        const sess: any = res?.data;
+        if (!sess || !sess.targetCode) {
+          setSessionTarget(null);
+          return;
+        }
+        // Parse target name from targetDir basename (pattern: `${name}_${code}`).
+        const td = typeof sess.targetDir === 'string' ? sess.targetDir : '';
+        const sepIdx = Math.max(td.lastIndexOf('/'), td.lastIndexOf('\\'));
+        const baseName = sepIdx >= 0 ? td.slice(sepIdx + 1) : td;
+        const lastUnderscore = baseName.lastIndexOf('_');
+        const name = lastUnderscore > 0 ? baseName.slice(0, lastUnderscore) : baseName;
+        setSessionTarget({ targetCode: sess.targetCode, targetName: name || null });
+      } catch {
+        if (!cancelled) setSessionTarget(null);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [currentChatSessionId]);
+
+  const zeroStates = useMemo(() => {
+    if (!sessionTarget?.targetCode) return baseZeroStates;
+    const label = sessionTarget.targetName
+      ? `${sessionTarget.targetCode} ${sessionTarget.targetName}`
+      : sessionTarget.targetCode;
+    return {
+      greeting: baseZeroStates?.greeting || '',
+      quick_starts: [
+        {
+          title: '深度分析',
+          description: '全面基本面分析',
+          prompt: `请对 ${label} 做一份深度基本面分析报告（公司概况、业务结构、财务、估值、风险）。`,
+        },
+        {
+          title: '财报点评',
+          description: '解读最新财报',
+          prompt: `请点评 ${label} 最新一期财报，重点关注收入结构、利润率与现金流变化。`,
+        },
+        {
+          title: '边际跟踪',
+          description: '跟踪关键变化',
+          prompt: `请跟踪 ${label} 的最新边际变化（业绩、行业、估值），整理到 tracking.md。`,
+        },
+        {
+          title: '同业对比',
+          description: '同业横向比较',
+          prompt: `请为 ${label} 选 4 家可比公司，对比关键财务和估值指标。`,
+        },
+      ],
+    };
+  }, [baseZeroStates, sessionTarget]);
 
   // MCP Tools handler - must be defined after currentChatId
   const handleOpenMcpTools = useCallback(() => {

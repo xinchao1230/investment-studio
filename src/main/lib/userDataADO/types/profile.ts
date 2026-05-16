@@ -470,24 +470,24 @@ export const DEFAULT_CHAT_AGENT_STELLA: ChatAgent = {
     greeting: "你好，我是 Stella 📊 — 你的 AI 投资研究助手。可以帮你做深度分析、行业对比、财报点评、量化初筛。",
     quick_starts: [
       {
-        title: "深度分析",
-        description: "对一家上市公司做全面基本面分析",
-        prompt: "请对 600519 贵州茅台 做一份深度基本面分析报告（公司概况、业务结构、财务、估值、风险）。"
+        title: "贵州茅台 600519",
+        description: "用一家上市公司创建第一个研究标的",
+        prompt: "请帮我用 600519 贵州茅台 创建一个研究标的，并简要介绍接下来可以做的几个分析方向。"
+      },
+      {
+        title: "全自动深度研报",
+        description: "体验 6-phase 自动化流水线",
+        prompt: "请用 600036 招商银行 跑一次 /stock-analyze 完整流程，生成一份自动化深度研报。"
       },
       {
         title: "行业对比",
-        description: "对比同行业多家公司的关键指标",
+        description: "同业多公司横向比较",
         prompt: "请对比白酒行业 TOP5（贵州茅台、五粮液、洋河、泸州老窖、山西汾酒）的营收增速、毛利率、ROE 与估值。"
       },
       {
-        title: "财报点评",
-        description: "解读单季 / 年度财报",
-        prompt: "请点评 002475 立讯精密 2025Q3 财报，重点关注收入结构、利润率与现金流变化。"
-      },
-      {
-        title: "量化初筛",
-        description: "按多因子条件筛选股票池",
-        prompt: "在 A 股全市场筛选：PE(TTM) < 20、ROE(近 3 年均值) > 15%、营收近 3 年复合增速 > 10%。给出名单与关键指标。"
+        title: "了解 Stella",
+        description: "核心能力 + 推荐工作流",
+        prompt: "请介绍你（Stella）的核心能力、典型工作流，以及推荐我作为投研用户的入门路径。"
       }
     ]
   }

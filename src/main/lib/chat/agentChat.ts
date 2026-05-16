@@ -3015,9 +3015,78 @@ export class AgentChat {
     if (toolName === 'get_agent_config_from_lib') {
       return await this.postProcessForGetAgentConfigFromLibTool(toolResult);
     }
+
+    // Investment-studio brand: when a chat creates a new portfolio target
+    // (via portfolio_init_target), auto-bind the current chat session to it
+    // so the conversation moves from "Ask Stella" (global) into that target's
+    // chat list. Pure UX glue — no failure mode aborts the chat.
+    if (toolName === 'portfolio_init_target') {
+      try {
+        await this.postProcessForPortfolioInitTarget(toolCall, toolResult);
+      } catch (e) {
+        logger.warn('[AgentChat] portfolio_init_target post-process failed (ignored): ' + (e instanceof Error ? e.message : String(e)));
+      }
+    }
     
     // Other tools are not processed, return the original result directly
     return toolResult;
+  }
+
+  /**
+   * 🏷️ Investment-studio brand: bind the current chat session to a newly
+   * created portfolio target. Skips when:
+   *  - brand != investment-studio
+   *  - tool returned failure
+   *  - chat session already bound to a target (don't clobber explicit binding)
+   *  - args missing required fields
+   */
+  private async postProcessForPortfolioInitTarget(toolCall: any, toolResult: any): Promise<void> {
+    if ((process.env.BRAND_NAME || 'openkosmos') !== 'investment-studio') return;
+    if (!this.currentChatSession) return;
+    // Don't overwrite an existing binding (user may have intentionally
+    // chosen a target before calling init for a different/related ticker).
+    const existing = (this.currentChatSession as any).targetCode;
+    if (existing) return;
+
+    // Tool failed → nothing to bind to.
+    const ok = typeof toolResult === 'object' && toolResult?.success === true;
+    if (!ok) return;
+
+    // Parse arguments — they were already validated by executeToolCall.
+    let args: any = {};
+    try {
+      const raw = toolCall?.function?.arguments;
+      args = typeof raw === 'string' ? JSON.parse(raw) : (raw || {});
+    } catch {
+      return;
+    }
+    const stockCode: string | undefined = args.stock_code;
+    const name: string | undefined = args.name;
+    if (!stockCode || !name) return;
+
+    // Mirror portfolioTools.executeInitTarget directory layout:
+    //   {userData}/portfolio/{name}_{stock_code}
+    const fs = require('fs');
+    const path = require('path');
+    const { app } = require('electron');
+    const targetDir = path.join(app.getPath('userData'), 'portfolio', `${name}_${stockCode}`);
+    if (!fs.existsSync(targetDir)) return;
+
+    (this.currentChatSession as any).targetCode = stockCode;
+    (this.currentChatSession as any).targetDir = targetDir;
+
+    logger.info('[AgentChat] Auto-bound chat session to newly created target', 'postProcessForPortfolioInitTarget', {
+      chatSessionId: this.currentChatSession.chatSession_id,
+      targetCode: stockCode,
+      targetDir,
+    });
+
+    // Persist + notify renderer so the chat moves to the target's list immediately.
+    try {
+      await this.saveChatSession();
+    } catch (e) {
+      logger.warn('[AgentChat] saveChatSession after target bind failed: ' + (e instanceof Error ? e.message : String(e)));
+    }
   }
   
   /**
