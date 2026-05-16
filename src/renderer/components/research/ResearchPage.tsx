@@ -417,10 +417,18 @@ export const ResearchPage: React.FC = () => {
 
   const handleSelectTarget = useCallback(
     async (code: string) => {
+      // Clicking the same active target again toggles its tree expansion so
+      // users can collapse the subtree with the row itself (not only the
+      // chevron). Switching to a different target always expands it.
+      const wasSelected = selectedCodeRef.current === code;
       setSelectedCode(code);
       setExpandedCodes((prev) => {
         const next = new Set(prev);
-        next.add(code);
+        if (wasSelected && next.has(code)) {
+          next.delete(code);
+        } else {
+          next.add(code);
+        }
         return next;
       });
       await loadFiles(code);
