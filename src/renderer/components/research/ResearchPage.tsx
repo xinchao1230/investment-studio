@@ -20,6 +20,7 @@ import { LayoutProvider } from '../layout/LayoutProvider';
 import { PasteToWorkspaceProvider } from '../chat/workspace/PasteToWorkspaceProvider';
 import { agentChatSessionCacheManager } from '../../lib/chat/agentChatSessionCacheManager';
 import { profileDataManager } from '@renderer/lib/userData';
+import { useFsChanged } from '../../hooks/useFsChanged';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../ui/dialog';
 import { Button } from '../ui/button';
 import ResizableDivider from '../ui/ResizableDivider';
@@ -361,8 +362,8 @@ export const ResearchPage: React.FC = () => {
   );
 
   const loadFiles = useCallback(
-    async (code: string) => {
-      if (filesByCodeRef.current[code]) return;
+    async (code: string, opts?: { force?: boolean }) => {
+      if (!opts?.force && filesByCodeRef.current[code]) return;
       const files = await getTargetFiles(code);
       setFilesByCode((prev) => ({ ...prev, [code]: files }));
     },
@@ -530,6 +531,50 @@ export const ResearchPage: React.FC = () => {
       setContentCacheVersion((v) => v + 1);
     }
   }, []);
+
+  // ── Filesystem-change subscriptions ────────────────────────────────
+  // When a builtin tool (e.g. LLM-initiated portfolio_init_target,
+  // write_file, move_file, download_and_save_as) mutates a file inside
+  // the currently-selected target's directory, refresh the per-target
+  // file list. We force-reload because `loadFiles` is otherwise cached
+  // by stock_code.
+  const selectedTarget = useMemo(
+    () => targets.find((t) => t.stock_code === selectedCode),
+    [targets, selectedCode],
+  );
+  const selectedDir = selectedTarget?.directory ?? '';
+  useFsChanged(
+    (m) => !!selectedDir && m.path.startsWith(selectedDir),
+    () => {
+      if (selectedCode) void loadFiles(selectedCode, { force: true });
+    },
+    [selectedDir, selectedCode, loadFiles],
+  );
+
+  // When a tracked file's content changes on disk, invalidate the cached
+  // content. For the currently-active tab in the active target we eagerly
+  // re-read so the editor pane updates immediately; other tabs are lazily
+  // re-fetched by `ensureContentLoaded` when they next become active.
+  // `kind !== 'create'` covers both `modify` and `delete` (delete still
+  // needs cache invalidation since the tab may remain open showing stale
+  // content until the file-tree refresh removes the entry).
+  const activeAbsPath =
+    (selectedCode && tabsByCode[selectedCode]?.activeAbsPath) || '';
+  useFsChanged(
+    (m) => m.kind !== 'create' && fileContentCacheRef.current.has(m.path),
+    (matched) => {
+      let bumped = false;
+      for (const m of matched) {
+        fileContentCacheRef.current.delete(m.path);
+        if (m.path === activeAbsPath) {
+          void ensureContentLoaded(m.path);
+        }
+        bumped = true;
+      }
+      if (bumped) setContentCacheVersion((v) => v + 1);
+    },
+    [activeAbsPath, ensureContentLoaded],
+  );
 
   const handleOpenFile = useCallback(
     (file: TargetFile) => {

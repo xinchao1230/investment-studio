@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Target } from './TargetListSidebar';
+import { useFsChanged, pathStartsWith } from '../../hooks/useFsChanged';
 
 export interface TargetFile {
   relPath: string;
@@ -43,6 +44,27 @@ function unwrapToolResult(result: any): any {
 export function usePortfolio(): PortfolioHook {
   const [targets, setTargets] = useState<Target[]>([]);
   const [loading, setLoading] = useState(true);
+  // Portfolio workspace absolute path; used as a path prefix to scope
+  // `kosmos:fs-changed` subscriptions to mutations inside this folder.
+  // Empty string while loading — `pathStartsWith('')` short-circuits to
+  // false so we don't refresh on unrelated mutations.
+  const [workspaceDir, setWorkspaceDir] = useState<string>('');
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const r = await (window as any).electronAPI?.portfolio?.getWorkspaceDir?.();
+        if (cancelled) return;
+        if (r?.success && typeof r.data === 'string') {
+          setWorkspaceDir(r.data);
+        }
+      } catch (err) {
+        console.warn('[usePortfolio] getWorkspaceDir failed:', err);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   const refresh = useCallback(async () => {
     try {
@@ -148,6 +170,16 @@ export function usePortfolio(): PortfolioHook {
   useEffect(() => {
     refresh();
   }, [refresh]);
+
+  // Any mutation inside the portfolio workspace (including LLM-initiated
+  // portfolio_init_target / portfolio_delete_target, or generic writeFile /
+  // moveFile / downloadAndSaveAs into the workspace) triggers a fresh
+  // listing. 80ms debounce in the shared hook coalesces bursts.
+  useFsChanged(
+    pathStartsWith(workspaceDir),
+    () => { void refresh(); },
+    [workspaceDir, refresh],
+  );
 
   return { targets, loading, refresh, initTarget, deleteTarget, getTargetFiles };
 }

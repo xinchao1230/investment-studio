@@ -14,7 +14,7 @@
 
 import * as fs from 'fs/promises';
 import * as path from 'path';
-import { BuiltinToolDefinition, ToolExecutionResult } from './types';
+import { BuiltinToolDefinition, ToolExecutionResult, FsMutation } from './types';
 import { getUnifiedLogger, UnifiedLogger } from '../../unifiedLogger';
 
 export type WriteMode = 'overwrite' | 'append' | 'prepend' | 'insert';
@@ -66,6 +66,13 @@ export interface WriteFileToolResult {
   isComplete?: boolean;       // Whether all chunks are complete
   
   error?: string;             // Error message
+
+  /**
+   * Filesystem mutations performed by this write, surfaced to the renderer
+   * via `kosmos:fs-changed`. Stripped from LLM-visible payload by
+   * `BuiltinToolsManager.executeTool` before serialization.
+   */
+  mutations?: FsMutation[];
 }
 
 // Maximum content size per write: 10MB
@@ -317,7 +324,8 @@ export class WriteFileTool {
         jsonValid,
         chunkNumber: session?.chunkCount,
         sectionId: args.sectionId,
-        isComplete: args.isLastChunk === true
+        isComplete: args.isLastChunk === true,
+        mutations: [{ path: normalizedPath, kind: fileExists ? 'modify' : 'create' }],
       };
 
       this.logger.info(

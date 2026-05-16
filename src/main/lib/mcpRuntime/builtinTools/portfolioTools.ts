@@ -324,7 +324,11 @@ export class PortfolioTools {
       'utf-8',
     );
 
-    return { success: true, data: `Target "${dirName}" created at ${targetDir}` };
+    return {
+      success: true,
+      data: `Target "${dirName}" created at ${targetDir}`,
+      mutations: [{ path: targetDir, kind: 'create' }],
+    };
   }
 
   /**
@@ -462,7 +466,11 @@ export class PortfolioTools {
         return { success: false, error: `Failed to delete target: ${msg}` };
       }
     }
-    return { success: true, data: `Target with stock_code "${args.stock_code}" deleted` };
+    return {
+      success: true,
+      data: `Target with stock_code "${args.stock_code}" deleted`,
+      mutations: [{ path: targetDir, kind: 'delete' }],
+    };
   }
 
   static async executeGetTrackingStatus(): Promise<ToolExecutionResult> {
@@ -495,8 +503,13 @@ export class PortfolioTools {
     if (!targetDir) {
       return { success: false, error: `Target with stock_code "${args.stock_code}" not found` };
     }
-    fs.writeFileSync(path.join(targetDir, 'key-drivers.md'), args.content, 'utf-8');
-    return { success: true, data: 'Key drivers updated' };
+    const keyDriversPath = path.join(targetDir, 'key-drivers.md');
+    fs.writeFileSync(keyDriversPath, args.content, 'utf-8');
+    return {
+      success: true,
+      data: 'Key drivers updated',
+      mutations: [{ path: keyDriversPath, kind: 'modify' }],
+    };
   }
 
   static async executeAppendNote(args: { stock_code: string; content: string }): Promise<ToolExecutionResult> {
@@ -508,6 +521,10 @@ export class PortfolioTools {
     const now = new Date().toISOString().split('T')[0];
     const entry = `\n## ${now}\n\n${args.content}\n`;
     fs.appendFileSync(notesPath, entry, 'utf-8');
-    return { success: true, data: 'Note appended' };
+    return {
+      success: true,
+      data: 'Note appended',
+      mutations: [{ path: notesPath, kind: 'modify' }],
+    };
   }
 }

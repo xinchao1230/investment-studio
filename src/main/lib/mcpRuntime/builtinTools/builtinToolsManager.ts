@@ -9,8 +9,9 @@
  * Only dynamically imported when the tool is actually executed, reducing startup time
  */
 
-import { BuiltinToolDefinition, ToolExecutionResult } from './types';
+import { BuiltinToolDefinition, ToolExecutionResult, FsMutation } from './types';
 import { isFeatureEnabled } from '../../featureFlags';
+import { BrowserWindow } from 'electron';
 
 // Lightweight tools - imported immediately (no heavy dependencies)
 import { ReadFileTool } from './readFileTool';
@@ -515,6 +516,29 @@ export class BuiltinToolsManager {
       
       console.timeEnd(`[BuiltinToolsManager] executeTool:${name}`);
       
+      // Extract filesystem mutations declared by the tool, strip them from
+      // the LLM-visible payload, then broadcast `kosmos:fs-changed` to all
+      // renderer windows so they can invalidate caches / refresh views.
+      // Using destructure (not `delete`) to stay safe with frozen objects.
+      let mutations: FsMutation[] | undefined;
+      if (result && typeof result === 'object' && Array.isArray((result as any).mutations)) {
+        const { mutations: pulled, ...rest } = result as any;
+        mutations = pulled as FsMutation[];
+        result = rest;
+      }
+      if (mutations && mutations.length > 0) {
+        try {
+          const payload = { tool: name, mutations, timestamp: Date.now() };
+          for (const win of BrowserWindow.getAllWindows()) {
+            if (!win.isDestroyed()) {
+              win.webContents.send('kosmos:fs-changed', payload);
+            }
+          }
+        } catch (broadcastErr) {
+          console.warn('[BuiltinToolsManager] fs-changed broadcast failed:', broadcastErr);
+        }
+      }
+
       return {
         success: true,
         data: JSON.stringify(result)

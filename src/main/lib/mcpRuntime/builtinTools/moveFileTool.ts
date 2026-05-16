@@ -9,7 +9,7 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import { BuiltinToolDefinition } from './types';
+import { BuiltinToolDefinition, FsMutation } from './types';
 
 export interface MoveFileArgs {
   /** Full path of the source file */
@@ -34,6 +34,11 @@ export interface MoveFileResult {
   fileSize?: number;
   /** Error message (if failed) */
   error?: string;
+  /**
+   * Filesystem mutations performed by this operation. Stripped from
+   * LLM-visible payload by `BuiltinToolsManager.executeTool`.
+   */
+  mutations?: FsMutation[];
 }
 
 /**
@@ -115,7 +120,8 @@ export class MoveFileTool {
     }
 
     // 6. Check if destination file already exists
-    if (fs.existsSync(finalDestPath) && !overwrite) {
+    const destExistedBefore = fs.existsSync(finalDestPath);
+    if (destExistedBefore && !overwrite) {
       throw new Error(`Destination file already exists: ${finalDestPath}. Set overwrite=true to replace it.`);
     }
 
@@ -149,12 +155,21 @@ export class MoveFileTool {
       // Get destination file size
       const destStats = fs.statSync(finalDestPath);
 
+      const destKind: 'create' | 'modify' = destExistedBefore ? 'modify' : 'create';
+      const mutations: FsMutation[] = copy
+        ? [{ path: finalDestPath, kind: destKind }]
+        : [
+            { path: sourcePath, kind: 'delete' },
+            { path: finalDestPath, kind: destKind },
+          ];
+
       return {
         success: true,
         operation,
         sourcePath,
         destinationPath: finalDestPath,
-        fileSize: destStats.size
+        fileSize: destStats.size,
+        mutations,
       };
     } catch (error) {
       throw new Error(`Failed to ${operation} file: ${error instanceof Error ? error.message : String(error)}`);

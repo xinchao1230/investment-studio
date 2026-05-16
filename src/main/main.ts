@@ -1369,6 +1369,25 @@ class ElectronApp {
       }
     });
 
+    // Portfolio workspace dir lookup (used by renderer-side fs-changed
+    // path-prefix filtering). Idempotently initializes the workspace dir
+    // so callers don't have to invoke a portfolio_* tool first.
+    ipcMain.handle('portfolio:getWorkspaceDir', async () => {
+      try {
+        const { PortfolioTools } = await import('./lib/mcpRuntime/builtinTools/portfolioTools');
+        if (!PortfolioTools.getWorkspaceDir()) {
+          const portfolioDir = path.join(app.getPath('userData'), 'portfolio');
+          if (!fs.existsSync(portfolioDir)) {
+            fs.mkdirSync(portfolioDir, { recursive: true });
+          }
+          PortfolioTools.setWorkspaceDir(portfolioDir);
+        }
+        return { success: true, data: PortfolioTools.getWorkspaceDir() };
+      } catch (error) {
+        return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+      }
+    });
+
     // Builtin Tools - AUTHORIZED
     ipcMain.handle('builtinTools:execute', async (event, toolName: string, args: any) => {
       try {

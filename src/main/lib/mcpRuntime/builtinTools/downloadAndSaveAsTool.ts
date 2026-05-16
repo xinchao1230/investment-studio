@@ -4,7 +4,7 @@
  * Note: This is a built-in tool, not an MCP protocol tool
  */
 
-import { BuiltinToolDefinition, ToolExecutionResult } from './types';
+import { BuiltinToolDefinition, ToolExecutionResult, FsMutation } from './types';
 import fetch from 'node-fetch';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -31,6 +31,11 @@ export interface DownloadAndSaveAsResult {
   downloadTime: number; // Download duration (milliseconds)
   error?: string; // Error message
   timestamp: string; // Operation timestamp
+  /**
+   * Filesystem mutations performed by this download. Stripped from
+   * LLM-visible payload by `BuiltinToolsManager.executeTool`.
+   */
+  mutations?: FsMutation[];
 }
 
 /**
@@ -177,8 +182,10 @@ export class DownloadAndSaveAsTool {
       const normalizedSaveDir = pathValidation.normalizedPath!;
       const fullFilePath = path.join(normalizedSaveDir, filename);
       
-      // 3. Check if file already exists
-      if (fs.existsSync(fullFilePath) && !overwrite) {
+      // 3. Check if file already exists (also captures existedBefore for
+      //    proper create/modify mutation kind)
+      const existedBefore = fs.existsSync(fullFilePath);
+      if (existedBefore && !overwrite) {
         throw new Error(`File already exists: ${fullFilePath}. Set overwrite=true to replace it.`);
       }
       
@@ -257,7 +264,8 @@ export class DownloadAndSaveAsTool {
         fileSize: downloadedBytes,
         mimeType,
         downloadTime,
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
+        mutations: [{ path: fullFilePath, kind: existedBefore ? 'modify' : 'create' }],
       };
       
     } catch (error) {

@@ -573,6 +573,24 @@ export interface ElectronAPI {
     isBuiltinTool: (
       toolName: string,
     ) => Promise<{ success: boolean; data?: boolean; error?: string }>;
+    /**
+     * Subscribe to `kosmos:fs-changed` broadcasts emitted whenever any
+     * builtin tool declares filesystem mutations. Returns an unsubscribe
+     * function. Use the shared `useFsChanged` renderer hook instead of
+     * calling this directly.
+     */
+    onFsChanged: (
+      cb: (event: {
+        tool: string;
+        mutations: { path: string; kind: 'create' | 'modify' | 'delete' }[];
+        timestamp: number;
+      }) => void,
+    ) => () => void;
+  };
+
+  // Portfolio (investment-studio research workspace) APIs
+  portfolio: {
+    getWorkspaceDir: () => Promise<{ success: boolean; data?: string; error?: string }>;
   };
 
   // Skills APIs
@@ -1718,6 +1736,23 @@ export const electronAPI: ElectronAPI = {
     getAllTools: () => ipcRenderer.invoke('builtinTools:getAllTools'),
     isBuiltinTool: (toolName: string) =>
       ipcRenderer.invoke('builtinTools:isBuiltinTool', toolName),
+    onFsChanged: (
+      cb: (event: {
+        tool: string;
+        mutations: { path: string; kind: 'create' | 'modify' | 'delete' }[];
+        timestamp: number;
+      }) => void,
+    ) => {
+      const listener = (_e: any, data: any) => cb(data);
+      ipcRenderer.on('kosmos:fs-changed', listener);
+      return () => {
+        try { ipcRenderer.removeListener('kosmos:fs-changed', listener); }
+        catch { /* ignore */ }
+      };
+    },
+  },
+  portfolio: {
+    getWorkspaceDir: () => ipcRenderer.invoke('portfolio:getWorkspaceDir'),
   },
   skills: {
     getSkillMarkdown: (skillName: string) =>
