@@ -6,6 +6,10 @@
 
 import { BuiltinToolDefinition, ToolExecutionResult } from './types';
 import { parse } from 'node-html-parser';
+import * as fs from 'node:fs/promises';
+import * as os from 'node:os';
+import * as path from 'node:path';
+import * as crypto from 'node:crypto';
 
 export interface FetchWebContentToolArgs {
   /**
@@ -292,6 +296,72 @@ export class FetchWebContentTool {
       
       // Check content type
       const contentType = response.headers.get('content-type') || '';
+      const lowerUrl = url.toLowerCase();
+      const isPdf = contentType.includes('application/pdf') || lowerUrl.endsWith('.pdf');
+
+      // PDF branch: download to a temp file, then extract text via ReadOfficeFileTool
+      if (isPdf) {
+        try {
+          const contentLengthHeader = response.headers.get('content-length');
+          if (contentLengthHeader && parseInt(contentLengthHeader) > maxContentSize) {
+            return { error: `Content too large: ${contentLengthHeader} bytes` };
+          }
+
+          const arrayBuffer = await response.arrayBuffer();
+          if (arrayBuffer.byteLength > maxContentSize) {
+            return { error: `Content too large: ${arrayBuffer.byteLength} bytes` };
+          }
+
+          const tmpFile = path.join(
+            os.tmpdir(),
+            `openkosmos-fetch-pdf-${Date.now()}-${crypto.randomBytes(4).toString('hex')}.pdf`
+          );
+          await fs.writeFile(tmpFile, Buffer.from(arrayBuffer));
+
+          try {
+            const { ReadOfficeFileTool } = await import('./readOfficeFileTool');
+            const fileName = (() => {
+              try {
+                const u = new URL(url);
+                const base = u.pathname.split('/').filter(Boolean).pop() || 'document.pdf';
+                return base.toLowerCase().endsWith('.pdf') ? base : `${base}.pdf`;
+              } catch {
+                return 'document.pdf';
+              }
+            })();
+
+            const pdfResult = await ReadOfficeFileTool.execute({
+              filePath: tmpFile,
+              description: `Extracting text from fetched PDF: ${fileName}`,
+              fileName,
+              mimeType: 'application/pdf',
+              fileType: '.pdf',
+            });
+
+            const header =
+              `[PDF document — ${pdfResult.totalPages} page(s), ${pdfResult.totalLines} line(s)` +
+              (pdfResult.truncated ? `, truncated to lines ${pdfResult.startLine}-${pdfResult.endLine}` : '') +
+              ']';
+
+            const webContent: WebContentResult = {
+              url,
+              title: fileName,
+              content: `${header}\n\n${pdfResult.content}`,
+              size: pdfResult.size,
+              timestamp: new Date().toISOString(),
+            };
+
+            return { webContent };
+          } finally {
+            // Best-effort temp cleanup
+            void fs.unlink(tmpFile).catch(() => undefined);
+          }
+        } catch (pdfError) {
+          const msg = pdfError instanceof Error ? pdfError.message : String(pdfError);
+          return { error: `Failed to extract PDF text: ${msg}` };
+        }
+      }
+
       const supportedTypes = [
         'text/html',
         'text/plain',
@@ -429,7 +499,7 @@ export class FetchWebContentTool {
   static getDefinition(): BuiltinToolDefinition {
     return {
       name: 'fetch_web_content',
-      description: 'Fetch and extract text content from multiple web pages in parallel. Removes HTML tags, JavaScript, and CSS, keeping only the main text content. Supports HTML, Markdown, JSON, YAML, XML, and plain text.',
+      description: 'Fetch and extract text content from multiple web pages in parallel. Removes HTML tags, JavaScript, and CSS, keeping only the main text content. Supports HTML, Markdown, JSON, YAML, XML, plain text, and PDF (text is extracted page-by-page).',
       inputSchema: {
         type: 'object',
         properties: {
