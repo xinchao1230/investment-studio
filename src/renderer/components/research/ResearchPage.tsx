@@ -248,6 +248,40 @@ export const ResearchPage: React.FC = () => {
     }
   }, [loading, targets.length, showAddForm]);
 
+  // Restore the last-active target on mount (after targets load). One-shot:
+  // only fires when nothing is selected yet so user navigation is never overridden.
+  const restoredTargetRef = useRef(false);
+  useEffect(() => {
+    if (restoredTargetRef.current) return;
+    if (loading) return;
+    if (targets.length === 0) return;
+    if (selectedCode) { restoredTargetRef.current = true; return; }
+    const api = (window as any).electronAPI?.researchTarget;
+    if (!api?.getLastActive) { restoredTargetRef.current = true; return; }
+    restoredTargetRef.current = true;
+    (async () => {
+      try {
+        const res = await api.getLastActive();
+        const code: string | null | undefined = res?.data;
+        if (!code) return;
+        if (!targets.some((t) => t.stock_code === code)) return;
+        await handleSelectTarget(code);
+      } catch (e) {
+        console.warn('[ResearchPage] restore last-active target failed:', e);
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, targets.length]);
+
+  // Persist last-active target whenever the selection changes (research workspace).
+  useEffect(() => {
+    const api = (window as any).electronAPI?.researchTarget;
+    if (!api?.setLastActive) return;
+    void api.setLastActive(selectedCode).catch((e: unknown) => {
+      console.warn('[ResearchPage] persist last-active target failed:', e);
+    });
+  }, [selectedCode]);
+
   // When active chat changes, tell the chat engine to switch sessions so
   // the embedded ChatView reflects the right history.
   useEffect(() => {

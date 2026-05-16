@@ -1279,6 +1279,12 @@ export interface ElectronAPI {
     getLastActive: (targetCode: string | null) => Promise<{ success: boolean; data?: string | null; error?: string }>;
   };
 
+  // Research workspace: persistent last-active target selection.
+  researchTarget?: {
+    getLastActive: () => Promise<{ success: boolean; data?: string | null; error?: string }>;
+    setLastActive: (targetCode: string | null) => Promise<{ success: boolean; error?: string }>;
+  };
+
   // Research API token management
   researchApi: {
     getToken: (provider: 'tushare' | 'eastmoney') => Promise<string | undefined>;
@@ -2290,6 +2296,11 @@ export const electronAPI: ElectronAPI = {
       ipcRenderer.invoke('researchChat:setLastActive', targetCode, chatSessionId),
     getLastActive: (targetCode: string | null) =>
       ipcRenderer.invoke('researchChat:getLastActive', targetCode),
+  },
+  researchTarget: {
+    getLastActive: () => ipcRenderer.invoke('researchTarget:getLastActive'),
+    setLastActive: (targetCode: string | null) =>
+      ipcRenderer.invoke('researchTarget:setLastActive', targetCode),
   },
 
   // Generic event listening methods for main window IPC events

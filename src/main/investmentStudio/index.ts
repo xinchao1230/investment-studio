@@ -382,4 +382,30 @@ function registerResearchChatIpc(deps: InvestmentStudioDeps): void {
       return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
     }
   });
+
+  // Research workspace: persistent "currently selected target" — used to
+  // restore the selection on app restart so users land back where they left off.
+  ipcMain.handle('researchTarget:getLastActive', async () => {
+    try {
+      const alias = deps.getCurrentUserAlias();
+      if (!alias) return { success: false, error: 'No current user session' };
+      const pcManager = await deps.getProfileCacheManager();
+      const code = pcManager.getLastActiveTargetCode(alias);
+      return { success: true, data: code };
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+    }
+  });
+
+  ipcMain.handle('researchTarget:setLastActive', async (_event, targetCode: string | null) => {
+    try {
+      const alias = deps.getCurrentUserAlias();
+      if (!alias) return { success: false, error: 'No current user session' };
+      const pcManager = await deps.getProfileCacheManager();
+      const ok = await pcManager.setLastActiveTargetCode(alias, targetCode);
+      return ok ? { success: true } : { success: false, error: 'Failed to set last active target' };
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+    }
+  });
 }

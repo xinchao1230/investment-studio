@@ -324,6 +324,7 @@ export class ProfileCacheManager {
         browserControl: profile.browserControl,
         researchApiTokens: profile.researchApiTokens,
         lastActiveChatByTarget: profile.lastActiveChatByTarget,
+        lastActiveTargetCode: profile.lastActiveTargetCode,
       };
 
       return sanitizedProfile;
@@ -2899,6 +2900,46 @@ export class ProfileCacheManager {
         alias,
         targetCode,
         chatSessionId,
+        error: error instanceof Error ? error.message : String(error)
+      });
+      return false;
+    }
+  }
+
+  /**
+   * Get the most-recently-active research target code (research workspace).
+   */
+  getLastActiveTargetCode(alias: string): string | null {
+    try {
+      const profile = this.cache.get(alias);
+      if (!profile || !isProfileV2(profile)) return null;
+      return profile.lastActiveTargetCode ?? null;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Set the most-recently-active research target code.
+   * Pass `null` to clear the selection.
+   */
+  async setLastActiveTargetCode(alias: string, targetCode: string | null): Promise<boolean> {
+    try {
+      let profile = this.cache.get(alias);
+      if (!profile) {
+        const fileProfile = await this.readProfileFromFile(alias);
+        if (!fileProfile) return false;
+        profile = fileProfile;
+      }
+      if (!isProfileV2(profile)) return false;
+      profile.lastActiveTargetCode = targetCode ?? null;
+      this.cache.set(alias, profile);
+      await this.notifyProfileDataManager(alias, true);
+      return await this.writeProfileToFile(alias, profile);
+    } catch (error) {
+      logger.error('[ProfileCacheManager] Failed to set lastActiveTargetCode', 'setLastActiveTargetCode', {
+        alias,
+        targetCode,
         error: error instanceof Error ? error.message : String(error)
       });
       return false;

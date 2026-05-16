@@ -18,19 +18,42 @@ interface ResearchChatPaneProps {
   onToggleCollapsed?: () => void;
 }
 
-const SUGGESTIONS: string[] = [
-  '跟踪公司边际变化并随时推送',
-  '找到今日蓝宝书排名前5的话题中,开盘后30分钟市场选择的龙头公司',
-  '搭建海底捞过去10年的单店模型',
-];
+/**
+ * Build context-aware quick prompts for the empty-chat state.
+ *
+ * - When a target is bound: prompts reference the target's name + code so
+ *   one click kicks off real work on the current company.
+ * - Without a target: fall back to generic research suggestions.
+ */
+function buildSuggestions(targetName?: string | null, targetCode?: string | null): string[] {
+  const hasTarget = Boolean(targetName || targetCode);
+  if (hasTarget) {
+    const label = targetName && targetCode
+      ? `${targetCode} ${targetName}`
+      : (targetCode || targetName || '');
+    return [
+      `请对 ${label} 做一份深度基本面分析报告（公司概况、业务结构、财务、估值、风险）`,
+      `请点评 ${label} 最新一期财报，重点关注收入结构、利润率与现金流变化`,
+      `跟踪 ${label} 的边际变化（经营、行业、估值），整理成 tracking.md`,
+    ];
+  }
+  return [
+    '跟踪公司边际变化并随时推送',
+    '找到今日蓝宝书排名前5的话题中,开盘后30分钟市场选择的龙头公司',
+    '搭建海底捞过去10年的单店模型',
+  ];
+}
 
-const EmptySuggestions: React.FC<{ onPick: (text: string) => void }> = ({ onPick }) => (
+const EmptySuggestions: React.FC<{
+  suggestions: string[];
+  onPick: (text: string) => void;
+}> = ({ suggestions, onPick }) => (
   <div className="px-5 py-6">
     <div className="rw-suggest-title">
       今天一起<span className="rw-suggest-title-accent">研究什么?</span>
     </div>
     <div className="flex flex-col">
-      {SUGGESTIONS.map((s) => (
+      {suggestions.map((s) => (
         <div
           key={s}
           className="rw-suggest-row"
@@ -69,7 +92,12 @@ export const ResearchChatPane: React.FC<ResearchChatPaneProps> = ({
   onToggleCollapsed,
 }) => {
   const messages = useMessages();
-  const isEmpty = !messages || messages.length === 0;
+  // Match ChatViewContent's empty-state logic: ignore system/tool messages and
+  // the frontend-only "say-hi-" greeting so the suggestions show on new chats.
+  const visibleMessages = (messages || []).filter(
+    (m: any) => m && m.role !== 'system' && m.role !== 'tool' && !(m.role === 'assistant' && typeof m.id === 'string' && m.id.startsWith('say-hi-'))
+  );
+  const isEmpty = visibleMessages.length === 0;
 
   const handlePick = useCallback((text: string) => {
     window.dispatchEvent(
@@ -78,6 +106,10 @@ export const ResearchChatPane: React.FC<ResearchChatPaneProps> = ({
   }, []);
 
   const hasTarget = Boolean(targetName || targetCode);
+  const suggestions = React.useMemo(
+    () => buildSuggestions(targetName, targetCode),
+    [targetName, targetCode],
+  );
 
   if (collapsed) {
     return (
@@ -147,7 +179,7 @@ export const ResearchChatPane: React.FC<ResearchChatPaneProps> = ({
         {isEmpty && (
           <div className="absolute inset-x-0 top-0 z-10 pointer-events-none">
             <div className="pointer-events-auto">
-              <EmptySuggestions onPick={handlePick} />
+              <EmptySuggestions suggestions={suggestions} onPick={handlePick} />
             </div>
           </div>
         )}
