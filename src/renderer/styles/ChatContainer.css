@@ -5,6 +5,8 @@
 .chat-container {
  flex: 1;
  overflow-y: auto;
+ overflow-x: hidden;
+ min-width: 0;
  padding: 24px;
  display: flex;
  flex-direction: column;
@@ -21,6 +23,8 @@
 .chat-container-reverse {
  flex: 1;
  overflow-y: auto;
+ overflow-x: hidden;
+ min-width: 0;
  padding: 24px;
  display: flex;
  flex-direction: column-reverse;

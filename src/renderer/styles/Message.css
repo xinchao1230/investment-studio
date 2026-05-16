@@ -2001,6 +2001,8 @@
  display: flex;
  flex-direction: column;
  position: relative;
+ min-width: 0;
+ max-width: 100%;
 }
 
 /* dashed line connection - use pseudo-element extending from below icon to container bottom */
