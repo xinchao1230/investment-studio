@@ -7,6 +7,7 @@ import { AddTargetSearch } from './AddTargetSearch';
 import { usePortfolio, TargetFile } from './usePortfolio';
 import { useTargetChats } from './useTargetChats';
 import { useTabsByCode } from './useTabsByCode';
+import { useResearchSelection } from './useResearchSelection';
 import {
   openTab as openTabRec,
   closeTab as closeTabRec,
@@ -53,7 +54,6 @@ const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(v, hi
 
 export const ResearchPage: React.FC = () => {
   const { targets, loading, initTarget, deleteTarget, getTargetFiles } = usePortfolio();
-  const [selectedCode, setSelectedCode] = useState<string | null>(null);
   // Per-target tab state (persisted to localStorage). Each entry holds an
   // ordered list of TabRecord (absPath + fractional sortKey) plus the
   // currently-active absPath. Switching targets restores both order and
@@ -69,11 +69,21 @@ export const ResearchPage: React.FC = () => {
     profileAlias,
     loading ? null : knownCodes,
   );
+  // Left-sidebar selection (selectedCode + expandedCodes) persists to
+  // sessionStorage so that intra-session navigation (e.g. /research →
+  // /settings → Back, which unmounts ResearchPage) preserves selection.
+  // App restart still clears it, by design (sessionStorage scope).
+  const {
+    selectedCode,
+    setSelectedCode,
+    expandedCodes,
+    setExpandedCodes,
+    flushNow: flushSelection,
+    hydrated: selectionHydrated,
+  } = useResearchSelection(profileAlias, loading ? null : knownCodes);
   const [showAddForm, setShowAddForm] = useState(false);
   const [addError, setAddError] = useState<string | null>(null);
   const [addBusy, setAddBusy] = useState(false);
-
-  const [expandedCodes, setExpandedCodes] = useState<Set<string>>(new Set());
   const [filesByCode, setFilesByCode] = useState<Record<string, TargetFile[]>>({});
   // In-app confirm dialog state for delete-target. We avoid window.confirm()
   // because the native modal steals focus from the renderer; when the
@@ -273,6 +283,31 @@ export const ResearchPage: React.FC = () => {
     },
     [getTargetFiles],
   );
+
+  // Post-hydration restore: when sessionStorage rehydrates a selectedCode
+  // (e.g. user returned from /settings and ResearchPage just remounted),
+  // re-trigger the per-target side effects that handleSelectTarget would
+  // normally do (load files, restore chat). Fires once per (profileAlias,
+  // selectedCode) pair to avoid clobbering subsequent user-driven changes.
+  const hydratedOnceRef = useRef<string | null>(null);
+  useEffect(() => {
+    // Reset the guard when the profile changes so a different user gets
+    // their own hydration pass.
+    hydratedOnceRef.current = null;
+  }, [profileAlias]);
+  useEffect(() => {
+    if (loading) return;
+    if (!selectionHydrated) return;
+    if (!selectedCode) return;
+    if (hydratedOnceRef.current === selectedCode) return;
+    const target = targetsRef.current.find((t) => t.stock_code === selectedCode);
+    if (!target) return; // orphan cleanup will null it out shortly
+    hydratedOnceRef.current = selectedCode;
+    loadFiles(selectedCode);
+    targetChats.selectChatForTarget(selectedCode, target).catch((err) => {
+      console.error('[ResearchPage] post-hydration selectChatForTarget failed:', err);
+    });
+  }, [loading, selectionHydrated, selectedCode, targets, loadFiles, targetChats]);
 
   const handleSelectTarget = useCallback(
     async (code: string) => {
@@ -511,8 +546,11 @@ export const ResearchPage: React.FC = () => {
         return next;
       });
       setSelectedCode((prev) => (prev === code ? null : prev));
+      // Flush selection state immediately so a quick re-add or app close
+      // can't leave a stale selection of a now-deleted target.
+      flushSelection();
     },
-    [pendingDelete, deleteTarget, targetChats, setTabsByCode, flushNow],
+    [pendingDelete, deleteTarget, targetChats, setTabsByCode, flushNow, setExpandedCodes, setSelectedCode, flushSelection],
   );
 
   const handleTabClose = useCallback(
