@@ -486,13 +486,37 @@ const ChatInput: React.FC<ChatInputPropsExtended> = ({
     };
   }, [message, onContextMenuClose]);
 
-  // Listen for fill-input-box events from AgentPage
+  // Listen for fill-input-box events from AgentPage.
+  //
+  // Event detail: { text: string, autoSubmit?: boolean }
+  // - autoSubmit=false (default): fill the input and let the user press Enter
+  //   (preserves the research-pane "edit-before-send" convention).
+  // - autoSubmit=true: fill the input AND send immediately. Used for the
+  //   "了解 Stella" intro card where editing makes no sense.
+  //
+  // For auto-submit we sync the attachment manager synchronously via
+  // setText() so handleSend() — which reads from attachmentManager, not the
+  // (asynchronously updated) `message` state — sees the new text on the same
+  // tick. We also use a ref to call the latest handleSend without making
+  // this effect re-subscribe on every render.
+  const autoSubmitRef = useRef<() => void>(() => {});
+  autoSubmitRef.current = () => { handleSend(); };
   useEffect(() => {
     const handleFillInputEvent = (e: CustomEvent) => {
-      const { text } = e.detail;
+      const { text, autoSubmit } = (e.detail || {}) as { text?: string; autoSubmit?: boolean };
 
       if (text && typeof text === 'string') {
         setMessage(text);
+
+        if (autoSubmit) {
+          // Sync into attachmentManager immediately so handleSend's
+          // attachmentManager.isValid() / createMessage() see the new text
+          // on this tick (the message-state sync effect is async).
+          attachmentManager.setText(text);
+          // Defer to next tick so any in-flight render settles first.
+          setTimeout(() => { autoSubmitRef.current(); }, 0);
+          return;
+        }
 
         // Focus the input and move the cursor to the end
         setTimeout(() => {
@@ -514,7 +538,7 @@ const ChatInput: React.FC<ChatInputPropsExtended> = ({
         handleFillInputEvent as EventListener,
       );
     };
-  }, []);
+  }, [attachmentManager]);
 
   // Auto-resize textarea based on content and control scrollbar visibility
   useEffect(() => {

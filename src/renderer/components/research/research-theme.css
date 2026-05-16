@@ -134,44 +134,9 @@
   color: var(--rw-text);
 }
 
-/* Empty-state suggestion list (right pane) */
-[data-theme="research"] .rw-suggest-title {
-  font-size: 15px;
-  font-weight: 600;
-  color: var(--rw-text);
-  padding: 4px 4px 12px 4px;
-}
-[data-theme="research"] .rw-suggest-title-accent { color: var(--rw-accent); }
-[data-theme="research"] .rw-suggest-row {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  padding: 8px 6px;
-  border-radius: 6px;
-  font-size: 13px;
-  line-height: 1.55;
-  color: var(--rw-text);
-  cursor: pointer;
-}
-[data-theme="research"] .rw-suggest-row:hover { background: rgba(0,0,0,0.035); }
-[data-theme="research"] .rw-suggest-icon {
-  color: var(--rw-suggest-icon);
-  flex: 0 0 auto;
-  font-size: 11px;
-  line-height: 20px;
-  transform: rotate(45deg);
-  display: inline-block;
-  width: 10px;
-  height: 10px;
-  background: var(--rw-suggest-icon);
-  border-radius: 1px;
-  margin-top: 5px;
-}
-[data-theme="research"] .rw-suggest-divider {
-  height: 1px;
-  background: var(--rw-border);
-  margin: 12px 24%;
-}
+/* NOTE: legacy .rw-suggest-* styles removed — the workspace-mode "今天一起
+ * 研究什么?" text rows have been replaced by the unified ResearchWelcome
+ * card grid (shared with Stella mode). See .rw-stella-welcome-* below. */
 
 [data-theme="research"] .rw-pane-right :where(input, textarea) { font-size: 13px; }
 [data-theme="research"] .rw-pane-right:not(.rw-pane-right--collapsed) { min-width: 400px; }
@@ -268,6 +233,40 @@
   font-size: 12px;
   color: var(--rw-text-3);
   line-height: 16px;
+}
+
+/* "未上市" pill rendered inline next to the workspace-mode header title
+ * (only when targetCode === targetName, i.e. synthetic unlisted target). */
+[data-theme="research"] .rw-stella-welcome-pill {
+  display: inline-flex;
+  align-items: center;
+  font-size: 10px;
+  line-height: 1;
+  padding: 3px 6px;
+  border-radius: 4px;
+  background: rgba(127, 127, 127, 0.12);
+  color: var(--rw-text-3);
+  margin-left: 4px;
+  flex-shrink: 0;
+}
+
+/* Subtitle under the header — used in workspace mode to show the stock code
+ * below the target name (when not unlisted). */
+[data-theme="research"] .rw-stella-welcome-subtitle {
+  font-size: 12px;
+  color: var(--rw-text-3);
+  text-align: center;
+  margin: -8px 0 14px 0;
+  letter-spacing: 0.3px;
+}
+
+/* Intro card variant — visually identical to task cards (no accent
+ * highlight per design). Click behavior still differs: intro auto-submits,
+ * task cards fill the input. Class kept so future tweaks have a hook. */
+[data-theme="research"] .rw-stella-welcome-card-icon {
+  font-size: 14px;
+  line-height: 1;
+  margin-bottom: 2px;
 }
 
 /* Chat message bubble typography — research workspace uses a denser scale
