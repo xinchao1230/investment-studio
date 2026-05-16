@@ -12,6 +12,7 @@
  */
 export const BUILTIN_SKILL_NAMES: string[] = [
   'skill-creator',
+  'xlsx',             // all brands — Excel/spreadsheet authoring
   'stock-analyze',    // investment-studio only
   'earnings-forecast', // investment-studio only
   'earnings-review',  // investment-studio only
@@ -27,6 +28,7 @@ export function getBuiltinSkillNamesForBrand(brandName: string): string[] {
   if (brandName === 'investment-studio') {
     return [
       'skill-creator',
+      'xlsx',
       'stock-analyze',
       'earnings-forecast',
       'earnings-review',
@@ -35,7 +37,7 @@ export function getBuiltinSkillNamesForBrand(brandName: string): string[] {
       'stock-screening',
     ];
   }
-  return ['skill-creator'];
+  return ['skill-creator', 'xlsx'];
 }
 
 /**
