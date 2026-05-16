@@ -1,13 +1,13 @@
 // React hook persisting the Research workspace's left-sidebar selection
-// (currently-selected target + expanded rows) to sessionStorage.
+// (currently-selected target + expanded rows) to localStorage.
 //
-// Why sessionStorage (not localStorage):
-//   - tabsByCode lives in localStorage (durable across app restarts).
-//   - Selection state should NOT survive app restart — fresh launch = clean
-//     initial state, matching the existing UX contract.
-//   - But it MUST survive intra-session route changes (e.g. /research →
-//     /settings → Back), because ResearchPage unmounts on those.
-//   - sessionStorage gives us exactly that: per-renderer-process lifetime.
+// Persistence scope:
+//   - localStorage (durable across app restarts) — matches `tabsByCode`
+//     and the per-target last-active chat (stored backend-side). On a
+//     fresh launch the user is restored to their last selected target,
+//     with its tabs and last chat already in view.
+//   - Also survives intra-session route changes (e.g. /research →
+//     /settings → Back), since ResearchPage unmounts on those.
 //
 // Persistence semantics mirror useTabsByCode:
 //   - 300ms debounce on normal writes.
@@ -46,7 +46,7 @@ function emptySnapshot(): Snapshot {
 
 function readFromStorage(profileAlias: string): Snapshot {
   try {
-    const raw = sessionStorage.getItem(storageKey(profileAlias));
+    const raw = localStorage.getItem(storageKey(profileAlias));
     if (!raw) return emptySnapshot();
     const parsed = JSON.parse(raw) as Persisted;
     if (!parsed || typeof parsed !== 'object') return emptySnapshot();
@@ -66,7 +66,7 @@ function readFromStorage(profileAlias: string): Snapshot {
     return { selectedCode, expandedCodes: new Set(expanded) };
   } catch (err) {
     console.warn(
-      '[useResearchSelection] failed to parse sessionStorage, starting fresh:',
+      '[useResearchSelection] failed to parse localStorage, starting fresh:',
       err,
     );
     return emptySnapshot();
@@ -80,9 +80,9 @@ function writeToStorage(profileAlias: string, snap: Snapshot): void {
       selectedCode: snap.selectedCode,
       expandedCodes: Array.from(snap.expandedCodes),
     };
-    sessionStorage.setItem(storageKey(profileAlias), JSON.stringify(payload));
+    localStorage.setItem(storageKey(profileAlias), JSON.stringify(payload));
   } catch (err) {
-    console.warn('[useResearchSelection] failed to write sessionStorage:', err);
+    console.warn('[useResearchSelection] failed to write localStorage:', err);
   }
 }
 
@@ -94,7 +94,7 @@ export interface UseResearchSelectionReturn {
   /** Force-flush pending state synchronously (bypass debounce). */
   flushNow: () => void;
   /**
-   * True once this hook has hydrated from sessionStorage for the current
+   * True once this hook has hydrated from localStorage for the current
    * profileAlias. Callers can gate "post-hydration" side-effects on this
    * to avoid double-firing during the initial empty-state render.
    */
