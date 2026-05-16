@@ -274,7 +274,15 @@ export const ResearchPage: React.FC = () => {
   }, [loading, targets.length]);
 
   // Persist last-active target whenever the selection changes (research workspace).
+  // Skip the initial mount: selectedCode starts as null, and writing that null
+  // would clobber the stored value before the restore effect has a chance to read it.
+  const persistedTargetRef = useRef(false);
   useEffect(() => {
+    if (!persistedTargetRef.current) {
+      // Allow persisting once restore is done OR once user picks a target.
+      if (!restoredTargetRef.current && selectedCode === null) return;
+      persistedTargetRef.current = true;
+    }
     const api = (window as any).electronAPI?.researchTarget;
     if (!api?.setLastActive) return;
     void api.setLastActive(selectedCode).catch((e: unknown) => {

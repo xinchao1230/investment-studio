@@ -162,6 +162,35 @@
 [data-theme="research"] .rw-pane-right :where(input, textarea) { font-size: 13px; }
 [data-theme="research"] .rw-pane-right:not(.rw-pane-right--collapsed) { min-width: 400px; }
 
+/* Chat message bubble typography — research workspace uses a denser scale
+   than the standalone /agent window (default 15px). Drop body text to 13px
+   so a single screen shows more of the conversation. */
+[data-theme="research"] .rw-pane-right .message-content {
+  font-size: 13px;
+  line-height: 1.55;
+}
+[data-theme="research"] .rw-pane-right .message-content p,
+[data-theme="research"] .rw-pane-right .message-content div,
+[data-theme="research"] .rw-pane-right .message-content span,
+[data-theme="research"] .rw-pane-right .message-content li {
+  font-size: 13px;
+  line-height: 1.55;
+}
+[data-theme="research"] .rw-pane-right .message-content code {
+  font-size: 12px;
+}
+[data-theme="research"] .rw-pane-right .message-content pre,
+[data-theme="research"] .rw-pane-right .message-content pre code {
+  font-size: 12px;
+  line-height: 1.5;
+}
+[data-theme="research"] .rw-pane-right .message-content h1 { font-size: 17px; }
+[data-theme="research"] .rw-pane-right .message-content h2 { font-size: 15px; }
+[data-theme="research"] .rw-pane-right .message-content h3 { font-size: 14px; }
+[data-theme="research"] .rw-pane-right .message-content h4,
+[data-theme="research"] .rw-pane-right .message-content h5,
+[data-theme="research"] .rw-pane-right .message-content h6 { font-size: 13px; }
+
 /* Zero-states (Stella greeting + quick-start cards) — scale down typography
    in the Research right pane so it matches the surrounding 12-13px UI rather
    than the 18-20px /agent main-window scale. */
