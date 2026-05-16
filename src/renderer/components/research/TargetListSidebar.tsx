@@ -330,7 +330,10 @@ export const TargetListSidebar: React.FC<TargetListSidebarProps> = ({
             </div>
           )}
           {stellaChats && [...stellaChats]
-            .sort((a, b) => (b.last_updated || '').localeCompare(a.last_updated || ''))
+            // Sort by creation time descending (chatSession_id lex order). Do
+            // not use last_updated: keeps the list stable across streaming
+            // updates and rename so it does not flicker mid-chat.
+            .sort((a, b) => b.chatSession_id.localeCompare(a.chatSession_id))
             .map((chat) => (
               <div
                 key={chat.chatSession_id}
@@ -470,7 +473,10 @@ export const TargetListSidebar: React.FC<TargetListSidebarProps> = ({
                         )}
                       </div>
                       {[...(chatsByCode?.[code] ?? [])]
-                        .sort((a, b) => (a.last_updated || '').localeCompare(b.last_updated || ''))
+                        // Sort by creation time ascending (oldest first, newest
+                        // at the bottom). Stays stable across last_updated
+                        // changes so the list does not jump while chatting.
+                        .sort((a, b) => a.chatSession_id.localeCompare(b.chatSession_id))
                         .map((chat) => (
                         <div
                           key={chat.chatSession_id}

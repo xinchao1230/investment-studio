@@ -275,8 +275,12 @@ export class ChatSessionManager {
       
       // Add to month index
       monthIndex.sessions.push(chatSession);
-      monthIndex.sessions.sort((a, b) => 
-        new Date(b.last_updated).getTime() - new Date(a.last_updated).getTime()
+      // Sort by chatSession_id descending (= creation time descending). The id
+      // format chatSession_YYYYMMDDHHmmSS makes lexicographic order match
+      // chronological order. last_updated is intentionally NOT used so that
+      // updating a session does not change the list position.
+      monthIndex.sessions.sort((a, b) =>
+        b.chatSession_id.localeCompare(a.chatSession_id)
       );
       
       // Save month index
@@ -375,9 +379,10 @@ export class ChatSessionManager {
         last_updated: new Date().toISOString()
       };
       
-      // Re-sort
-      monthIndex.sessions.sort((a, b) => 
-        new Date(b.last_updated).getTime() - new Date(a.last_updated).getTime()
+      // Re-sort by creation time (chatSession_id desc) so updates do not
+      // change the visible order.
+      monthIndex.sessions.sort((a, b) =>
+        b.chatSession_id.localeCompare(a.chatSession_id)
       );
       
       // Save month index
@@ -606,9 +611,9 @@ export class ChatSessionManager {
         monthIndex++;
       }
       
-      // Ensure sorted in descending order by time
+      // Ensure sorted by creation time descending (chatSession_id lex order).
       allSessions.sort((a, b) =>
-        new Date(b.last_updated).getTime() - new Date(a.last_updated).getTime()
+        b.chatSession_id.localeCompare(a.chatSession_id)
       );
       
       const hasMore = monthIndex < chatIndex.months.length;
@@ -676,9 +681,9 @@ export class ChatSessionManager {
       const nextMonthIndex = fromMonthIndex + 1;
       const hasMore = nextMonthIndex < chatIndex.months.length;
       
-      // Ensure sorted in descending order by time
+      // Ensure sorted by creation time descending (chatSession_id lex order).
       sessions.sort((a, b) =>
-        new Date(b.last_updated).getTime() - new Date(a.last_updated).getTime()
+        b.chatSession_id.localeCompare(a.chatSession_id)
       );
       
       logger.info('[ChatSessionManager] getMoreChatSessions completed','getMoreChatSessions', {
@@ -733,9 +738,9 @@ export class ChatSessionManager {
         }
       }
       
-      // Ensure sorted in descending order by time
+      // Ensure sorted by creation time descending (chatSession_id lex order).
       allSessions.sort((a, b) =>
-        new Date(b.last_updated).getTime() - new Date(a.last_updated).getTime()
+        b.chatSession_id.localeCompare(a.chatSession_id)
       );
       
       return allSessions;
@@ -987,9 +992,9 @@ export class ChatSessionManager {
       
       // Create index and migrate files for each month
       for (const [month, sessions] of sessionsByMonth) {
-        // Sort
-        sessions.sort((a, b) => 
-          new Date(b.last_updated).getTime() - new Date(a.last_updated).getTime()
+        // Sort by creation time descending (chatSession_id lex order)
+        sessions.sort((a, b) =>
+          b.chatSession_id.localeCompare(a.chatSession_id)
         );
         
         // Create month index

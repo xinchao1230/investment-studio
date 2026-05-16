@@ -594,7 +594,10 @@ const AgentList: React.FC<AgentListProps> = ({
                   }}
                 >
                   {chat.chatSessions
-                    .sort((a, b) => new Date(b.last_updated).getTime() - new Date(a.last_updated).getTime())
+                    // Sort by creation time descending (chatSession_id lex order).
+                    // Stays stable across last_updated changes so the list does
+                    // not jump on each new message.
+                    .sort((a, b) => b.chatSession_id.localeCompare(a.chatSession_id))
                     .map((session) => (
                       <div
                         key={session.chatSession_id}

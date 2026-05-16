@@ -536,9 +536,10 @@ async function importMonthSessions(
       });
     }
     
-    // Sort by time in descending order
+    // Sort by creation time descending (chatSession_id lex order). Keeps the
+    // list stable under later updates.
     targetMonthIndex.sessions.sort((a, b) =>
-      new Date(b.last_updated).getTime() - new Date(a.last_updated).getTime()
+      b.chatSession_id.localeCompare(a.chatSession_id)
     );
     targetMonthIndex.last_updated = new Date().toISOString();
     

@@ -108,8 +108,9 @@ export function useStellaChats(): UseStellaChatsApi {
       // Active chat was deleted — fall back so the right pane never keeps
       // showing stale messages from the deleted session.
       if (remaining.length > 0) {
+        // Pick the newest by creation time (chatSession_id lex desc).
         const next = [...remaining].sort((a, b) =>
-          (b.last_updated || '').localeCompare(a.last_updated || ''),
+          b.chatSession_id.localeCompare(a.chatSession_id),
         )[0];
         const { chatId } = await researchChatIpc.listByTarget(null);
         if (chatId) {
