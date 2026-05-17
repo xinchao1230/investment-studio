@@ -32,6 +32,7 @@ import React, {
   useEffect,
   useImperativeHandle,
   useRef,
+  useState,
 } from 'react';
 import type * as monaco from 'monaco-editor';
 import { AlertTriangle, RotateCw } from 'lucide-react';
@@ -72,6 +73,13 @@ const EditableMonacoPane = forwardRef<
   const containerRef = useRef<HTMLDivElement | null>(null);
   const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null);
   const changeDisposableRef = useRef<{ dispose(): void } | null>(null);
+  // Forces a re-render once Monaco has finished its async mount so
+  // the readOnly-sync effect below can grab editorRef.current.
+  // Without this, the editor would stay in whatever readOnly state it
+  // was created with — the readOnly effect runs in render order and
+  // would have already early-returned (editorRef.current=null) by the
+  // time the async import resolves.
+  const [editorEpoch, setEditorEpoch] = useState(0);
   // We update `editor.setValue` reactively from `file.content`. To
   // avoid re-firing the change listener (and incorrectly marking the
   // buffer dirty against itself), gate the listener with this flag.
@@ -111,14 +119,37 @@ const EditableMonacoPane = forwardRef<
   // we mount exactly once per file load — typing into the buffer
   // mutates file.content but must NOT re-mount Monaco.
   // -----------------------------------------------------------------
-  const contentReady = file.content !== null;
+  // Mount only after the hook has settled into a state where it
+  // knows the file contents AND knows whether editing is allowed.
+  // Mounting earlier (e.g. when content arrives but status is still
+  // transitioning) leaves a race where Monaco initializes with
+  // readOnly=true and the subsequent updateOptions effect never
+  // re-fires because editorRef.current was set asynchronously
+  // without triggering a React re-render.
+  const statusSettled =
+    file.status === 'ready' ||
+    file.status === 'too-large' ||
+    file.status === 'unsupported';
+  // Capture readOnly at mount-time from current render state (not via
+  // ref) so the closure has consistent values.
+  const initialReadOnlyAtMount =
+    readOnly || file.status !== 'ready' || !file.canEdit;
   useEffect(() => {
     if (!containerRef.current) return;
-    if (!contentReady) return;
+    if (!statusSettled) return;
 
     const container = containerRef.current;
     let disposed = false;
-    const initialValue = fileApiRef.current.content ?? '';
+    const initialValue = file.content ?? '';
+    const initialReadOnly = initialReadOnlyAtMount;
+    // eslint-disable-next-line no-console
+    console.log('[EditableMonacoPane] mounting Monaco', {
+      filePath,
+      status: file.status,
+      canEdit: file.canEdit,
+      initialReadOnly,
+      contentLen: initialValue.length,
+    });
 
     import(/* webpackChunkName: "monaco-editor" */ 'monaco-editor').then(
       (monacoModule) => {
@@ -146,12 +177,7 @@ const EditableMonacoPane = forwardRef<
             verticalScrollbarSize: 10,
             horizontalScrollbarSize: 10,
           },
-          // readOnly is computed from the latest hook status — read it
-          // off the ref so we don't re-mount Monaco when it changes.
-          readOnly:
-            readOnly ||
-            fileApiRef.current.status !== 'ready' ||
-            !fileApiRef.current.canEdit,
+          readOnly: initialReadOnly,
           contextmenu: true,
           quickSuggestions: false,
           parameterHints: { enabled: false },
@@ -160,8 +186,14 @@ const EditableMonacoPane = forwardRef<
           tabCompletion: 'off',
           wordBasedSuggestions: 'off',
         });
+        // eslint-disable-next-line no-console
+        console.log('[EditableMonacoPane] Monaco created', {
+          filePath,
+          readOnlyApplied: editor.getOption(monacoModule.editor.EditorOption.readOnly),
+        });
 
         editorRef.current = editor;
+        setEditorEpoch((n) => n + 1);
 
         changeDisposableRef.current = editor.onDidChangeModelContent(() => {
           if (suppressNextChangeRef.current) {
@@ -193,7 +225,7 @@ const EditableMonacoPane = forwardRef<
     // updates (typing, reloadFromDisk) are pushed via setValue in the
     // next effect.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filePath, language, contentReady]);
+  }, [filePath, language, statusSettled]);
 
   // -----------------------------------------------------------------
   // Apply external content updates (e.g. reloadFromDisk) to the live
@@ -217,8 +249,26 @@ const EditableMonacoPane = forwardRef<
     const editor = editorRef.current;
     if (!editor) return;
     const ro = readOnly || file.status !== 'ready' || !file.canEdit;
+    // eslint-disable-next-line no-console
+    console.log('[EditableMonacoPane] updateOptions readOnly', {
+      filePath,
+      ro,
+      status: file.status,
+      canEdit: file.canEdit,
+      propReadOnly: readOnly,
+      editorEpoch,
+    });
     editor.updateOptions({ readOnly: ro });
-  }, [readOnly, file.status, file.canEdit]);
+    if (!ro) {
+      // If we just transitioned to editable, make sure focus is in
+      // the editor so the user can start typing immediately.
+      try {
+        editor.focus();
+      } catch {
+        /* noop */
+      }
+    }
+  }, [readOnly, file.status, file.canEdit, filePath, editorEpoch]);
 
   // -----------------------------------------------------------------
   // Ctrl+S / Cmd+S to save. Listener is window-level but only fires
