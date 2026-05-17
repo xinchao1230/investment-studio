@@ -189,9 +189,6 @@ const ResearchWelcome: React.FC<ResearchWelcomeProps> = ({
               className={`rw-stella-welcome-card${isIntro ? ' rw-stella-welcome-card--intro' : ''}`}
               onClick={() => (isIntro ? onPickSend(q.prompt) : onPickFill(q.prompt))}
             >
-              {isIntro && (
-                <span className="rw-stella-welcome-card-icon" aria-hidden>💡</span>
-              )}
               <div className="rw-stella-welcome-card-title">{q.title}</div>
               <div className="rw-stella-welcome-card-desc">{q.description}</div>
             </button>

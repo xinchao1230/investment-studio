@@ -261,13 +261,9 @@
 }
 
 /* Intro card variant — visually identical to task cards (no accent
- * highlight per design). Click behavior still differs: intro auto-submits,
- * task cards fill the input. Class kept so future tweaks have a hook. */
-[data-theme="research"] .rw-stella-welcome-card-icon {
-  font-size: 14px;
-  line-height: 1;
-  margin-bottom: 2px;
-}
+ * highlight, no icon, per design). Click behavior still differs:
+ * intro auto-submits, task cards fill the input. Class kept so future
+ * tweaks have a hook. */
 
 /* Chat message bubble typography — research workspace uses a denser scale
    than the standalone /agent window (default 15px). Drop body text to 13px
