@@ -171,9 +171,17 @@ const ResearchWelcome: React.FC<ResearchWelcomeProps> = ({
   onPickFill,
   onPickSend,
 }) => {
+  // Workspace mode without a selected target = empty state. The 6 target-
+  // scoped cards would render with an empty `${label}` (broken prompts), so
+  // fall back to the Stella sample cards. Stella herself can guide the user
+  // through `portfolio_init_target` if they want to start a research target.
+  const hasActiveTarget = !!(targetName || targetCode);
   const cards = React.useMemo(
-    () => (mode === 'workspace' ? buildWorkspaceCards(targetName, targetCode) : STELLA_CARDS),
-    [mode, targetName, targetCode],
+    () =>
+      mode === 'workspace' && hasActiveTarget
+        ? buildWorkspaceCards(targetName, targetCode)
+        : STELLA_CARDS,
+    [mode, hasActiveTarget, targetName, targetCode],
   );
 
   const isUnlisted = !!targetName && !!targetCode && targetName === targetCode;
