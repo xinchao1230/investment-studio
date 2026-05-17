@@ -2,6 +2,17 @@ import React, { useCallback } from 'react';
 import { PanelRightClose, PanelRightOpen } from 'lucide-react';
 import ChatView from '../chat/ChatView';
 import { useMessages } from '../../lib/chat/agentChatSessionCacheManager';
+import { BRAND_NAME } from '../../../shared/constants/branding';
+
+// Brand-scoped Stella logo (PNG); webpack asset/resource pipeline emits as URL.
+let stellaLogoUrl: string | null = null;
+try {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const mod = require(`../../assets/${BRAND_NAME}/stella.png`);
+  stellaLogoUrl = typeof mod === 'string' ? mod : mod?.default ?? null;
+} catch {
+  stellaLogoUrl = null;
+}
 
 interface ResearchChatPaneProps {
   activeFileAbsPath: string | null;
@@ -171,10 +182,17 @@ const ResearchWelcome: React.FC<ResearchWelcomeProps> = ({
   return (
     <div className="rw-stella-welcome">
       <div className="rw-stella-welcome-header">
-        <span className="rw-stella-welcome-emoji" aria-hidden>📊</span>
-        <span className="rw-stella-welcome-title">
-          {mode === 'workspace' ? `研究 ${targetName ?? ''}` : 'Ask Stella'}
-        </span>
+        {stellaLogoUrl ? (
+          <img
+            src={stellaLogoUrl}
+            alt=""
+            className="rw-stella-welcome-logo"
+            aria-hidden
+          />
+        ) : (
+          <span className="rw-stella-welcome-emoji" aria-hidden>📊</span>
+        )}
+        <span className="rw-stella-welcome-title">Ask Stella</span>
         {mode === 'workspace' && isUnlisted && (
           <span className="rw-stella-welcome-pill">未上市</span>
         )}
