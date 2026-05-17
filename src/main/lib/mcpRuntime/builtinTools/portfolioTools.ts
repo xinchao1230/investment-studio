@@ -379,7 +379,11 @@ export class PortfolioTools {
     fs.mkdirSync(targetDir, { recursive: true });
     fs.mkdirSync(path.join(targetDir, 'inputs'), { recursive: true });
     fs.mkdirSync(path.join(targetDir, 'earnings'), { recursive: true });
-    fs.mkdirSync(path.join(targetDir, 'research'), { recursive: true });
+    // Note: Do NOT pre-create a `research/` (English) dir. The sidebar's
+    // SUBCATEGORIES are Chinese (纪要/研报/公告/...), and stock-analyze writes
+    // to `研报/stock-analyze/{date}/`. An empty pre-created English `research/`
+    // biases the LLM into the "复用既有结构" branch and lands reports in
+    // an extras row that users miss. Let the skill create its own path.
     fs.mkdirSync(path.join(targetDir, 'models'), { recursive: true });
 
     // ISO datetime with millisecond precision so the renderer can sort
