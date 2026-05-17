@@ -3056,11 +3056,11 @@ export class AgentChat {
    */
   private async postProcessToolResult(toolCall: any, toolResult: any): Promise<any> {
     const toolName = toolCall.function?.name;
-    
+
     if (toolName === 'get_mcp_config_from_lib') {
       return await this.postProcessForGetMcpConfigFromLibTool(toolResult);
     }
-    
+
     if (toolName === 'get_agent_config_from_lib') {
       return await this.postProcessForGetAgentConfigFromLibTool(toolResult);
     }
@@ -3076,7 +3076,7 @@ export class AgentChat {
         logger.warn('[AgentChat] portfolio_init_target post-process failed (ignored): ' + (e instanceof Error ? e.message : String(e)));
       }
     }
-    
+
     // Other tools are not processed, return the original result directly
     return toolResult;
   }
@@ -3097,9 +3097,17 @@ export class AgentChat {
     const existing = (this.currentChatSession as any).targetCode;
     if (existing) return;
 
-    // Tool failed → nothing to bind to.
-    const ok = typeof toolResult === 'object' && toolResult?.success === true;
-    if (!ok) return;
+    // Treat the tool result as "ok" unless it's an explicit failure object.
+    // BuiltinMcpClient.executeTool unwraps successful results to plain strings
+    // (e.g. 'Target "..." created at ...') and only throws on failure — so by
+    // the time we reach here, a non-throw means success. The explicit
+    // `success === false` check covers the case where some MCP clients return
+    // failure envelopes instead of throwing.
+    const isExplicitFailure =
+      typeof toolResult === 'object' &&
+      toolResult !== null &&
+      (toolResult as any).success === false;
+    if (isExplicitFailure) return;
 
     // Parse arguments — they were already validated by executeToolCall.
     let args: any = {};

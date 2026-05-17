@@ -107,6 +107,17 @@ export function useTargetChats(): UseTargetChatsApi {
   const selectChatForTarget = useCallback(
     async (code: string, target: Target | undefined, preferredSessionId?: string): Promise<ActiveChat | null> => {
       try {
+        // Clear any stale active state from a previous target before we
+        // begin resolving the new one. Without this, an upstream caller
+        // that switches targets (e.g. an LLM-driven chat→target rebind
+        // that flips activeMode='workspace') exposes the prior target's
+        // `active` to the workspace-mode "switch chat engine" effect for
+        // the ~ms it takes us to listByTarget(code) + pick a session.
+        // The effect would then swap the chat engine to the old session,
+        // and our final setActive(...) would have to swap it back —
+        // visible as a brief flash of the wrong chat.
+        setActive(null);
+
         const { chatId, sessions } = await researchChatIpc.listByTarget(code);
         setChatsByCode((prev) => ({ ...prev, [code]: sessions }));
 

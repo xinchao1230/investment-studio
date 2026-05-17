@@ -20,7 +20,7 @@ import {
 } from './tabState';
 import { LayoutProvider } from '../layout/LayoutProvider';
 import { PasteToWorkspaceProvider } from '../chat/workspace/PasteToWorkspaceProvider';
-import { agentChatSessionCacheManager } from '../../lib/chat/agentChatSessionCacheManager';
+import { agentChatSessionCacheManager, useCurrentChatSessionId } from '../../lib/chat/agentChatSessionCacheManager';
 import { profileDataManager } from '@renderer/lib/userData';
 import { useFsChanged } from '../../hooks/useFsChanged';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../ui/dialog';
@@ -92,6 +92,10 @@ export const ResearchPage: React.FC = () => {
   // Not persisted by design — always defaults to 'workspace' on app start.
   const [activeMode, setActiveMode] = useState<'workspace' | 'stella'>('workspace');
   const stella = useStellaChats();
+  // Source of truth for the chat session id the agent engine is *actually*
+  // bound to right now. Survives across stella↔target tab switches and
+  // includes "leftover" sessions that aren't tracked by either hook.
+  const liveChatSessionId = useCurrentChatSessionId();
   const [showAddForm, setShowAddForm] = useState(false);
   const [addError, setAddError] = useState<string | null>(null);
   const [addBusy, setAddBusy] = useState(false);
@@ -342,6 +346,74 @@ export const ResearchPage: React.FC = () => {
       }
     })();
   }, [stella.active, activeMode]);
+
+  // Investment-studio: backend's postProcessForPortfolioInitTarget will
+  // re-bind a Stella-scoped chat (targetCode = null) to a newly-created
+  // target the LLM just instantiated via `portfolio_init_target`. When
+  // that happens, `chatSession:updated` fires with the session's new
+  // targetCode. Migrate the renderer UI accordingly: switch to workspace
+  // mode + select the target so the user lands in the per-target view
+  // with this same chat already attached.
+  //
+  // We watch `liveChatSessionId` (the session id the agent engine is
+  // actually bound to) instead of the two UI hooks (`stella.active` /
+  // `targetChats.active`). The agent engine can keep using a "leftover"
+  // session — e.g. user is in the Workspace tab but no target picked,
+  // and the right pane still talks to whatever stella session was last
+  // active. Watching only the UI hooks misses that case (both undefined).
+  //
+  // Critical: trigger migration only on the **null → non-null** transition.
+  // If the session was already bound (e.g. user previously created target X
+  // in this chat, backend will NOT rebind to a later target Y per Q1=A),
+  // every subsequent saveChatSession still fires onChatSessionUpdated with
+  // the unchanged `targetCode: X` — without the transition guard we'd
+  // re-migrate the UI to X every time the LLM saves, even when the user
+  // is exploring elsewhere.
+  const sessionTargetCodeRef = useRef<Map<string, string | null>>(new Map());
+  useEffect(() => {
+    if (!liveChatSessionId) return;
+
+    const api: any = (window as any).electronAPI;
+    const off = api?.profile?.onChatSessionUpdated?.((data: { sessions: any[] }) => {
+      const sessions = data?.sessions;
+      if (!Array.isArray(sessions)) return;
+      const me = sessions.find((s) => s?.chatSession_id === liveChatSessionId);
+      if (!me) return;
+      const newCode: string | null = me.targetCode ?? null;
+      const prevCode = sessionTargetCodeRef.current.get(liveChatSessionId) ?? null;
+      sessionTargetCodeRef.current.set(liveChatSessionId, newCode);
+
+      // Only the null → non-null transition counts as a binding event.
+      // Everything else (still null, still bound to same code, etc.) means
+      // the LLM saved unrelated state in an already-bound session, and the
+      // UI should not be hijacked.
+      if (prevCode !== null || newCode === null) return;
+
+      // Already on this target → nothing to do (defensive; shouldn't happen
+      // given the transition guard above).
+      if (selectedCodeRef.current === newCode) return;
+
+      // Migrate UI: workspace mode + select the new target. We do NOT
+      // gate on `targets` containing newCode — the fs watcher refreshes
+      // `targets` asynchronously (~80ms debounce) and can lag the
+      // chatSession:updated notification. handleSelectTarget +
+      // selectChatForTarget are resilient: they call listByTarget(newCode)
+      // directly via IPC and don't need the local `targets` cache to be
+      // up-to-date.
+      //
+      // Note: `selectChatForTarget` clears its stale `active` state at the
+      // start of the call (see useTargetChats), so the workspace-mode
+      // "switch chat engine" effect doesn't get a chance to react to a
+      // leftover value from an earlier target before the correct session
+      // for `newCode` is picked.
+      setActiveMode('workspace');
+      void handleSelectTarget(newCode);
+    });
+    return () => { try { off?.(); } catch { /* ignore */ } };
+    // Re-arm whenever the live session id changes — otherwise a stale
+    // closure would fire for the previous session id.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [liveChatSessionId]);
 
   // Mode switch: ensure the right chat session is active for the new mode.
   // - workspace: re-select the current target's chat (no-op if unchanged).
