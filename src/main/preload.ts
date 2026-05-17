@@ -591,6 +591,7 @@ export interface ElectronAPI {
   // Portfolio (investment-studio research workspace) APIs
   portfolio: {
     getWorkspaceDir: () => Promise<{ success: boolean; data?: string; error?: string }>;
+    trashFile: (absPath: string) => Promise<{ success: boolean; error?: string }>;
   };
 
   // Skills APIs
@@ -1753,6 +1754,7 @@ export const electronAPI: ElectronAPI = {
   },
   portfolio: {
     getWorkspaceDir: () => ipcRenderer.invoke('portfolio:getWorkspaceDir'),
+    trashFile: (absPath: string) => ipcRenderer.invoke('portfolio:trashFile', absPath),
   },
   skills: {
     getSkillMarkdown: (skillName: string) =>

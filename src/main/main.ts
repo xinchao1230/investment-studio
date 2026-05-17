@@ -1388,6 +1388,53 @@ class ElectronApp {
       }
     });
 
+    // Move a portfolio workspace file to the OS trash. Refuses anything
+    // outside the active workspace dir or named `profile.yaml`. Also
+    // broadcasts a synthetic `kosmos:fs-changed` event so renderer caches
+    // refresh (the broadcast normally only fires for builtin tool calls,
+    // and this op goes through a plain IPC, not a tool).
+    ipcMain.handle('portfolio:trashFile', async (_event, absPath: string) => {
+      try {
+        if (typeof absPath !== 'string' || !absPath) {
+          return { success: false, error: 'absPath is required' };
+        }
+        const { PortfolioTools } = await import('./lib/mcpRuntime/builtinTools/portfolioTools');
+        const workspaceDir = PortfolioTools.getWorkspaceDir();
+        if (!workspaceDir) {
+          return { success: false, error: 'Workspace not initialized' };
+        }
+        const resolved = path.resolve(absPath);
+        const rel = path.relative(workspaceDir, resolved);
+        if (!rel || rel.startsWith('..') || path.isAbsolute(rel)) {
+          return { success: false, error: 'Path is outside the workspace' };
+        }
+        if (path.basename(resolved).toLowerCase() === 'profile.yaml') {
+          return { success: false, error: 'profile.yaml is protected and cannot be deleted' };
+        }
+        if (!fs.existsSync(resolved)) {
+          return { success: false, error: 'File does not exist' };
+        }
+        const stat = fs.statSync(resolved);
+        if (!stat.isFile()) {
+          return { success: false, error: 'Not a regular file' };
+        }
+        await shell.trashItem(resolved);
+        // Broadcast fs-changed so renderer caches refresh.
+        const payload = {
+          tool: 'portfolio:trashFile',
+          mutations: [{ path: resolved, kind: 'delete' as const }],
+          timestamp: Date.now(),
+        };
+        for (const win of BrowserWindow.getAllWindows()) {
+          try { win.webContents.send('kosmos:fs-changed', payload); }
+          catch { /* ignore */ }
+        }
+        return { success: true };
+      } catch (error) {
+        return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+      }
+    });
+
     // Builtin Tools - AUTHORIZED
     ipcMain.handle('builtinTools:execute', async (event, toolName: string, args: any) => {
       try {

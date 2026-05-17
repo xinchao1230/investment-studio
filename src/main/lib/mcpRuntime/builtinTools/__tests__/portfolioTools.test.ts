@@ -303,4 +303,151 @@ describe('PortfolioTools', () => {
       expect(content).toContain('Note 2');
     });
   });
+
+  describe('move_file', () => {
+    beforeEach(() => {
+      fs.mkdirSync(path.join(tmpDir, 'A'), { recursive: true });
+      fs.writeFileSync(path.join(tmpDir, 'A', 'a.md'), 'hello');
+    });
+
+    it('moves into a sibling subfolder (creates dir)', async () => {
+      const r = await PortfolioTools.executeMoveFile({
+        source_abs_path: path.join(tmpDir, 'A', 'a.md'),
+        dest_dir_abs_path: path.join(tmpDir, 'A', '研报'),
+      });
+      expect(r.success).toBe(true);
+      expect(fs.existsSync(path.join(tmpDir, 'A', '研报', 'a.md'))).toBe(true);
+      expect(fs.existsSync(path.join(tmpDir, 'A', 'a.md'))).toBe(false);
+      // mutations preserved (not stripped here since we call execute* directly)
+      expect((r as any).mutations).toHaveLength(2);
+    });
+
+    it('refuses profile.yaml as source', async () => {
+      fs.writeFileSync(path.join(tmpDir, 'A', 'profile.yaml'), 'k: v');
+      const r = await PortfolioTools.executeMoveFile({
+        source_abs_path: path.join(tmpDir, 'A', 'profile.yaml'),
+        dest_dir_abs_path: path.join(tmpDir, 'A', '研报'),
+      });
+      expect(r.success).toBe(false);
+      expect(r.error).toMatch(/profile\.yaml/);
+    });
+
+    it('refuses source outside workspace', async () => {
+      const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'pf-out-'));
+      try {
+        fs.writeFileSync(path.join(outside, 'x.md'), '');
+        const r = await PortfolioTools.executeMoveFile({
+          source_abs_path: path.join(outside, 'x.md'),
+          dest_dir_abs_path: path.join(tmpDir, 'A'),
+        });
+        expect(r.success).toBe(false);
+        expect(r.error).toMatch(/outside/);
+      } finally {
+        fs.rmSync(outside, { recursive: true, force: true });
+      }
+    });
+
+    it('on_conflict=fail returns code=EXISTS', async () => {
+      fs.mkdirSync(path.join(tmpDir, 'A', '研报'));
+      fs.writeFileSync(path.join(tmpDir, 'A', '研报', 'a.md'), 'old');
+      const r = await PortfolioTools.executeMoveFile({
+        source_abs_path: path.join(tmpDir, 'A', 'a.md'),
+        dest_dir_abs_path: path.join(tmpDir, 'A', '研报'),
+        on_conflict: 'fail',
+      });
+      expect(r.success).toBe(false);
+      expect(JSON.parse(r.data as string).code).toBe('EXISTS');
+      // Source still in place
+      expect(fs.existsSync(path.join(tmpDir, 'A', 'a.md'))).toBe(true);
+    });
+
+    it('on_conflict=rename auto-suffixes', async () => {
+      fs.mkdirSync(path.join(tmpDir, 'A', '研报'));
+      fs.writeFileSync(path.join(tmpDir, 'A', '研报', 'a.md'), 'old');
+      const r = await PortfolioTools.executeMoveFile({
+        source_abs_path: path.join(tmpDir, 'A', 'a.md'),
+        dest_dir_abs_path: path.join(tmpDir, 'A', '研报'),
+        on_conflict: 'rename',
+      });
+      expect(r.success).toBe(true);
+      expect(fs.existsSync(path.join(tmpDir, 'A', '研报', 'a (1).md'))).toBe(true);
+      // Original collided file untouched
+      expect(fs.readFileSync(path.join(tmpDir, 'A', '研报', 'a.md'), 'utf-8')).toBe('old');
+    });
+
+    it('on_conflict=overwrite replaces', async () => {
+      fs.mkdirSync(path.join(tmpDir, 'A', '研报'));
+      fs.writeFileSync(path.join(tmpDir, 'A', '研报', 'a.md'), 'old');
+      const r = await PortfolioTools.executeMoveFile({
+        source_abs_path: path.join(tmpDir, 'A', 'a.md'),
+        dest_dir_abs_path: path.join(tmpDir, 'A', '研报'),
+        on_conflict: 'overwrite',
+      });
+      expect(r.success).toBe(true);
+      expect(fs.readFileSync(path.join(tmpDir, 'A', '研报', 'a.md'), 'utf-8')).toBe('hello');
+    });
+
+    it('same-dir same-name short-circuits to noop', async () => {
+      const r = await PortfolioTools.executeMoveFile({
+        source_abs_path: path.join(tmpDir, 'A', 'a.md'),
+        dest_dir_abs_path: path.join(tmpDir, 'A'),
+      });
+      expect(r.success).toBe(true);
+      const parsed = JSON.parse(r.data as string);
+      expect(parsed.noop).toBe(true);
+    });
+  });
+
+  describe('rename_file', () => {
+    beforeEach(() => {
+      fs.mkdirSync(path.join(tmpDir, 'A'), { recursive: true });
+      fs.writeFileSync(path.join(tmpDir, 'A', 'a.md'), 'x');
+    });
+
+    it('renames in place', async () => {
+      const r = await PortfolioTools.executeRenameFile({
+        source_abs_path: path.join(tmpDir, 'A', 'a.md'),
+        new_name: 'b.md',
+      });
+      expect(r.success).toBe(true);
+      expect(fs.existsSync(path.join(tmpDir, 'A', 'b.md'))).toBe(true);
+      expect(fs.existsSync(path.join(tmpDir, 'A', 'a.md'))).toBe(false);
+    });
+
+    it('rejects path separators in new_name', async () => {
+      const r = await PortfolioTools.executeRenameFile({
+        source_abs_path: path.join(tmpDir, 'A', 'a.md'),
+        new_name: 'sub/b.md',
+      });
+      expect(r.success).toBe(false);
+    });
+
+    it('rejects profile.yaml as new_name', async () => {
+      const r = await PortfolioTools.executeRenameFile({
+        source_abs_path: path.join(tmpDir, 'A', 'a.md'),
+        new_name: 'profile.yaml',
+      });
+      expect(r.success).toBe(false);
+    });
+
+    it('rejects profile.yaml as source', async () => {
+      fs.writeFileSync(path.join(tmpDir, 'A', 'profile.yaml'), '');
+      const r = await PortfolioTools.executeRenameFile({
+        source_abs_path: path.join(tmpDir, 'A', 'profile.yaml'),
+        new_name: 'b.yaml',
+      });
+      expect(r.success).toBe(false);
+      expect(r.error).toMatch(/profile\.yaml/);
+    });
+
+    it('returns EXISTS on collision', async () => {
+      fs.writeFileSync(path.join(tmpDir, 'A', 'b.md'), '');
+      const r = await PortfolioTools.executeRenameFile({
+        source_abs_path: path.join(tmpDir, 'A', 'a.md'),
+        new_name: 'b.md',
+      });
+      expect(r.success).toBe(false);
+      expect(JSON.parse(r.data as string).code).toBe('EXISTS');
+    });
+  });
 });

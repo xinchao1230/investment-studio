@@ -186,6 +186,37 @@ export class PortfolioTools {
     };
   }
 
+  static getMoveFileDefinition(): BuiltinToolDefinition {
+    return {
+      name: 'portfolio_move_file',
+      description: 'Move a file within the portfolio workspace (target tree). Both paths must be inside the workspace. profile.yaml cannot be moved. Returns finalDestPath and renamed flag on success; returns code=EXISTS with existingPath on conflict when on_conflict=fail.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          source_abs_path: { type: 'string', description: 'Absolute path of the file to move (must be inside portfolio workspace).' },
+          dest_dir_abs_path: { type: 'string', description: 'Absolute path of the destination directory (created if missing, must be inside portfolio workspace).' },
+          on_conflict: { type: 'string', enum: ['fail', 'rename', 'overwrite'], description: 'How to handle name collision at destination. Default: fail.' },
+        },
+        required: ['source_abs_path', 'dest_dir_abs_path'],
+      },
+    };
+  }
+
+  static getRenameFileDefinition(): BuiltinToolDefinition {
+    return {
+      name: 'portfolio_rename_file',
+      description: 'Rename a file in place within the portfolio workspace. profile.yaml cannot be renamed. new_name must be a basename (no path separators).',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          source_abs_path: { type: 'string', description: 'Absolute path of the file to rename.' },
+          new_name: { type: 'string', description: 'New basename (no directory separators).' },
+        },
+        required: ['source_abs_path', 'new_name'],
+      },
+    };
+  }
+
   // --- Execution ---
 
   /**
@@ -213,6 +244,62 @@ export class PortfolioTools {
       return 'Target name is a reserved system name on Windows';
     }
     return null;
+  }
+
+  /**
+   * Reject file basenames that would break filesystems. Stricter than
+   * validateName because callers must also block 'profile.yaml' separately
+   * (via assertNotProfileYaml).
+   */
+  private static validateFileBasename(name: string): string | null {
+    if (!name || !name.trim()) return 'File name is required';
+    if (name.length > 200) return 'File name is too long (max 200 chars)';
+    if (/[\\/:*?"<>|]/.test(name)) {
+      return 'File name contains invalid characters (\\ / : * ? " < > |)';
+    }
+    // eslint-disable-next-line no-control-regex
+    if (/[\x00-\x1f]/.test(name)) return 'File name contains control characters';
+    if (name === '.' || name === '..') return 'File name cannot be "." or ".."';
+    if (/^(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])(\..*)?$/i.test(name)) {
+      return 'File name is a reserved system name on Windows';
+    }
+    return null;
+  }
+
+  /** Ensure `absPath` is strictly under `this.workspaceDir`. Throws on violation. */
+  private static assertInsideWorkspace(absPath: string, label: string): void {
+    if (!this.workspaceDir) throw new Error('Portfolio workspace not initialized');
+    const rel = path.relative(this.workspaceDir, path.resolve(absPath));
+    if (rel.startsWith('..') || path.isAbsolute(rel)) {
+      throw new Error(`${label} is outside the portfolio workspace: ${absPath}`);
+    }
+  }
+
+  /** Refuse any operation touching a target's profile.yaml. */
+  private static assertNotProfileYaml(absPath: string): void {
+    if (path.basename(absPath).toLowerCase() === 'profile.yaml') {
+      throw new Error('profile.yaml is protected and cannot be moved/renamed/deleted');
+    }
+  }
+
+  /**
+   * Given a desired destination path that already exists, return a free path
+   * by appending ` (N)` before the extension. e.g. `foo.md` → `foo (1).md` →
+   * `foo (2).md`. Hard cap at 1000 iterations.
+   */
+  private static resolveAutoRename(destPath: string): string {
+    if (!fs.existsSync(destPath)) return destPath;
+    const dir = path.dirname(destPath);
+    const ext = path.extname(destPath);
+    let base = path.basename(destPath, ext);
+    const m = base.match(/^(.*) \((\d+)\)$/);
+    let start = 1;
+    if (m) { base = m[1]; start = parseInt(m[2], 10) + 1; }
+    for (let i = start; i < start + 1000; i++) {
+      const candidate = path.join(dir, `${base} (${i})${ext}`);
+      if (!fs.existsSync(candidate)) return candidate;
+    }
+    throw new Error('Auto-rename exhausted 1000 attempts');
   }
 
   static async executeInitTarget(args: { stock_code?: string; name: string; industry?: string }): Promise<ToolExecutionResult> {
@@ -538,5 +625,141 @@ export class PortfolioTools {
       data: 'Note appended',
       mutations: [{ path: notesPath, kind: 'modify' }],
     };
+  }
+
+  static async executeMoveFile(args: {
+    source_abs_path: string;
+    dest_dir_abs_path: string;
+    on_conflict?: 'fail' | 'rename' | 'overwrite';
+  }): Promise<ToolExecutionResult> {
+    const source = path.resolve(args.source_abs_path || '');
+    const destDir = path.resolve(args.dest_dir_abs_path || '');
+    const onConflict = args.on_conflict ?? 'fail';
+    try {
+      this.assertInsideWorkspace(source, 'source_abs_path');
+      this.assertInsideWorkspace(destDir, 'dest_dir_abs_path');
+      this.assertNotProfileYaml(source);
+
+      if (!fs.existsSync(source)) {
+        return {
+          success: false,
+          error: `Source file not found: ${source}`,
+          data: JSON.stringify({ code: 'NOT_FOUND' }),
+        };
+      }
+      const sStat = fs.statSync(source);
+      if (!sStat.isFile()) {
+        return { success: false, error: `Source is not a regular file: ${source}` };
+      }
+
+      fs.mkdirSync(destDir, { recursive: true });
+      let finalDest = path.join(destDir, path.basename(source));
+
+      // No-op short-circuit: same directory, same name.
+      if (path.resolve(finalDest) === source) {
+        return {
+          success: true,
+          data: JSON.stringify({ finalDestPath: source, renamed: false, noop: true }),
+        };
+      }
+
+      const conflict = fs.existsSync(finalDest);
+      let renamed = false;
+      if (conflict) {
+        if (onConflict === 'fail') {
+          return {
+            success: false,
+            error: `Destination already exists: ${finalDest}`,
+            data: JSON.stringify({ code: 'EXISTS', existingPath: finalDest }),
+          };
+        } else if (onConflict === 'rename') {
+          finalDest = this.resolveAutoRename(finalDest);
+          renamed = true;
+        } else if (onConflict === 'overwrite') {
+          fs.unlinkSync(finalDest);
+        }
+      }
+
+      try {
+        fs.renameSync(source, finalDest);
+      } catch (e: any) {
+        if (e && e.code === 'EXDEV') {
+          // Cross-device fallback: copy + unlink.
+          fs.copyFileSync(source, finalDest);
+          fs.unlinkSync(source);
+        } else {
+          return {
+            success: false,
+            error: `Failed to move file: ${e?.message || String(e)}`,
+            data: JSON.stringify({ code: e?.code || 'EIO' }),
+          };
+        }
+      }
+
+      return {
+        success: true,
+        data: JSON.stringify({ finalDestPath: finalDest, renamed }),
+        mutations: [
+          { path: source, kind: 'delete' },
+          { path: finalDest, kind: conflict && onConflict === 'overwrite' ? 'modify' : 'create' },
+        ],
+      };
+    } catch (err: any) {
+      return { success: false, error: err?.message || String(err) };
+    }
+  }
+
+  static async executeRenameFile(args: {
+    source_abs_path: string;
+    new_name: string;
+  }): Promise<ToolExecutionResult> {
+    const source = path.resolve(args.source_abs_path || '');
+    const newName = (args.new_name || '').trim();
+    try {
+      this.assertInsideWorkspace(source, 'source_abs_path');
+      this.assertNotProfileYaml(source);
+      const nameErr = this.validateFileBasename(newName);
+      if (nameErr) return { success: false, error: nameErr };
+      if (newName.toLowerCase() === 'profile.yaml') {
+        return { success: false, error: 'Cannot rename a file to profile.yaml (reserved)' };
+      }
+      if (!fs.existsSync(source)) {
+        return {
+          success: false,
+          error: `Source file not found: ${source}`,
+          data: JSON.stringify({ code: 'NOT_FOUND' }),
+        };
+      }
+      const finalDest = path.join(path.dirname(source), newName);
+      if (path.resolve(finalDest) === source) {
+        return { success: true, data: JSON.stringify({ finalDestPath: source, noop: true }) };
+      }
+      if (fs.existsSync(finalDest)) {
+        return {
+          success: false,
+          error: `A file named "${newName}" already exists in this folder`,
+          data: JSON.stringify({ code: 'EXISTS', existingPath: finalDest }),
+        };
+      }
+      try {
+        fs.renameSync(source, finalDest);
+      } catch (e: any) {
+        return {
+          success: false,
+          error: `Failed to rename: ${e?.message || String(e)}`,
+          data: JSON.stringify({ code: e?.code || 'EIO' }),
+        };
+      }
+      return {
+        success: true,
+        data: JSON.stringify({ finalDestPath: finalDest }),
+        mutations: [
+          { path: source, kind: 'delete' },
+          { path: finalDest, kind: 'create' },
+        ],
+      };
+    } catch (err: any) {
+      return { success: false, error: err?.message || String(err) };
+    }
   }
 }

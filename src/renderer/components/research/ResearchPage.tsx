@@ -4,7 +4,8 @@ import { TargetListSidebar } from './TargetListSidebar';
 import { ContentTabs, Tab } from './ContentTabs';
 import { ResearchChatPane } from './ResearchChatPane';
 import { AddTargetSearch } from './AddTargetSearch';
-import { usePortfolio, TargetFile } from './usePortfolio';
+import { usePortfolio, TargetFile, MoveResult } from './usePortfolio';
+import { useTargetFilesByCode } from './useTargetFilesByCode';
 import { useTargetChats } from './useTargetChats';
 import { useStellaChats } from './useStellaChats';
 import { useTabsByCode } from './useTabsByCode';
@@ -13,6 +14,7 @@ import {
   openTab as openTabRec,
   closeTab as closeTabRec,
   activateTab as activateTabRec,
+  renameTab as renameTabRec,
   reconcileWithFileSystem,
   sortedTabs,
 } from './tabState';
@@ -55,7 +57,7 @@ const readBool = (key: string): boolean => {
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(v, hi));
 
 export const ResearchPage: React.FC = () => {
-  const { targets, loading, initTarget, deleteTarget, getTargetFiles } = usePortfolio();
+  const { targets, loading, workspaceDir, initTarget, deleteTarget, getTargetFiles, moveFile, renameFile, trashFile } = usePortfolio();
   // Per-target tab state (persisted to localStorage). Each entry holds an
   // ordered list of TabRecord (absPath + fractional sortKey) plus the
   // currently-active absPath. Switching targets restores both order and
@@ -93,7 +95,7 @@ export const ResearchPage: React.FC = () => {
   const [showAddForm, setShowAddForm] = useState(false);
   const [addError, setAddError] = useState<string | null>(null);
   const [addBusy, setAddBusy] = useState(false);
-  const [filesByCode, setFilesByCode] = useState<Record<string, TargetFile[]>>({});
+  const { filesByCode, loadFiles } = useTargetFilesByCode(targets, workspaceDir, getTargetFiles);
   // In-app confirm dialog state for delete-target. We avoid window.confirm()
   // because the native modal steals focus from the renderer; when the
   // following <AddTargetSearch> auto-mounts, its input.focus() becomes a
@@ -109,9 +111,6 @@ export const ResearchPage: React.FC = () => {
   const [contentCacheVersion, setContentCacheVersion] = useState(0);
   // Track in-flight reads to avoid duplicate fetches when visibleTabs churns.
   const inflightReadsRef = useRef<Set<string>>(new Set());
-
-  const filesByCodeRef = useRef(filesByCode);
-  filesByCodeRef.current = filesByCode;
 
   const targetChats = useTargetChats();
   const targetsRef = useRef(targets);
@@ -361,15 +360,6 @@ export const ResearchPage: React.FC = () => {
     [activeMode, selectedCode, stella, targetChats],
   );
 
-  const loadFiles = useCallback(
-    async (code: string, opts?: { force?: boolean }) => {
-      if (!opts?.force && filesByCodeRef.current[code]) return;
-      const files = await getTargetFiles(code);
-      setFilesByCode((prev) => ({ ...prev, [code]: files }));
-    },
-    [getTargetFiles],
-  );
-
   // Post-hydration restore: when sessionStorage rehydrates a selectedCode
   // (e.g. user returned from /settings and ResearchPage just remounted),
   // re-trigger the per-target side effects that handleSelectTarget would
@@ -605,6 +595,65 @@ export const ResearchPage: React.FC = () => {
     [findOwningCode, ensureContentLoaded, setTabsByCode, handleSelectTarget],
   );
 
+  // Rewrite any open-tab record + cached content keyed by `oldAbsPath` to
+  // `newAbsPath`. Used after a successful rename/move so the editor pane
+  // doesn't end up reading the stale (now-missing) path and showing ENOENT.
+  const remapOpenTab = useCallback(
+    (oldAbsPath: string, newAbsPath: string) => {
+      if (oldAbsPath === newAbsPath) return;
+      // Move the file-content cache entry (if any) over to the new key so
+      // the editor doesn't refetch on the next render.
+      const cached = fileContentCacheRef.current.get(oldAbsPath);
+      if (cached) {
+        fileContentCacheRef.current.delete(oldAbsPath);
+        fileContentCacheRef.current.set(newAbsPath, cached);
+        setContentCacheVersion((v) => v + 1);
+      }
+      // Update tab records across *all* targets — a move can cross targets,
+      // so we can't restrict to a single owning code.
+      setTabsByCode((prev) => {
+        let changed = false;
+        const next: typeof prev = { ...prev };
+        for (const code of Object.keys(prev)) {
+          const cur = prev[code];
+          const updated = renameTabRec(cur, oldAbsPath, newAbsPath);
+          if (updated !== cur) {
+            next[code] = updated;
+            changed = true;
+          }
+        }
+        return changed ? next : prev;
+      });
+    },
+    [setTabsByCode],
+  );
+
+  const handleRenameFile = useCallback(
+    async (sourceAbs: string, newName: string): Promise<MoveResult> => {
+      const r = await renameFile(sourceAbs, newName);
+      if (r.success && r.finalDestPath) {
+        remapOpenTab(sourceAbs, r.finalDestPath);
+      }
+      return r;
+    },
+    [renameFile, remapOpenTab],
+  );
+
+  const handleMoveFile = useCallback(
+    async (
+      sourceAbs: string,
+      destDirAbs: string,
+      onConflict?: 'fail' | 'rename' | 'overwrite',
+    ): Promise<MoveResult> => {
+      const r = await moveFile(sourceAbs, destDirAbs, onConflict);
+      if (r.success && r.finalDestPath) {
+        remapOpenTab(sourceAbs, r.finalDestPath);
+      }
+      return r;
+    },
+    [moveFile, remapOpenTab],
+  );
+
   const handleOpenAddForm = useCallback(() => {
     setAddError(null);
     setShowAddForm(true);
@@ -710,11 +759,7 @@ export const ResearchPage: React.FC = () => {
           if (absPath.startsWith(prefix)) fileContentCacheRef.current.delete(absPath);
         }
       }
-      setFilesByCode((prev) => {
-        const next = { ...prev };
-        delete next[code];
-        return next;
-      });
+      // filesByCode entry is auto-pruned by useTargetFilesByCode when `targets` updates.
       setExpandedCodes((prev) => {
         if (!prev.has(code)) return prev;
         const next = new Set(prev);
@@ -871,6 +916,10 @@ export const ResearchPage: React.FC = () => {
             onOpenFile={handleOpenFile}
             onAddTarget={handleOpenAddForm}
             onDeleteTarget={handleDeleteTarget}
+            workspaceDir={workspaceDir}
+            onMoveFile={handleMoveFile}
+            onRenameFile={handleRenameFile}
+            onTrashFile={trashFile}
             addFormOpen={showAddForm}
             onOpenSearch={handleCancelAddTarget}
             chatsByCode={targetChats.chatsByCode}

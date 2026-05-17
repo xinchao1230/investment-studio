@@ -178,6 +178,8 @@ export class BuiltinToolsManager {
       this.tools.set('portfolio_get_tracking_status', PortfolioTools.getGetTrackingStatusDefinition());
       this.tools.set('portfolio_update_key_drivers', PortfolioTools.getUpdateKeyDriversDefinition());
       this.tools.set('portfolio_append_note', PortfolioTools.getAppendNoteDefinition());
+      this.tools.set('portfolio_move_file', PortfolioTools.getMoveFileDefinition());
+      this.tools.set('portfolio_rename_file', PortfolioTools.getRenameFileDefinition());
 
       // ===== Heavy tools (use static definitions, lazy load actual modules) =====
       // ⚠️ IMPORTANT CAUTION FOR LLM / DEVELOPERS:
@@ -472,6 +474,10 @@ export class BuiltinToolsManager {
         result = await PortfolioTools.executeUpdateKeyDrivers(args);
       } else if (name === 'portfolio_append_note') {
         result = await PortfolioTools.executeAppendNote(args);
+      } else if (name === 'portfolio_move_file') {
+        result = await PortfolioTools.executeMoveFile(args);
+      } else if (name === 'portfolio_rename_file') {
+        result = await PortfolioTools.executeRenameFile(args);
       }
       // ===== Heavy tools (lazy loaded) =====
       else if (name === 'bing_web_search') {

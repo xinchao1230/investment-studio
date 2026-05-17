@@ -86,6 +86,13 @@
 }
 [data-theme="research"] .rw-tree-row.is-disabled { color: var(--rw-text-3); cursor: default; }
 
+/* Drop-target highlight for drag-and-drop file moves. */
+[data-theme="research"] .rw-tree-row-drop {
+  outline: 1px solid var(--rw-accent, #2563eb);
+  outline-offset: -1px;
+  background: var(--rw-accent-soft, rgba(37, 99, 235, 0.08)) !important;
+}
+
 /* Active chat row — emphasize with accent color + bolder weight, on top of the
    shared .is-active background/left-bar treatment. */
 [data-theme="research"] .rw-chat-row.is-active {

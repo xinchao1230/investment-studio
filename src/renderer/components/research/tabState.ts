@@ -105,6 +105,38 @@ export function activateTab(
 }
 
 /**
+ * Rewrite an existing tab's absPath (used after a rename or move). Returns
+ * the same reference if `oldAbsPath` isn't present. If `newAbsPath` already
+ * exists as a separate tab, the old entry is dropped (the new one wins) and
+ * the active tab is updated if it pointed at either. Preserves sortKey so
+ * the renamed tab keeps its position.
+ */
+export function renameTab(
+  state: TargetTabState | undefined,
+  oldAbsPath: string,
+  newAbsPath: string,
+): TargetTabState {
+  if (!state) return emptyState();
+  if (oldAbsPath === newAbsPath) return state;
+  const idx = state.tabs.findIndex((t) => t.absPath === oldAbsPath);
+  if (idx < 0) return state;
+  const collideIdx = state.tabs.findIndex((t) => t.absPath === newAbsPath);
+  let tabs: TabRecord[];
+  if (collideIdx >= 0 && collideIdx !== idx) {
+    // Target path already open in another tab — drop the old entry and
+    // keep the existing newAbsPath tab in its current slot.
+    tabs = state.tabs.filter((_, i) => i !== idx);
+  } else {
+    tabs = state.tabs.map((t, i) =>
+      i === idx ? { absPath: newAbsPath, sortKey: t.sortKey } : t,
+    );
+  }
+  const activeAbsPath =
+    state.activeAbsPath === oldAbsPath ? newAbsPath : state.activeAbsPath;
+  return { tabs, activeAbsPath };
+}
+
+/**
  * Drop any tabs whose absPath isn't in `validPaths`. If the active tab is
  * dropped, run the right-first-then-left fallback against the *original*
  * sort order so the user lands on a sensible neighbour. If the active was

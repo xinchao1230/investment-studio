@@ -8,13 +8,21 @@ export interface TargetFile {
   mtime: number;
 }
 
+export type MoveResult =
+  | { success: true; finalDestPath: string; renamed: boolean; noop?: boolean }
+  | { success: false; code?: string; error: string; existingPath?: string };
+
 interface PortfolioHook {
   targets: Target[];
   loading: boolean;
+  workspaceDir: string;
   refresh: () => Promise<void>;
   initTarget: (code: string, name: string) => Promise<{ success: boolean; error?: string }>;
   deleteTarget: (code: string) => Promise<{ success: boolean; error?: string }>;
   getTargetFiles: (code: string) => Promise<TargetFile[]>;
+  moveFile: (sourceAbs: string, destDirAbs: string, onConflict?: 'fail' | 'rename' | 'overwrite') => Promise<MoveResult>;
+  renameFile: (sourceAbs: string, newName: string) => Promise<MoveResult>;
+  trashFile: (sourceAbs: string) => Promise<{ success: boolean; error?: string }>;
 }
 
 // Recursively unwrap { success, data } envelopes that may have been JSON-stringified
@@ -181,5 +189,89 @@ export function usePortfolio(): PortfolioHook {
     [workspaceDir, refresh],
   );
 
-  return { targets, loading, refresh, initTarget, deleteTarget, getTargetFiles };
+  const moveFile = useCallback(
+    async (
+      sourceAbs: string,
+      destDirAbs: string,
+      onConflict: 'fail' | 'rename' | 'overwrite' = 'fail',
+    ): Promise<MoveResult> => {
+      try {
+        const raw = await window.electronAPI.builtinTools.execute('portfolio_move_file', {
+          source_abs_path: sourceAbs,
+          dest_dir_abs_path: destDirAbs,
+          on_conflict: onConflict,
+        });
+        if (raw && raw.success) {
+          const payload = unwrapToolResult(raw) || {};
+          return {
+            success: true,
+            finalDestPath: payload.finalDestPath,
+            renamed: !!payload.renamed,
+            noop: !!payload.noop,
+          };
+        }
+        let code: string | undefined;
+        let existingPath: string | undefined;
+        if (raw && typeof raw.data === 'string') {
+          try {
+            const p = JSON.parse(raw.data);
+            code = p.code;
+            existingPath = p.existingPath;
+          } catch { /* ignore */ }
+        }
+        return { success: false, code, existingPath, error: raw?.error || 'Move failed' };
+      } catch (err: any) {
+        return { success: false, error: err?.message || String(err) };
+      }
+    },
+    [],
+  );
+
+  const renameFile = useCallback(
+    async (sourceAbs: string, newName: string): Promise<MoveResult> => {
+      try {
+        const raw = await window.electronAPI.builtinTools.execute('portfolio_rename_file', {
+          source_abs_path: sourceAbs,
+          new_name: newName,
+        });
+        if (raw && raw.success) {
+          const payload = unwrapToolResult(raw) || {};
+          return {
+            success: true,
+            finalDestPath: payload.finalDestPath,
+            renamed: false,
+            noop: !!payload.noop,
+          };
+        }
+        let code: string | undefined;
+        let existingPath: string | undefined;
+        if (raw && typeof raw.data === 'string') {
+          try {
+            const p = JSON.parse(raw.data);
+            code = p.code;
+            existingPath = p.existingPath;
+          } catch { /* ignore */ }
+        }
+        return { success: false, code, existingPath, error: raw?.error || 'Rename failed' };
+      } catch (err: any) {
+        return { success: false, error: err?.message || String(err) };
+      }
+    },
+    [],
+  );
+
+  const trashFile = useCallback(
+    async (sourceAbs: string): Promise<{ success: boolean; error?: string }> => {
+      try {
+        const r = await (window as any).electronAPI?.portfolio?.trashFile?.(sourceAbs);
+        if (!r || typeof r !== 'object') return { success: false, error: 'IPC unavailable' };
+        return r;
+      } catch (err: any) {
+        return { success: false, error: err?.message || String(err) };
+      }
+    },
+    [],
+  );
+
+  return { targets, loading, workspaceDir, refresh, initTarget, deleteTarget, getTargetFiles, moveFile, renameFile, trashFile };
 }

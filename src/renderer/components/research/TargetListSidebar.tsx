@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Plus,
@@ -16,10 +16,16 @@ import {
   Settings,
   PanelLeftClose,
 } from 'lucide-react';
-import type { TargetFile } from './usePortfolio';
+import type { TargetFile, MoveResult } from './usePortfolio';
 import type { ResearchChatSessionMeta } from './researchChatIpc';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../ui/dialog';
 import { Button } from '../ui/button';
+import { useTargetTreeClipboard } from './useTargetTreeClipboard';
+import { MoveConflictDialog, MoveConflictChoice } from './MoveConflictDialog';
+import { CrossTargetMoveConfirmDialog } from './CrossTargetMoveConfirmDialog';
+import { RenameFileDialog } from './RenameFileDialog';
+import { TargetTreeFileContextMenu } from './TargetTreeFileContextMenu';
+import { useToast } from '../ui/ToastProvider';
 
 export interface Target {
   stock_code: string;
@@ -55,6 +61,14 @@ interface TargetListSidebarProps {
   onOpenFile: (file: TargetFile) => void;
   onAddTarget: () => void;
   onDeleteTarget: (code: string, name: string) => void;
+  /** Workspace root absolute path. Required for path-prefix safety checks. */
+  workspaceDir?: string;
+  /** Move a file. Resolves to MoveResult so the sidebar can show a conflict dialog. */
+  onMoveFile?: (sourceAbs: string, destDirAbs: string, onConflict?: 'fail' | 'rename' | 'overwrite') => Promise<MoveResult>;
+  /** Rename a file in place. */
+  onRenameFile?: (sourceAbs: string, newName: string) => Promise<MoveResult>;
+  /** Move a file to the OS trash. */
+  onTrashFile?: (sourceAbs: string) => Promise<{ success: boolean; error?: string }>;
   /** Optional slot rendered above the tree (e.g. add-target combobox). */
   topSlot?: React.ReactNode;
   /** Whether the add-target slot is currently visible. When it becomes
@@ -112,6 +126,10 @@ export const TargetListSidebar: React.FC<TargetListSidebarProps> = ({
   onOpenFile,
   onAddTarget,
   onDeleteTarget,
+  workspaceDir = '',
+  onMoveFile,
+  onRenameFile,
+  onTrashFile,
   topSlot,
   addFormOpen,
   onOpenSearch,
@@ -130,6 +148,32 @@ export const TargetListSidebar: React.FC<TargetListSidebarProps> = ({
   onDeleteStellaChat,
   onRenameStellaChat,
 }) => {
+  const { showError, showSuccess } = useToast();
+  const clipboard = useTargetTreeClipboard();
+
+  // File-tree drag-and-drop / context-menu / dialog state.
+  type FileRef = { absPath: string; fileName: string; ownerCode: string; isProtected: boolean };
+  const [pendingMoveConflict, setPendingMoveConflict] = useState<{
+    source: FileRef;
+    destDirAbs: string;
+    destDirLabel: string;
+  } | null>(null);
+  const [pendingCrossTargetMove, setPendingCrossTargetMove] = useState<{
+    source: FileRef;
+    destDirAbs: string;
+    fromTargetName: string;
+    toTargetName: string;
+  } | null>(null);
+  const [pendingRenameFile, setPendingRenameFile] = useState<FileRef | null>(null);
+  const [pendingDeleteFile, setPendingDeleteFile] = useState<FileRef | null>(null);
+  const [contextMenu, setContextMenu] = useState<{
+    file: FileRef;
+    position: { top: number; left: number };
+  } | null>(null);
+  // Active drop highlight; key is `${code}` for the target's root or
+  // `${code}::${cat}` for a sub-category folder.
+  const [dropHover, setDropHover] = useState<string | null>(null);
+  const fileTreeFocusRef = useRef<HTMLDivElement | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const searchInputRef = React.useRef<HTMLInputElement | null>(null);
 
@@ -205,6 +249,238 @@ export const TargetListSidebar: React.FC<TargetListSidebarProps> = ({
           (t.industry ?? '').toLowerCase().includes(q),
       )
     : targets;
+
+  // ---- File tree move/rename/delete helpers ---------------------------
+
+  // Map from lowercased target dir absolute path → target code. Keyed by
+  // both `\\` and `/` separators because mutation paths may use either.
+  const targetDirToCode = useMemo(() => {
+    const m = new Map<string, string>();
+    if (!workspaceDir) return m;
+    for (const t of targets) {
+      const a = `${workspaceDir}\\${t.name}`.toLowerCase();
+      const b = `${workspaceDir}/${t.name}`.toLowerCase();
+      m.set(a, t.stock_code);
+      m.set(b, t.stock_code);
+    }
+    return m;
+  }, [targets, workspaceDir]);
+
+  void targetDirToCode; // reserved for future drag-source detection
+
+  const makeFileRef = useCallback((file: TargetFile, code: string): FileRef => {
+    const fileName = file.relPath.split(/[\\/]/).pop() || file.relPath;
+    return {
+      absPath: file.absPath,
+      fileName,
+      ownerCode: code,
+      isProtected: fileName.toLowerCase() === 'profile.yaml',
+    };
+  }, []);
+
+  const findFileByAbsPath = useCallback((absPath: string): FileRef | null => {
+    for (const code of Object.keys(filesByCode)) {
+      const files = filesByCode[code];
+      if (!files) continue;
+      const hit = files.find((f) => f.absPath === absPath);
+      if (hit) return makeFileRef(hit, code);
+    }
+    return null;
+  }, [filesByCode, makeFileRef]);
+
+  const tryMove = useCallback(async (
+    source: FileRef,
+    destDirAbs: string,
+    destDirLabel: string,
+  ) => {
+    if (!onMoveFile) return;
+    if (source.isProtected) {
+      showError('profile.yaml is protected and cannot be moved');
+      return;
+    }
+    const sourceDir = source.absPath.replace(/[\\/][^\\/]+$/, '');
+    if (sourceDir.toLowerCase() === destDirAbs.toLowerCase()) return; // no-op
+    const result = await onMoveFile(source.absPath, destDirAbs, 'fail');
+    if (result.success) {
+      showSuccess('Moved');
+      return;
+    }
+    if (result.code === 'EXISTS') {
+      setPendingMoveConflict({ source, destDirAbs, destDirLabel });
+      return;
+    }
+    showError(result.error || 'Move failed');
+  }, [onMoveFile, showError, showSuccess]);
+
+  const resolveMoveConflict = useCallback(async (choice: MoveConflictChoice) => {
+    const ctx = pendingMoveConflict;
+    setPendingMoveConflict(null);
+    if (!ctx || choice === 'cancel' || !onMoveFile) return;
+    const result = await onMoveFile(ctx.source.absPath, ctx.destDirAbs, choice);
+    if (result.success) {
+      showSuccess(choice === 'overwrite' ? 'Replaced' : 'Moved');
+    } else {
+      showError(result.error || 'Move failed');
+    }
+  }, [pendingMoveConflict, onMoveFile, showError, showSuccess]);
+
+  const handleDeleteFile = useCallback(async () => {
+    const ref = pendingDeleteFile;
+    setPendingDeleteFile(null);
+    if (!ref || !onTrashFile) return;
+    if (ref.isProtected) {
+      showError('profile.yaml is protected and cannot be deleted');
+      return;
+    }
+    const r = await onTrashFile(ref.absPath);
+    if (r.success) showSuccess('Moved to trash');
+    else showError(r.error || 'Delete failed');
+  }, [pendingDeleteFile, onTrashFile, showError, showSuccess]);
+
+  const handleConfirmRenameFile = useCallback(async (newName: string) => {
+    const ref = pendingRenameFile;
+    setPendingRenameFile(null);
+    if (!ref || !onRenameFile) return;
+    if (ref.isProtected) {
+      showError('profile.yaml is protected and cannot be renamed');
+      return;
+    }
+    const r = await onRenameFile(ref.absPath, newName);
+    if (r.success) showSuccess('Renamed');
+    else showError(r.error || 'Rename failed');
+  }, [pendingRenameFile, onRenameFile, showError, showSuccess]);
+
+  const handlePaste = useCallback(async (destDirAbs: string, destDirLabel: string) => {
+    if (!clipboard.clipboard || !onMoveFile) return;
+    const ref = findFileByAbsPath(clipboard.clipboard.absPath);
+    if (!ref) {
+      clipboard.clear();
+      return;
+    }
+    await tryMove(ref, destDirAbs, destDirLabel);
+    clipboard.clear();
+  }, [clipboard, onMoveFile, findFileByAbsPath, tryMove]);
+
+  const beginDrag = useCallback((e: React.DragEvent, file: TargetFile, code: string) => {
+    const ref = makeFileRef(file, code);
+    if (ref.isProtected) {
+      e.preventDefault();
+      return;
+    }
+    e.dataTransfer.effectAllowed = 'move';
+    try { e.dataTransfer.setData('application/x-target-file', ref.absPath); } catch { /* ignore */ }
+    try { e.dataTransfer.setData('text/plain', ref.absPath); } catch { /* ignore */ }
+  }, [makeFileRef]);
+
+  const readDragAbsPath = (e: React.DragEvent): string | null => {
+    try {
+      const v = e.dataTransfer.getData('application/x-target-file') || e.dataTransfer.getData('text/plain');
+      return v || null;
+    } catch { return null; }
+  };
+
+  const handleDropOnTarget = useCallback(async (e: React.DragEvent, destCode: string) => {
+    e.preventDefault();
+    setDropHover(null);
+    const abs = readDragAbsPath(e);
+    if (!abs) return;
+    const source = findFileByAbsPath(abs);
+    if (!source) return;
+    const destTarget = targets.find((t) => t.stock_code === destCode);
+    if (!destTarget) return;
+    const destDirAbs = destTarget.directory;
+    if (source.ownerCode !== destCode) {
+      const fromTarget = targets.find((t) => t.stock_code === source.ownerCode);
+      setPendingCrossTargetMove({
+        source,
+        destDirAbs,
+        fromTargetName: fromTarget?.name ?? source.ownerCode,
+        toTargetName: destTarget.name,
+      });
+      return;
+    }
+    await tryMove(source, destDirAbs, destTarget.name);
+  }, [findFileByAbsPath, targets, tryMove]);
+
+  const handleDropOnSubcategory = useCallback(async (
+    e: React.DragEvent,
+    destCode: string,
+    cat: string,
+  ) => {
+    e.preventDefault();
+    setDropHover(null);
+    const abs = readDragAbsPath(e);
+    if (!abs) return;
+    const source = findFileByAbsPath(abs);
+    if (!source) return;
+    const destTarget = targets.find((t) => t.stock_code === destCode);
+    if (!destTarget) return;
+    const sep = destTarget.directory.includes('\\') ? '\\' : '/';
+    const destDirAbs = `${destTarget.directory}${sep}${cat}`;
+    if (source.ownerCode !== destCode) {
+      const fromTarget = targets.find((t) => t.stock_code === source.ownerCode);
+      setPendingCrossTargetMove({
+        source,
+        destDirAbs,
+        fromTargetName: fromTarget?.name ?? source.ownerCode,
+        toTargetName: `${destTarget.name} / ${cat}`,
+      });
+      return;
+    }
+    await tryMove(source, destDirAbs, `${destTarget.name} / ${cat}`);
+  }, [findFileByAbsPath, targets, tryMove]);
+
+  const confirmCrossTargetMove = useCallback(async () => {
+    const ctx = pendingCrossTargetMove;
+    setPendingCrossTargetMove(null);
+    if (!ctx) return;
+    await tryMove(ctx.source, ctx.destDirAbs, ctx.toTargetName);
+  }, [pendingCrossTargetMove, tryMove]);
+
+  const selectedFile = useMemo<FileRef | null>(() => {
+    if (!activeFileAbsPath) return null;
+    return findFileByAbsPath(activeFileAbsPath);
+  }, [activeFileAbsPath, findFileByAbsPath]);
+
+  const onTreeKeyDown = useCallback((e: React.KeyboardEvent) => {
+    const isMod = e.ctrlKey || e.metaKey;
+    if (isMod && e.key.toLowerCase() === 'x') {
+      if (selectedFile && !selectedFile.isProtected) {
+        clipboard.setCut(selectedFile.absPath);
+        e.preventDefault();
+      }
+      return;
+    }
+    if (isMod && e.key.toLowerCase() === 'v') {
+      if (!clipboard.clipboard) return;
+      const code = selectedCode || (selectedFile?.ownerCode);
+      if (!code) return;
+      const t = targets.find((tt) => tt.stock_code === code);
+      if (!t) return;
+      e.preventDefault();
+      void handlePaste(t.directory, t.name);
+      return;
+    }
+    if (e.key === 'F2' && selectedFile && !selectedFile.isProtected) {
+      e.preventDefault();
+      setPendingRenameFile(selectedFile);
+      return;
+    }
+    if ((e.key === 'Delete' || e.key === 'Backspace') && selectedFile && !selectedFile.isProtected) {
+      e.preventDefault();
+      setPendingDeleteFile(selectedFile);
+      return;
+    }
+  }, [selectedFile, clipboard, selectedCode, targets, handlePaste]);
+
+  const openFileContextMenu = useCallback((e: React.MouseEvent, file: TargetFile, code: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setContextMenu({
+      file: makeFileRef(file, code),
+      position: { top: e.clientY, left: e.clientX },
+    });
+  }, [makeFileRef]);
 
   const navigate = useNavigate();
 
@@ -376,7 +652,12 @@ export const TargetListSidebar: React.FC<TargetListSidebarProps> = ({
 
       {/* Body — Workspace tree */}
       {activeMode === 'workspace' && (
-      <div className="flex-1 overflow-y-auto pt-1">
+      <div
+        ref={fileTreeFocusRef}
+        tabIndex={0}
+        onKeyDown={onTreeKeyDown}
+        className="flex-1 overflow-y-auto pt-1 focus:outline-none"
+      >
         {targets.length === 0 && (
           <div className="px-3 py-4 text-xs text-[var(--rw-text-3)] text-center">
             No targets yet
@@ -399,7 +680,15 @@ export const TargetListSidebar: React.FC<TargetListSidebarProps> = ({
             <React.Fragment key={code}>
               {/* Target row */}
               <div
-                className={`rw-tree-row group ${selectedCode === code ? 'is-active' : ''}`}
+                className={`rw-tree-row group ${selectedCode === code ? 'is-active' : ''} ${dropHover === code ? 'rw-tree-row-drop' : ''}`}
+                onDragOver={(e) => {
+                  if (readDragAbsPath(e) == null && !e.dataTransfer.types.includes('text/plain') && !e.dataTransfer.types.includes('application/x-target-file')) return;
+                  e.preventDefault();
+                  e.dataTransfer.dropEffect = 'move';
+                  setDropHover(code);
+                }}
+                onDragLeave={() => { if (dropHover === code) setDropHover(null); }}
+                onDrop={(e) => { void handleDropOnTarget(e, code); }}
               >
                 <span
                   className="flex-shrink-0 cursor-pointer text-[var(--rw-text-3)]"
@@ -444,7 +733,21 @@ export const TargetListSidebar: React.FC<TargetListSidebarProps> = ({
 
               {/* Expanded contents */}
               {isExpanded && files && (
-                <>
+                <div
+                  onDragOver={(e) => {
+                    if (readDragAbsPath(e) == null && !e.dataTransfer.types.includes('text/plain') && !e.dataTransfer.types.includes('application/x-target-file')) return;
+                    e.preventDefault();
+                    e.dataTransfer.dropEffect = 'move';
+                    setDropHover(code);
+                  }}
+                  onDragLeave={(e) => {
+                    // Only clear when the pointer truly leaves the wrapper
+                    // (not when crossing into a child element).
+                    if (e.currentTarget.contains(e.relatedTarget as Node)) return;
+                    if (dropHover === code) setDropHover(null);
+                  }}
+                  onDrop={(e) => { void handleDropOnTarget(e, code); }}
+                >
                   {/* Chat list — Target ↔ Chat binding */}
                   {onSelectChat && (
                     <>
@@ -521,12 +824,17 @@ export const TargetListSidebar: React.FC<TargetListSidebarProps> = ({
                   {/* Root-level files */}
                   {rootFiles.map((file) => {
                     const Icon = fileIcon(file.relPath);
+                    const ref = makeFileRef(file, code);
+                    const isCut = clipboard.clipboard?.absPath === file.absPath;
                     return (
                       <div
                         key={file.absPath}
-                        className={`rw-tree-row ${activeFileAbsPath === file.absPath ? 'is-active' : ''}`}
+                        draggable={!ref.isProtected}
+                        className={`rw-tree-row ${activeFileAbsPath === file.absPath ? 'is-active' : ''} ${isCut ? 'opacity-50' : ''}`}
                         style={{ paddingLeft: 12 }}
                         onClick={() => onOpenFile(file)}
+                        onContextMenu={(e) => openFileContextMenu(e, file, code)}
+                        onDragStart={(e) => beginDrag(e, file, code)}
                       >
                         <span style={{ width: 13 }} className="flex-shrink-0" />
                         <Icon size={13} className="flex-shrink-0 mr-1" />
@@ -545,36 +853,61 @@ export const TargetListSidebar: React.FC<TargetListSidebarProps> = ({
                     return (
                       <React.Fragment key={catKey}>
                         <div
-                          className={`rw-tree-row ${!hasFiles ? 'is-disabled' : ''}`}
-                          style={{ paddingLeft: 12 }}
-                          onClick={hasFiles ? () => onToggleCat(catKey) : undefined}
+                          onDragOver={(e) => {
+                            // Subcategory drop zone covers the folder row AND
+                            // (when expanded) its child files area, so users
+                            // don't have to land precisely on the row.
+                            e.preventDefault();
+                            e.stopPropagation();
+                            e.dataTransfer.dropEffect = 'move';
+                            setDropHover(catKey);
+                          }}
+                          onDragLeave={(e) => {
+                            if (e.currentTarget.contains(e.relatedTarget as Node)) return;
+                            if (dropHover === catKey) setDropHover(null);
+                          }}
+                          onDrop={(e) => {
+                            e.stopPropagation();
+                            void handleDropOnSubcategory(e, code, cat);
+                          }}
                         >
-                          {hasFiles
-                            ? (isCatExpanded ? <ChevronDown size={13} /> : <ChevronRight size={13} />)
-                            : <span style={{ width: 13 }} />}
-                          <Folder size={13} className="flex-shrink-0 mr-1" />
-                          <span className="truncate" style={{ color: 'var(--rw-text)' }}>{cat}</span>
-                        </div>
+                          <div
+                            className={`rw-tree-row ${!hasFiles ? 'is-disabled' : ''} ${dropHover === catKey ? 'rw-tree-row-drop' : ''}`}
+                            style={{ paddingLeft: 12 }}
+                            onClick={hasFiles ? () => onToggleCat(catKey) : undefined}
+                          >
+                            {hasFiles
+                              ? (isCatExpanded ? <ChevronDown size={13} /> : <ChevronRight size={13} />)
+                              : <span style={{ width: 13 }} />}
+                            <Folder size={13} className="flex-shrink-0 mr-1" />
+                            <span className="truncate" style={{ color: 'var(--rw-text)' }}>{cat}</span>
+                          </div>
 
-                        {hasFiles && isCatExpanded && catFiles.map((file) => {
-                          const Icon = fileIcon(file.relPath);
-                          const fileName = file.relPath.slice(cat.length + 1);
-                          return (
-                            <div
-                              key={file.absPath}
-                              className={`rw-tree-row ${activeFileAbsPath === file.absPath ? 'is-active' : ''}`}
-                              style={{ paddingLeft: 24 }}
-                              onClick={() => onOpenFile(file)}
-                            >
-                              <Icon size={13} className="flex-shrink-0 mr-1" />
-                              <span className="truncate">{fileName}</span>
-                            </div>
-                          );
-                        })}
+                          {hasFiles && isCatExpanded && catFiles.map((file) => {
+                            const Icon = fileIcon(file.relPath);
+                            const fileName = file.relPath.slice(cat.length + 1);
+                            const ref = makeFileRef(file, code);
+                            const isCut = clipboard.clipboard?.absPath === file.absPath;
+                            return (
+                              <div
+                                key={file.absPath}
+                                draggable={!ref.isProtected}
+                                className={`rw-tree-row ${activeFileAbsPath === file.absPath ? 'is-active' : ''} ${isCut ? 'opacity-50' : ''}`}
+                                style={{ paddingLeft: 24 }}
+                                onClick={() => onOpenFile(file)}
+                                onContextMenu={(e) => openFileContextMenu(e, file, code)}
+                                onDragStart={(e) => beginDrag(e, file, code)}
+                              >
+                                <Icon size={13} className="flex-shrink-0 mr-1" />
+                                <span className="truncate">{fileName}</span>
+                              </div>
+                            );
+                          })}
+                        </div>
                       </React.Fragment>
                     );
                   })}
-                </>
+                </div>
               )}
             </React.Fragment>
           );
@@ -623,6 +956,62 @@ export const TargetListSidebar: React.FC<TargetListSidebarProps> = ({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* File-move conflict resolution */}
+      <MoveConflictDialog
+        open={!!pendingMoveConflict}
+        fileName={pendingMoveConflict?.source.fileName ?? ''}
+        destDirLabel={pendingMoveConflict?.destDirLabel ?? ''}
+        onResolve={(choice) => { void resolveMoveConflict(choice); }}
+      />
+
+      {/* Cross-target move confirmation */}
+      <CrossTargetMoveConfirmDialog
+        open={!!pendingCrossTargetMove}
+        fileName={pendingCrossTargetMove?.source.fileName ?? ''}
+        fromTargetName={pendingCrossTargetMove?.fromTargetName ?? ''}
+        toTargetName={pendingCrossTargetMove?.toTargetName ?? ''}
+        onConfirm={() => { void confirmCrossTargetMove(); }}
+        onCancel={() => setPendingCrossTargetMove(null)}
+      />
+
+      {/* Rename file dialog */}
+      <RenameFileDialog
+        open={!!pendingRenameFile}
+        originalName={pendingRenameFile?.fileName ?? ''}
+        onConfirm={(newName) => { void handleConfirmRenameFile(newName); }}
+        onCancel={() => setPendingRenameFile(null)}
+      />
+
+      {/* Delete file confirmation */}
+      <Dialog open={!!pendingDeleteFile} onOpenChange={(open) => { if (!open) setPendingDeleteFile(null); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete file?</DialogTitle>
+          </DialogHeader>
+          <div className="text-sm text-gray-600 py-2">
+            {pendingDeleteFile ? `Move "${pendingDeleteFile.fileName}" to the trash?` : null}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPendingDeleteFile(null)}>Cancel</Button>
+            <Button variant="destructive" onClick={() => { void handleDeleteFile(); }}>Delete</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* File context menu (right-click) */}
+      {contextMenu && (
+        <TargetTreeFileContextMenu
+          position={contextMenu.position}
+          absPath={contextMenu.file.absPath}
+          fileName={contextMenu.file.fileName}
+          canDelete={!contextMenu.file.isProtected}
+          onClose={() => setContextMenu(null)}
+          onCut={() => clipboard.setCut(contextMenu.file.absPath)}
+          onRename={() => setPendingRenameFile(contextMenu.file)}
+          onDelete={() => setPendingDeleteFile(contextMenu.file)}
+        />
+      )}
     </div>
   );
 };
