@@ -1151,6 +1151,7 @@ export const ResearchPage: React.FC = () => {
             onMoveFile={handleMoveFile}
             onRenameFile={handleRenameFile}
             onTrashFile={trashFile}
+            onRefreshTarget={(code) => { void loadFiles(code, { force: true }); }}
             addFormOpen={showAddForm}
             chatsByCode={targetChats.chatsByCode}
             activeChatSessionId={targetChats.active?.chatSessionId ?? null}

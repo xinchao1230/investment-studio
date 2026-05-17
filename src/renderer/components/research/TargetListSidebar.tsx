@@ -25,6 +25,8 @@ import { MoveConflictDialog, MoveConflictChoice } from './MoveConflictDialog';
 import { CrossTargetMoveConfirmDialog } from './CrossTargetMoveConfirmDialog';
 import { RenameFileDialog } from './RenameFileDialog';
 import { TargetTreeFileContextMenu } from './TargetTreeFileContextMenu';
+import { TargetTreeFolderContextMenu } from './TargetTreeFolderContextMenu';
+import { CreateItemDialog } from './CreateItemDialog';
 import { useToast } from '../ui/ToastProvider';
 
 export interface Target {
@@ -69,6 +71,13 @@ interface TargetListSidebarProps {
   onRenameFile?: (sourceAbs: string, newName: string) => Promise<MoveResult>;
   /** Move a file to the OS trash. */
   onTrashFile?: (sourceAbs: string) => Promise<{ success: boolean; error?: string }>;
+  /**
+   * Force-reload the file list for a target. Used after creating files
+   * via `fs:writeTextFileSafe` (which suppresses the watcher echo to
+   * avoid clobbering open editor buffers — but that suppression also
+   * stops fresh creates from refreshing the tree, so we ping manually).
+   */
+  onRefreshTarget?: (code: string) => void;
   /** Optional slot rendered above the tree (e.g. add-target combobox). */
   topSlot?: React.ReactNode;
   /** Whether the add-target slot is currently visible. The sidebar uses
@@ -150,6 +159,7 @@ export const TargetListSidebar: React.FC<TargetListSidebarProps> = ({
   onMoveFile,
   onRenameFile,
   onTrashFile,
+  onRefreshTarget,
   topSlot,
   addFormOpen,
   chatsByCode,
@@ -191,10 +201,43 @@ export const TargetListSidebar: React.FC<TargetListSidebarProps> = ({
   } | null>(null);
   const [pendingRenameFile, setPendingRenameFile] = useState<FileRef | null>(null);
   const [pendingDeleteFile, setPendingDeleteFile] = useState<FileRef | null>(null);
+  // User-created subfolder pending trash confirmation. Triggered by the
+  // 删除 item in the folder context menu.
+  const [pendingDeleteFolder, setPendingDeleteFolder] = useState<{
+    folderAbsPath: string;
+    folderName: string;
+    ownerCode: string;
+  } | null>(null);
   const [contextMenu, setContextMenu] = useState<{
     file: FileRef;
     position: { top: number; left: number };
   } | null>(null);
+  // Folder context menu (right-click on a target row or a subcategory row).
+  const [folderContextMenu, setFolderContextMenu] = useState<{
+    folderAbsPath: string;
+    folderName: string;
+    ownerCode: string;
+    position: { top: number; left: number };
+  } | null>(null);
+  // "New file" / "New folder" prompt — opened from the folder context menu.
+  const [pendingCreate, setPendingCreate] = useState<{
+    kind: 'file' | 'folder';
+    parentDirAbs: string;
+    parentLabel: string;
+    ownerCode: string;
+  } | null>(null);
+  // Optimistic top-level folders per target. The on-disk listing returned by
+  // `portfolio_get_target_files` skips empty directories, so a freshly
+  // mkdir'd folder is invisible until it contains a file. We stitch
+  // user-created top-level folders into the `extras` calculation below so
+  // they appear immediately. Entries naturally dedupe with disk-derived
+  // categories (Set), and become harmless once files are added.
+  // Tracks user-created folders that may be empty on disk. Each value is
+  // a list of POSIX-style relPaths under that target's directory (e.g.
+  // "test" for a top-level folder or "研报/test" for a nested one).
+  // Empty dirs aren't returned by the file listing tool, so without this
+  // state they would be invisible until a file is added.
+  const [optimisticFolders, setOptimisticFolders] = useState<Record<string, string[]>>({});
   // Active drop highlight; key is `${code}` for the target's root or
   // `${code}::${cat}` for a sub-category folder.
   const [dropHover, setDropHover] = useState<string | null>(null);
@@ -334,6 +377,46 @@ export const TargetListSidebar: React.FC<TargetListSidebarProps> = ({
     if (r.success) showSuccess('Moved to trash');
     else showError(r.error || 'Delete failed');
   }, [pendingDeleteFile, onTrashFile, showError, showSuccess]);
+
+  const handleConfirmDeleteFolder = useCallback(async () => {
+    const ctx = pendingDeleteFolder;
+    setPendingDeleteFolder(null);
+    if (!ctx) return;
+    const api: any = (window as any).electronAPI;
+    const trash = api?.portfolio?.trashPath;
+    if (!trash) { showError('文件系统接口不可用'); return; }
+    try {
+      const r = await trash(ctx.folderAbsPath);
+      if (r?.success) {
+        // Drop optimistic entries that are now gone (the folder itself or
+        // anything underneath it).
+        const ownerTarget = targets.find((t) => t.stock_code === ctx.ownerCode);
+        if (ownerTarget) {
+          const baseDir = ownerTarget.directory;
+          const sep = baseDir.includes('\\') ? '\\' : '/';
+          const prefix = baseDir.endsWith(sep) ? baseDir : baseDir + sep;
+          const relPosix = ctx.folderAbsPath.startsWith(prefix)
+            ? ctx.folderAbsPath.slice(prefix.length).replace(/\\/g, '/')
+            : '';
+          if (relPosix) {
+            setOptimisticFolders((prev) => {
+              const existing = prev[ctx.ownerCode];
+              if (!existing || existing.length === 0) return prev;
+              const filtered = existing.filter((p) => p !== relPosix && !p.startsWith(relPosix + '/'));
+              if (filtered.length === existing.length) return prev;
+              return { ...prev, [ctx.ownerCode]: filtered };
+            });
+          }
+        }
+        showSuccess(`已删除 ${ctx.folderName}`);
+        onRefreshTarget?.(ctx.ownerCode);
+      } else {
+        showError(r?.error || '删除失败');
+      }
+    } catch (err) {
+      showError(err instanceof Error ? err.message : String(err));
+    }
+  }, [pendingDeleteFolder, targets, showError, showSuccess, onRefreshTarget]);
 
   const handleConfirmRenameFile = useCallback(async (newName: string) => {
     const ref = pendingRenameFile;
@@ -479,6 +562,146 @@ export const TargetListSidebar: React.FC<TargetListSidebarProps> = ({
       position: { top: e.clientY, left: e.clientX },
     });
   }, [makeFileRef]);
+
+  const openFolderContextMenu = useCallback((e: React.MouseEvent, folderAbsPath: string, folderName: string, ownerCode: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setFolderContextMenu({
+      folderAbsPath,
+      folderName,
+      ownerCode,
+      position: { top: e.clientY, left: e.clientX },
+    });
+  }, []);
+
+  const joinPath = useCallback((dir: string, name: string) => {
+    const sep = dir.includes('\\') ? '\\' : '/';
+    return `${dir}${sep}${name}`;
+  }, []);
+
+  const handleConfirmCreate = useCallback(async (name: string) => {
+    const ctx = pendingCreate;
+    setPendingCreate(null);
+    if (!ctx) return;
+    const target = joinPath(ctx.parentDirAbs, name);
+    const api: any = (window as any).electronAPI;
+    try {
+      if (ctx.kind === 'file') {
+        const writer = api?.fs?.writeTextFileSafe ?? api?.fs?.writeFile;
+        if (!writer) { showError('文件系统接口不可用'); return; }
+        // Check for existing file via stat to avoid silently overwriting.
+        try {
+          const s = await api?.fs?.stat?.(target);
+          if (s?.success && s.stats?.isFile) {
+            showError(`文件已存在：${name}`);
+            return;
+          }
+        } catch { /* stat is best-effort */ }
+        const r = await writer(target, '');
+        if (r?.success) {
+          showSuccess(`已创建文件 ${name}`);
+          // fs:writeTextFileSafe / fs:writeFile both call
+          // PortfolioWatcher.suppressOnce() to silence editor-save echoes,
+          // which unfortunately also silences fresh creates. Force-reload
+          // the affected target so the new file appears immediately.
+          onRefreshTarget?.(ctx.ownerCode);
+
+          // Reveal & open the freshly-created file: compute its POSIX-style
+          // relPath under the target dir, ensure the target row and every
+          // intermediate folder is expanded in the tree, then open it in the
+          // editor pane.
+          const ownerTarget = targets.find((t) => t.stock_code === ctx.ownerCode);
+          if (ownerTarget) {
+            const baseDir = ownerTarget.directory;
+            const sep = baseDir.includes('\\') ? '\\' : '/';
+            const prefix = baseDir.endsWith(sep) ? baseDir : baseDir + sep;
+            let relPath = name;
+            if (ctx.parentDirAbs !== baseDir) {
+              const rel = ctx.parentDirAbs.startsWith(prefix)
+                ? ctx.parentDirAbs.slice(prefix.length)
+                : ctx.parentDirAbs;
+              relPath = `${rel.replace(/\\/g, '/')}/${name}`;
+            }
+
+            if (!expandedCodes.has(ctx.ownerCode)) {
+              onToggleExpand(ctx.ownerCode);
+            }
+            // Expand every ancestor folder so the file is actually visible
+            // in the tree (the category renderer uses composite keys of
+            // form `${code}::${relPosix}` for both top-level categories
+            // and arbitrarily-nested subfolders).
+            const segs = relPath.split('/');
+            for (let i = 1; i < segs.length; i += 1) {
+              const partial = segs.slice(0, i).join('/');
+              const catKey = `${ctx.ownerCode}::${partial}`;
+              if (!expandedCats.has(catKey)) {
+                onToggleCat(catKey);
+              }
+            }
+
+            onOpenFile({ relPath, absPath: target, mtime: Date.now() });
+          }
+        } else {
+          showError(r?.error || '创建文件失败');
+        }
+      } else {
+        if (!api?.fs?.mkdir) { showError('文件系统接口不可用'); return; }
+        const r = await api.fs.mkdir(target);
+        if (r?.success) {
+          if (r.exists) {
+            showError(`文件夹已存在：${name}`);
+          } else {
+            // Record the new folder optimistically. Empty dirs are not
+            // returned by the file listing tool, so without this they
+            // would be invisible until the user drops a file into them.
+            const ownerTarget = targets.find((t) => t.stock_code === ctx.ownerCode);
+            if (ownerTarget) {
+              const baseDir = ownerTarget.directory;
+              // Compute POSIX-style relPath under the target dir.
+              let relPath = name;
+              if (ctx.parentDirAbs !== baseDir) {
+                // Strip the target dir prefix (+ separator) from parentDirAbs.
+                const sep = baseDir.includes('\\') ? '\\' : '/';
+                const prefix = baseDir.endsWith(sep) ? baseDir : baseDir + sep;
+                const rel = ctx.parentDirAbs.startsWith(prefix)
+                  ? ctx.parentDirAbs.slice(prefix.length)
+                  : ctx.parentDirAbs;
+                relPath = `${rel.replace(/\\/g, '/')}/${name}`;
+              }
+              setOptimisticFolders((prev) => {
+                const existing = prev[ctx.ownerCode] ?? [];
+                if (existing.includes(relPath)) return prev;
+                return { ...prev, [ctx.ownerCode]: [...existing, relPath] };
+              });
+              // Ensure the target row is expanded so the new folder is
+              // actually visible (otherwise it hides behind a collapsed
+              // parent).
+              if (!expandedCodes.has(ctx.ownerCode)) {
+                onToggleExpand(ctx.ownerCode);
+              }
+              // For nested folders, also expand the parent category row
+              // so the empty folder is visible underneath it.
+              if (relPath.includes('/')) {
+                const parentCat = relPath.split('/')[0];
+                const catKey = `${ctx.ownerCode}::${parentCat}`;
+                if (!expandedCats.has(catKey)) {
+                  onToggleCat(catKey);
+                }
+              }
+            }
+            showSuccess(`已创建文件夹 ${name}`);
+            // Still ping a refresh so any race with concurrent writes
+            // (e.g. an LLM tool placing a file inside the new dir) shows up.
+            onRefreshTarget?.(ctx.ownerCode);
+          }
+        } else {
+          showError(r?.error || '创建文件夹失败');
+        }
+      }
+    } catch (err) {
+      showError(err instanceof Error ? err.message : String(err));
+    }
+  }, [pendingCreate, joinPath, showError, showSuccess, onRefreshTarget, targets, expandedCodes, onToggleExpand, expandedCats, onToggleCat, onOpenFile]);
 
   const navigate = useNavigate();
 
@@ -696,6 +919,7 @@ export const TargetListSidebar: React.FC<TargetListSidebarProps> = ({
               {/* Target row */}
               <div
                 className={`rw-tree-row group ${selectedCode === code ? 'is-active' : ''} ${dropHover === code ? 'rw-tree-row-drop' : ''}`}
+                onContextMenu={(e) => openFolderContextMenu(e, target.directory, target.name, code)}
                 onDragOver={(e) => {
                   if (readDragAbsPath(e) == null && !e.dataTransfer.types.includes('text/plain') && !e.dataTransfer.types.includes('application/x-target-file')) return;
                   e.preventDefault();
@@ -858,12 +1082,38 @@ export const TargetListSidebar: React.FC<TargetListSidebarProps> = ({
                     );
                   })}
 
-                  {/* Sub-categories */}
-                  {SUBCATEGORIES.map((cat) => {
+                  {/* Sub-categories — standard 7 first, plus any extra
+                      top-level folders we find under this target (so files
+                      placed in user-created subfolders remain visible).
+                      Also includes optimistic folders just created via the
+                      right-click "新建文件夹" action — those are empty on disk
+                      and would otherwise be invisible. */}
+                  {(() => {
+                    const optimistic = optimisticFolders[code] ?? [];
+                    const fromFiles = files
+                      .filter((f) => f.relPath.includes('/'))
+                      .map((f) => f.relPath.split('/')[0]);
+                    const fromOptimistic = optimistic.map((p) => p.split('/')[0]);
+                    const extras = Array.from(new Set(
+                      [...fromFiles, ...fromOptimistic]
+                        .filter((c) => c && !SUBCATEGORIES.includes(c))
+                    ));
+                    return [...SUBCATEGORIES, ...extras];
+                  })().map((cat) => {
                     const catFiles = files.filter((f) => f.relPath.startsWith(cat + '/'));
                     const catKey = `${code}::${cat}`;
                     const isCatExpanded = expandedCats.has(catKey);
-                    const hasFiles = catFiles.length > 0;
+                    // Optimistic empty folders living directly under this
+                    // category (e.g. "研报/test"). Top-level optimistic
+                    // entries (no '/') manifest themselves as their own
+                    // category row instead, so they're excluded here.
+                    // All optimistic folder relPaths under this category
+                    // (any depth). e.g. for cat='纪要', this includes
+                    // '纪要/eee', '纪要/foo/bar', etc.
+                    const optimisticUnderCat = (optimisticFolders[code] ?? [])
+                      .filter((p) => p.startsWith(cat + '/'));
+                    const hasFiles = catFiles.length > 0 || optimisticUnderCat.length > 0;
+                    const catDirAbs = joinPath(target.directory, cat);
 
                     return (
                       <React.Fragment key={catKey}>
@@ -890,6 +1140,7 @@ export const TargetListSidebar: React.FC<TargetListSidebarProps> = ({
                             className={`rw-tree-row ${!hasFiles ? 'is-disabled' : ''} ${dropHover === catKey ? 'rw-tree-row-drop' : ''}`}
                             style={{ paddingLeft: 12 }}
                             onClick={hasFiles ? () => onToggleCat(catKey) : undefined}
+                            onContextMenu={(e) => openFolderContextMenu(e, catDirAbs, `${target.name} / ${cat}`, code)}
                           >
                             {hasFiles
                               ? (isCatExpanded ? <ChevronDown size={13} /> : <ChevronRight size={13} />)
@@ -898,26 +1149,119 @@ export const TargetListSidebar: React.FC<TargetListSidebarProps> = ({
                             <span className="truncate" style={{ color: 'var(--rw-text)' }}>{cat}</span>
                           </div>
 
-                          {hasFiles && isCatExpanded && catFiles.map((file) => {
-                            const Icon = fileIcon(file.relPath);
-                            const fileName = file.relPath.slice(cat.length + 1);
-                            const ref = makeFileRef(file, code);
-                            const isCut = clipboard.clipboard?.absPath === file.absPath;
-                            return (
-                              <div
-                                key={file.absPath}
-                                draggable={!ref.isProtected}
-                                className={`rw-tree-row ${activeFileAbsPath === file.absPath ? 'is-active' : ''} ${isCut ? 'opacity-50' : ''}`}
-                                style={{ paddingLeft: 24 }}
-                                onClick={() => onOpenFile(file)}
-                                onContextMenu={(e) => openFileContextMenu(e, file, code)}
-                                onDragStart={(e) => beginDrag(e, file, code)}
-                              >
-                                <Icon size={13} className="flex-shrink-0 mr-1" />
-                                <span className="truncate">{fileName}</span>
-                              </div>
-                            );
-                          })}
+                          {hasFiles && isCatExpanded && (() => {
+                            // Build a hierarchical tree of files + optimistic
+                            // folders under this category, so nested paths
+                            // (e.g. '纪要/eee/eee.md') render as a folder
+                            // containing the file rather than a flat row
+                            // with '/' in the label.
+                            type Node = {
+                              name: string;
+                              fullRel: string;       // POSIX path under target.directory
+                              children: Map<string, Node>;
+                              file?: TargetFile;     // present iff this is a leaf file
+                            };
+                            const root: Node = { name: cat, fullRel: cat, children: new Map() };
+                            const ensureFolder = (segments: string[]): Node => {
+                              let node = root;
+                              for (let i = 0; i < segments.length; i++) {
+                                const seg = segments[i];
+                                let child = node.children.get(seg);
+                                if (!child) {
+                                  child = {
+                                    name: seg,
+                                    fullRel: `${node.fullRel}/${seg}`,
+                                    children: new Map(),
+                                  };
+                                  node.children.set(seg, child);
+                                }
+                                node = child;
+                              }
+                              return node;
+                            };
+                            // Insert files.
+                            for (const f of catFiles) {
+                              const parts = f.relPath.split('/'); // [cat, ...inner, fileName]
+                              const innerDirs = parts.slice(1, -1);
+                              const fileName = parts[parts.length - 1];
+                              const parent = ensureFolder(innerDirs);
+                              parent.children.set(fileName, {
+                                name: fileName,
+                                fullRel: f.relPath,
+                                children: new Map(),
+                                file: f,
+                              });
+                            }
+                            // Insert optimistic (possibly empty) folders.
+                            for (const optRel of optimisticUnderCat) {
+                              const innerDirs = optRel.split('/').slice(1); // strip cat
+                              if (innerDirs.length === 0) continue;
+                              ensureFolder(innerDirs);
+                            }
+
+                            const renderNode = (node: Node, depth: number): React.ReactNode => {
+                              const paddingLeft = 12 + depth * 12;
+                              if (node.file) {
+                                const f = node.file;
+                                const Icon = fileIcon(f.relPath);
+                                const ref = makeFileRef(f, code);
+                                const isCut = clipboard.clipboard?.absPath === f.absPath;
+                                return (
+                                  <div
+                                    key={f.absPath}
+                                    draggable={!ref.isProtected}
+                                    className={`rw-tree-row ${activeFileAbsPath === f.absPath ? 'is-active' : ''} ${isCut ? 'opacity-50' : ''}`}
+                                    style={{ paddingLeft }}
+                                    onClick={() => onOpenFile(f)}
+                                    onContextMenu={(e) => openFileContextMenu(e, f, code)}
+                                    onDragStart={(e) => beginDrag(e, f, code)}
+                                  >
+                                    <Icon size={13} className="flex-shrink-0 mr-1" />
+                                    <span className="truncate">{node.name}</span>
+                                  </div>
+                                );
+                              }
+                              // Folder node.
+                              const folderKey = `${code}::${node.fullRel}`;
+                              const folderAbs = joinPath(target.directory, node.fullRel);
+                              const hasChildren = node.children.size > 0;
+                              const isExpanded = expandedCats.has(folderKey);
+                              // Sort: folders first then files, alphabetic.
+                              const sortedChildren = [...node.children.values()].sort((a, b) => {
+                                const aIsFile = !!a.file;
+                                const bIsFile = !!b.file;
+                                if (aIsFile !== bIsFile) return aIsFile ? 1 : -1;
+                                return a.name.localeCompare(b.name);
+                              });
+                              return (
+                                <React.Fragment key={folderKey}>
+                                  <div
+                                    className={`rw-tree-row ${!hasChildren ? 'is-disabled' : ''}`}
+                                    style={{ paddingLeft }}
+                                    onClick={hasChildren ? () => onToggleCat(folderKey) : undefined}
+                                    onContextMenu={(e) => openFolderContextMenu(e, folderAbs, `${target.name} / ${node.fullRel}`, code)}
+                                  >
+                                    {hasChildren
+                                      ? (isExpanded ? <ChevronDown size={13} /> : <ChevronRight size={13} />)
+                                      : <span style={{ width: 13 }} />}
+                                    <Folder size={13} className="flex-shrink-0 mr-1" />
+                                    <span className="truncate">{node.name}</span>
+                                  </div>
+                                  {hasChildren && isExpanded && sortedChildren.map((c) => renderNode(c, depth + 1))}
+                                </React.Fragment>
+                              );
+                            };
+
+                            // Render root's children (root itself == the cat
+                            // row which is rendered above this IIFE).
+                            const rootSorted = [...root.children.values()].sort((a, b) => {
+                              const aIsFile = !!a.file;
+                              const bIsFile = !!b.file;
+                              if (aIsFile !== bIsFile) return aIsFile ? 1 : -1;
+                              return a.name.localeCompare(b.name);
+                            });
+                            return rootSorted.map((c) => renderNode(c, 1));
+                          })()}
                         </div>
                       </React.Fragment>
                     );
@@ -1014,6 +1358,24 @@ export const TargetListSidebar: React.FC<TargetListSidebarProps> = ({
         </DialogContent>
       </Dialog>
 
+      {/* Delete-folder confirm dialog */}
+      <Dialog open={!!pendingDeleteFolder} onOpenChange={(open) => { if (!open) setPendingDeleteFolder(null); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>删除文件夹？</DialogTitle>
+          </DialogHeader>
+          <div className="text-sm text-gray-600 py-2">
+            {pendingDeleteFolder
+              ? `将 "${pendingDeleteFolder.folderName}" 及其全部内容移至回收站？`
+              : null}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPendingDeleteFolder(null)}>取消</Button>
+            <Button variant="destructive" onClick={() => { void handleConfirmDeleteFolder(); }}>删除</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* File context menu (right-click) */}
       {contextMenu && (
         <TargetTreeFileContextMenu
@@ -1027,6 +1389,64 @@ export const TargetListSidebar: React.FC<TargetListSidebarProps> = ({
           onDelete={() => setPendingDeleteFile(contextMenu.file)}
         />
       )}
+
+      {/* Folder context menu (right-click on target row or subcategory row) */}
+      {folderContextMenu && (() => {
+        const fcm = folderContextMenu;
+        const ownerTarget = targets.find((t) => t.stock_code === fcm.ownerCode);
+        // Disallow deleting the target root (handled by deleteTarget) and
+        // the seven standard subcategory rows (they're virtual folders the
+        // user shouldn't trash). Everything else — user-created subfolders
+        // at any depth — is deletable.
+        let canDelete = false;
+        if (ownerTarget) {
+          const baseDir = ownerTarget.directory;
+          const sep = baseDir.includes('\\') ? '\\' : '/';
+          const prefix = baseDir.endsWith(sep) ? baseDir : baseDir + sep;
+          if (fcm.folderAbsPath !== baseDir && fcm.folderAbsPath.startsWith(prefix)) {
+            const relPosix = fcm.folderAbsPath.slice(prefix.length).replace(/\\/g, '/');
+            const isStandardCategoryRoot = SUBCATEGORIES.includes(relPosix);
+            canDelete = !isStandardCategoryRoot;
+          }
+        }
+        return (
+          <TargetTreeFolderContextMenu
+            position={fcm.position}
+            folderAbsPath={fcm.folderAbsPath}
+            folderName={fcm.folderName}
+            canDelete={canDelete}
+            onClose={() => setFolderContextMenu(null)}
+            onNewFile={() => setPendingCreate({
+              kind: 'file',
+              parentDirAbs: fcm.folderAbsPath,
+              parentLabel: fcm.folderName,
+              ownerCode: fcm.ownerCode,
+            })}
+            onNewFolder={() => setPendingCreate({
+              kind: 'folder',
+              parentDirAbs: fcm.folderAbsPath,
+              parentLabel: fcm.folderName,
+              ownerCode: fcm.ownerCode,
+            })}
+            onDelete={() => setPendingDeleteFolder({
+              folderAbsPath: fcm.folderAbsPath,
+              folderName: fcm.folderName,
+              ownerCode: fcm.ownerCode,
+            })}
+          />
+        );
+      })()}
+
+      {/* New file / new folder prompt */}
+      <CreateItemDialog
+        open={!!pendingCreate}
+        title={pendingCreate?.kind === 'folder' ? '新建文件夹' : '新建文件'}
+        placeholder={pendingCreate?.kind === 'folder' ? '文件夹名' : '文件名（含扩展名，如 notes.md）'}
+        parentHint={pendingCreate?.parentLabel}
+        defaultValue=""
+        onConfirm={(name) => { void handleConfirmCreate(name); }}
+        onCancel={() => setPendingCreate(null)}
+      />
     </div>
   );
 };

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Target } from './TargetListSidebar';
 import { useFsChanged, pathStartsWith } from '../../hooks/useFsChanged';
 import { researchChatIpc } from './researchChatIpc';
@@ -75,9 +75,16 @@ export function usePortfolio(): PortfolioHook {
     return () => { cancelled = true; };
   }, []);
 
+  // `loading` reflects ONLY the initial load. Subsequent refreshes
+  // (triggered by `useFsChanged`, `initTarget`, `deleteTarget`, etc.) must
+  // not flip it back to true — `ResearchPage` swaps the entire UI for a
+  // "Loading portfolio..." placeholder while loading, which would otherwise
+  // make the page flash every time the user deletes a file or folder.
+  const initialLoadDoneRef = useRef(false);
+
   const refresh = useCallback(async () => {
     try {
-      setLoading(true);
+      if (!initialLoadDoneRef.current) setLoading(true);
       const result = await window.electronAPI.builtinTools.execute(
         'portfolio_list_targets',
         {},
@@ -105,7 +112,10 @@ export function usePortfolio(): PortfolioHook {
     } catch (err) {
       console.error('[usePortfolio] Failed to list targets:', err);
     } finally {
-      setLoading(false);
+      if (!initialLoadDoneRef.current) {
+        initialLoadDoneRef.current = true;
+        setLoading(false);
+      }
     }
   }, []);
 

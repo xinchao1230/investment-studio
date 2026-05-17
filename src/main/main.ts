@@ -1442,6 +1442,56 @@ class ElectronApp {
       }
     });
 
+    // Move a portfolio workspace file OR directory to the OS trash. Used
+    // by the right-click "删除" action on user-created subfolders in the
+    // research sidebar. Refuses anything outside the active workspace,
+    // the workspace root itself, any target root (those go through the
+    // dedicated deleteTarget flow), and any path named `profile.yaml`.
+    ipcMain.handle('portfolio:trashPath', async (_event, absPath: string) => {
+      try {
+        if (typeof absPath !== 'string' || !absPath) {
+          return { success: false, error: 'absPath is required' };
+        }
+        const { PortfolioTools } = await import('./lib/mcpRuntime/builtinTools/portfolioTools');
+        const workspaceDir = PortfolioTools.getWorkspaceDir();
+        if (!workspaceDir) {
+          return { success: false, error: 'Workspace not initialized' };
+        }
+        const resolved = path.resolve(absPath);
+        const rel = path.relative(workspaceDir, resolved);
+        if (!rel || rel.startsWith('..') || path.isAbsolute(rel)) {
+          return { success: false, error: 'Path is outside the workspace' };
+        }
+        // Refuse target roots — the first path segment under workspaceDir.
+        // Those have their own deleteTarget flow.
+        const firstSep = rel.indexOf(path.sep);
+        if (firstSep === -1) {
+          return { success: false, error: '不能删除股票根目录，请使用删除标的操作' };
+        }
+        if (path.basename(resolved).toLowerCase() === 'profile.yaml') {
+          return { success: false, error: 'profile.yaml is protected and cannot be deleted' };
+        }
+        if (!fs.existsSync(resolved)) {
+          return { success: false, error: '文件或文件夹不存在' };
+        }
+        // Suppress watcher echo so the renderer's own refresh wins.
+        try { PortfolioWatcher.getInstance().suppressOnce(resolved); } catch { /* ignore */ }
+        await shell.trashItem(resolved);
+        const payload = {
+          tool: 'portfolio:trashPath',
+          mutations: [{ path: resolved, kind: 'delete' as const }],
+          timestamp: Date.now(),
+        };
+        for (const win of BrowserWindow.getAllWindows()) {
+          try { win.webContents.send('kosmos:fs-changed', payload); }
+          catch { /* ignore */ }
+        }
+        return { success: true };
+      } catch (error) {
+        return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+      }
+    });
+
     // Builtin Tools - AUTHORIZED
     ipcMain.handle('builtinTools:execute', async (event, toolName: string, args: any) => {
       try {
@@ -3316,7 +3366,40 @@ class ElectronApp {
         }
       }
     );
-    
+
+    // fs:mkdir — Create a directory (recursive). Used by the research
+    // sidebar to create new subfolders inside a target. Returns
+    // `exists: true` if the path is already a directory; fails if a
+    // non-directory exists at that path.
+    ipcMain.handle('fs:mkdir', async (_event, dirPath: string) => {
+      try {
+        if (typeof dirPath !== 'string' || !dirPath.trim()) {
+          return { success: false, error: 'Invalid path' };
+        }
+        if (fs.existsSync(dirPath)) {
+          const st = fs.statSync(dirPath);
+          if (st.isDirectory()) {
+            return { success: true, dirPath, exists: true };
+          }
+          return { success: false, error: 'Path exists but is not a directory' };
+        }
+        // Suppress the chokidar `addDir` echo so the renderer doesn't see a
+        // `kosmos:fs-changed` event that triggers `usePortfolio.refresh()`
+        // (which causes a visible flash of the whole sidebar). The sidebar
+        // manually refreshes the affected target via `onRefreshTarget`.
+        try {
+          PortfolioWatcher.getInstance().suppressOnce(dirPath);
+        } catch { /* watcher may not be running yet */ }
+        fs.mkdirSync(dirPath, { recursive: true });
+        return { success: true, dirPath };
+      } catch (error) {
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : 'Unknown error',
+        };
+      }
+    });
+
     ipcMain.handle('fs:stat', async (event, filePath: string) => {
       try {
         const stats = fs.statSync(filePath);

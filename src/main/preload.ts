@@ -592,6 +592,7 @@ export interface ElectronAPI {
   portfolio: {
     getWorkspaceDir: () => Promise<{ success: boolean; data?: string; error?: string }>;
     trashFile: (absPath: string) => Promise<{ success: boolean; error?: string }>;
+    trashPath: (absPath: string) => Promise<{ success: boolean; error?: string }>;
   };
 
   // Skills APIs
@@ -1034,6 +1035,13 @@ export interface ElectronAPI {
         atime: number;
         birthtime: number;
       };
+      error?: string;
+    }>;
+    /** Create a directory (recursive). `exists:true` if already a dir. */
+    mkdir: (dirPath: string) => Promise<{
+      success: boolean;
+      dirPath?: string;
+      exists?: boolean;
       error?: string;
     }>;
     expandPath: (path: string) => Promise<string>;
@@ -1799,6 +1807,7 @@ export const electronAPI: ElectronAPI = {
   portfolio: {
     getWorkspaceDir: () => ipcRenderer.invoke('portfolio:getWorkspaceDir'),
     trashFile: (absPath: string) => ipcRenderer.invoke('portfolio:trashFile', absPath),
+    trashPath: (absPath: string) => ipcRenderer.invoke('portfolio:trashPath', absPath),
   },
   skills: {
     getSkillMarkdown: (skillName: string) =>
@@ -2106,6 +2115,7 @@ export const electronAPI: ElectronAPI = {
       }
     ) => ipcRenderer.invoke('fs:writeTextFileSafe', filePath, content, options),
     stat: (filePath: string) => ipcRenderer.invoke('fs:stat', filePath),
+    mkdir: (dirPath: string) => ipcRenderer.invoke('fs:mkdir', dirPath),
     expandPath: (path: string) => ipcRenderer.invoke('fs:expandPath', path),
     selectFile: (options?: {
       title?: string;
