@@ -93,6 +93,12 @@ function buildWorkspaceCards(
       description: '同业横向比较',
       prompt: `请为 ${label} 选 4 家可比公司，对比关键财务和估值指标。`,
     },
+    {
+      kind: 'task',
+      title: '投资逻辑',
+      description: '梳理并写入 key-drivers.md',
+      prompt: `请基于公开资料，梳理 ${label} 的投资逻辑（短期 + 长期）、3-5 条核心跟踪变量、估值参考、主要风险，并用 portfolio_update_key_drivers 写入 key-drivers.md。`,
+    },
   ];
 }
 
