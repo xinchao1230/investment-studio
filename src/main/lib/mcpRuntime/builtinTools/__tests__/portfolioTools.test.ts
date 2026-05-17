@@ -98,10 +98,16 @@ describe('PortfolioTools', () => {
       expect(content).toContain('## 投资逻辑');
       expect(content).toContain('## 核心跟踪变量');
 
-      // Unlisted-specific sections
+      // Unlisted-specific section
       expect(content).toContain('## 单位经济与资金');
       expect(content).toContain('现金跑道');
-      expect(content).toContain('## 退出路径与风险');
+
+      // Valuation + risk sections are intentionally NOT in the skeleton;
+      // skills (key-drivers / stock-analyze) own those when they generate
+      // a thesis.
+      expect(content).not.toContain('## 估值参考');
+      expect(content).not.toContain('## 风险');
+      expect(content).not.toContain('## 退出路径与风险');
 
       // No leaked Ctrip-template content
       expect(content).not.toContain('携程');
@@ -109,7 +115,7 @@ describe('PortfolioTools', () => {
       expect(content).not.toContain('同程');
     });
 
-    it('renders listed key-drivers as an empty skeleton with 估值参考 section', async () => {
+    it('renders listed key-drivers as an empty skeleton (only 投资逻辑 + 核心跟踪变量)', async () => {
       await PortfolioTools.executeInitTarget({ stock_code: '603993', name: '洛阳钼业' });
       const kdPath = path.join(tmpDir, '洛阳钼业', 'key-drivers.md');
       const content = fs.readFileSync(kdPath, 'utf-8');
@@ -117,10 +123,11 @@ describe('PortfolioTools', () => {
       expect(content).toContain('# 洛阳钼业 (603993) - Key Drivers');
       expect(content).toContain('## 投资逻辑');
       expect(content).toContain('## 核心跟踪变量');
-      expect(content).toContain('## 估值参考');
-      expect(content).toContain('## 风险');
 
-      // Listed variant must not include unlisted-only sections
+      // Listed skeleton is intentionally minimal — no 估值/风险/退出路径
+      // (those land later, written by the key-drivers / stock-analyze skill).
+      expect(content).not.toContain('## 估值参考');
+      expect(content).not.toContain('## 风险');
       expect(content).not.toContain('## 单位经济与资金');
       expect(content).not.toContain('## 退出路径与风险');
 

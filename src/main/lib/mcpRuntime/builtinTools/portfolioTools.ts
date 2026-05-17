@@ -438,24 +438,13 @@ export class PortfolioTools {
 1.
 2.
 3.
-
-## 估值参考
-
-| 可比公司 | 代码 | PS | PE | EV/Sales | 备注 |
-|---------|------|----|----|----------|------|
-|         |      |    |    |          |      |
-
-## 风险
-
--
 `;
   }
 
   /**
    * Build an empty skeleton key-drivers.md for an **unlisted / private**
-   * company. Differs from the listed variant by carrying a 单位经济与资金
-   * section in place of pure 估值参考 framing, and a 退出路径与风险 closer
-   * instead of a plain 风险 list.
+   * company. Adds a 单位经济与资金 section after 核心跟踪变量 so PMF /
+   * runway fundamentals have a dedicated home.
    */
   private static buildUnlistedKeyDrivers(name: string): string {
     return `${this.formatTitle(name, '', 'Key Drivers')}
@@ -477,16 +466,6 @@ export class PortfolioTools {
 - 关键运营指标：
 - 单位经济（LTV/CAC、毛利率）：
 - 现金跑道：
-
-## 估值参考（可比公司）
-
-| 可比公司 | 代码 | PS | PE | EV/Sales | 备注 |
-|---------|------|----|----|----------|------|
-|         |      |    |    |          |      |
-
-## 退出路径与风险
-
--
 `;
   }
 

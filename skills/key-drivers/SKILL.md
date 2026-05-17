@@ -37,7 +37,6 @@ TTL: income/balancesheet/cashflow/peer_comparison = 7d, daily = 12h, capital_flo
   - balance sheet headline (总资产 / 资产负债率)
   - shareholder structure (前 10 大股东最新一期)
 - `yfinance_collect` for 美股 equivalents.
-- `peer_collect` — 4-6 same-industry comparables.
 
 **Public information layer:**
 - `bing_web_search` (or `google_web_search`) with at least 3 queries:
@@ -68,17 +67,7 @@ For each variable, record:
 4. Current reading (number from Phase 2, or "待补" if not yet collected)
 5. Threshold that would change the thesis (one line)
 
-### Phase 5 — Valuation + Risk
-**Valuation:**
-- 3-5 comparable companies from `peer_collect`.
-- Fill the `估值参考` table columns: 可比公司 / 代码 / PS / PE / EV/Sales / 备注.
-- Add a one-line summary above the table: "Trades at X PE vs peer median Y, premium/discount driven by …"
-
-**Risk (3-5 entries):**
-- Make each risk specific and actionable (not "macroeconomic risk"). Examples: monopoly probe outcome, top-3 customer concentration, key-person dependency, sector regulation, FX exposure.
-- Pair each risk with a leading signal that would detect it materializing.
-
-### Phase 6 — Reviewer self-check (single pass)
+### Phase 5 — Reviewer self-check (single pass)
 Validate the draft against this checklist. **Any ✗ → revise, do NOT write to disk:**
 
 | # | Check | Pass criterion |
@@ -88,10 +77,8 @@ Validate the draft against this checklist. **Any ✗ → revise, do NOT write to
 | 3 | No marketing copy | No "看好" / "前景广阔" / "龙头地位稳固" without backing numbers |
 | 4 | Variables are leading | Each tracking variable can in principle change *before* revenue/profit changes |
 | 5 | Variables are disaggregated | At least 3 of 5 are sub-segment / KPI level, not total-company aggregates |
-| 6 | Comps are real | All 3-5 comparable companies have actual PE/PS data (not "N/A" across the board) |
-| 7 | Risks are specific | Each risk names the company-specific mechanism, not generic macro |
 
-### Phase 7 — Write
+### Phase 6 — Write
 Compose the final markdown body matching the existing skeleton structure:
 
 ```markdown
@@ -112,24 +99,11 @@ Compose the final markdown body matching the existing skeleton structure:
    - 阈值：…
 
 2. …
-
-## 估值参考
-
-> Trades at {value} vs peer median {value}, {premium|discount} driven by {reason}
-
-| 可比公司 | 代码 | PS | PE | EV/Sales | 备注 |
-|---------|------|----|----|----------|------|
-| ...     | ...  | ...| ...| ...      | ...  |
-
-## 风险
-
-- **{risk_name}** — {mechanism}. 监测信号：{leading_signal}
-- …
 ```
 
 Then persist:
 1. Call `portfolio_update_key_drivers` with `{ stock_code, content }` — this **overwrites** the file atomically.
-2. Call `portfolio_append_note` with `{ stock_code, content: "Built investment thesis (key-drivers.md) — short/long logic, {n} tracking variables, {m} peer comps." }`.
+2. Call `portfolio_append_note` with `{ stock_code, content: "Built investment thesis (key-drivers.md) — short/long logic, {n} tracking variables." }`.
 
 ## Output
 
@@ -137,5 +111,6 @@ Markdown written to `{target_dir}/key-drivers.md`. A timestamped note appended t
 
 ## Notes
 
-- For **unlisted/private targets**, skip Tushare/yfinance/peer_collect; substitute with `bing_web_search` for funding rounds, customer testimonials, founder background, and any leaked unit-economics. Use the unlisted skeleton sections (单位经济与资金 / 退出路径与风险) in place of the listed valuation table.
+- Valuation comparables and risk analysis are intentionally **out of scope** for `key-drivers.md` — those live in `research/` reports produced by `stock-analyze` or ad-hoc analysis. Keep this file focused on thesis + tracking signals.
+- For **unlisted/private targets**, skip Tushare/yfinance/peer_collect; substitute with `bing_web_search` for funding rounds, customer testimonials, founder background, and any leaked unit-economics.
 - This skill complements `stock-analyze` (full 6-phase deep research report) — `key-drivers` is the lighter "thesis only" pipeline that runs in seconds to a minute, suitable as the first action after `portfolio_init_target`.
