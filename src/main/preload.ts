@@ -995,6 +995,35 @@ export interface ElectronAPI {
       content: string,
       encoding?: string,
     ) => Promise<{ success: boolean; error?: string }>;
+    /** Editor-grade text read — see implementation for shape. */
+    readTextFileSafe: (filePath: string) => Promise<{
+      success: boolean;
+      content?: string;
+      size?: number;
+      mtimeMs?: number;
+      bom?: boolean;
+      eol?: 'lf' | 'crlf' | 'mixed';
+      encoding?: 'utf-8';
+      error?: string;
+    }>;
+    /** Editor-grade text write — atomic, conflict-aware, EOL/BOM-preserving. */
+    writeTextFileSafe: (
+      filePath: string,
+      content: string,
+      options?: {
+        expectedMtimeMs?: number;
+        bom?: boolean;
+        eol?: 'lf' | 'crlf' | 'mixed';
+      },
+    ) => Promise<{
+      success: boolean;
+      filePath?: string;
+      mtimeMs?: number;
+      size?: number;
+      conflict?: boolean;
+      currentMtimeMs?: number;
+      error?: string;
+    }>;
     stat: (filePath: string) => Promise<{
       success: boolean;
       stats?: {
@@ -2054,6 +2083,28 @@ export const electronAPI: ElectronAPI = {
       ipcRenderer.invoke('fs:readFile', filePath, encoding),
     writeFile: (filePath: string, content: string, encoding?: string) =>
       ipcRenderer.invoke('fs:writeFile', filePath, content, encoding),
+    /**
+     * Editor-grade text read: returns content with BOM stripped + EOL
+     * normalized to LF, plus mtimeMs/bom/eol metadata for round-tripping
+     * on save. Refuses UTF-16. Use this from interactive editors instead
+     * of the raw `readFile`.
+     */
+    readTextFileSafe: (filePath: string) =>
+      ipcRenderer.invoke('fs:readTextFileSafe', filePath),
+    /**
+     * Editor-grade text write: atomic (tmp + rename), preserves BOM/EOL,
+     * suppresses the watcher echo, and rejects with `conflict: true`
+     * when the on-disk mtime no longer matches `expectedMtimeMs`.
+     */
+    writeTextFileSafe: (
+      filePath: string,
+      content: string,
+      options?: {
+        expectedMtimeMs?: number;
+        bom?: boolean;
+        eol?: 'lf' | 'crlf' | 'mixed';
+      }
+    ) => ipcRenderer.invoke('fs:writeTextFileSafe', filePath, content, options),
     stat: (filePath: string) => ipcRenderer.invoke('fs:stat', filePath),
     expandPath: (path: string) => ipcRenderer.invoke('fs:expandPath', path),
     selectFile: (options?: {

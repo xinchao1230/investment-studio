@@ -3125,7 +3125,15 @@ class ElectronApp {
         if (!fs.existsSync(dirPath)) {
           fs.mkdirSync(dirPath, { recursive: true });
         }
-        
+
+        // Suppress the watcher echo for our own write so the renderer's
+        // editor doesn't see its just-saved file as an external change.
+        try {
+          PortfolioWatcher.getInstance().suppressOnce(filePath);
+        } catch {
+          /* ignore — non-fatal */
+        }
+
         // Write file
         fs.writeFileSync(filePath, content, encoding || 'utf8');
         
@@ -3140,6 +3148,174 @@ class ElectronApp {
         };
       }
     });
+
+    // ----------------------------------------------------------------
+    // fs:readTextFileSafe / fs:writeTextFileSafe
+    // ----------------------------------------------------------------
+    // Editor-grade text I/O used by OverlayFileViewer (and any future
+    // ContentTabs editor). Differences vs plain fs:readFile/writeFile:
+    //
+    //   - Returns/accepts EOL ('lf' | 'crlf') and BOM (utf-8) markers
+    //     detected on read and re-applied on write, so editing doesn't
+    //     silently flip line endings or strip a BOM.
+    //   - Returns mtimeMs; writers pass `expectedMtimeMs` for optimistic
+    //     concurrency. If the on-disk mtime differs (external write
+    //     since the editor loaded), the save is rejected with
+    //     `conflict: true` so the UI can offer a merge / overwrite UX.
+    //   - Atomic write: data goes to `${path}.kosmos-tmp-${rand}` and
+    //     is renamed into place — a crash mid-write can't leave the
+    //     real file truncated.
+    //   - Suppresses the watcher echo so the editor's own save doesn't
+    //     come back as an external fs-changed event.
+    //
+    // Encoding: UTF-8 only (with optional BOM). Non-UTF-8 files
+    // (GBK / UTF-16) must be handled at a higher layer; we refuse to
+    // round-trip them through utf8 to avoid corruption.
+    // ----------------------------------------------------------------
+
+    ipcMain.handle('fs:readTextFileSafe', async (event, filePath: string) => {
+      try {
+        const stats = fs.statSync(filePath);
+        if (!stats.isFile()) {
+          return { success: false, error: 'Not a regular file' };
+        }
+        const buffer = fs.readFileSync(filePath);
+
+        // BOM detection (UTF-8 only — UTF-16 BOMs are intentionally not
+        // supported for editing in this batch and would surface here as
+        // garbled text, signaling the caller to refuse editing.)
+        let bom = false;
+        let start = 0;
+        if (buffer.length >= 3 && buffer[0] === 0xEF && buffer[1] === 0xBB && buffer[2] === 0xBF) {
+          bom = true;
+          start = 3;
+        }
+
+        // Reject obvious UTF-16 so the caller can fall back to read-only.
+        if (
+          buffer.length >= 2 &&
+          ((buffer[0] === 0xFF && buffer[1] === 0xFE) || (buffer[0] === 0xFE && buffer[1] === 0xFF))
+        ) {
+          return { success: false, error: 'UTF-16 encoding not supported for editing' };
+        }
+
+        const content = buffer.toString('utf8', start);
+
+        // EOL detection from the first ~64KB of text. 'mixed' falls back
+        // to LF on write (editor canonicalizes anyway).
+        let eol: 'lf' | 'crlf' | 'mixed' = 'lf';
+        const sample = content.length > 65536 ? content.slice(0, 65536) : content;
+        const crlfCount = (sample.match(/\r\n/g) || []).length;
+        const lfOnlyCount = (sample.match(/(^|[^\r])\n/g) || []).length;
+        if (crlfCount > 0 && lfOnlyCount === 0) eol = 'crlf';
+        else if (crlfCount > 0 && lfOnlyCount > 0) eol = 'mixed';
+        else eol = 'lf';
+
+        // Normalize CRLF -> LF so Monaco sees a canonical buffer. We'll
+        // restore the original EOL on write.
+        const normalized = eol === 'lf' ? content : content.replace(/\r\n/g, '\n');
+
+        return {
+          success: true,
+          content: normalized,
+          size: stats.size,
+          mtimeMs: stats.mtime.getTime(),
+          bom,
+          eol, // original on-disk EOL — caller passes back on write
+          encoding: 'utf-8' as const,
+        };
+      } catch (error) {
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : 'Unknown error',
+        };
+      }
+    });
+
+    ipcMain.handle(
+      'fs:writeTextFileSafe',
+      async (
+        event,
+        filePath: string,
+        content: string,
+        options?: {
+          expectedMtimeMs?: number;
+          bom?: boolean;
+          eol?: 'lf' | 'crlf' | 'mixed';
+        }
+      ) => {
+        try {
+          const dirPath = path.dirname(filePath);
+          if (!fs.existsSync(dirPath)) {
+            fs.mkdirSync(dirPath, { recursive: true });
+          }
+
+          // Conflict detection: only meaningful if the file already exists
+          // and the caller told us what mtime it loaded.
+          if (options?.expectedMtimeMs !== undefined && fs.existsSync(filePath)) {
+            const currentStats = fs.statSync(filePath);
+            const currentMtime = currentStats.mtime.getTime();
+            // 1ms tolerance — some filesystems (FAT) coarsen mtime.
+            if (Math.abs(currentMtime - options.expectedMtimeMs) > 1) {
+              return {
+                success: false,
+                conflict: true,
+                currentMtimeMs: currentMtime,
+                error: 'File changed on disk since it was loaded',
+              };
+            }
+          }
+
+          // Re-apply EOL. 'mixed' files normalize to LF on save.
+          const eol = options?.eol === 'crlf' ? 'crlf' : 'lf';
+          const body = eol === 'crlf' ? content.replace(/\r?\n/g, '\r\n') : content;
+
+          // Prepend BOM if the source had one.
+          const buffer = options?.bom
+            ? Buffer.concat([Buffer.from([0xEF, 0xBB, 0xBF]), Buffer.from(body, 'utf8')])
+            : Buffer.from(body, 'utf8');
+
+          // Atomic write: tmp -> rename. Tmp lives in the same directory
+          // so rename is guaranteed to be an atomic move on every OS.
+          const tmpName = `.${path.basename(filePath)}.kosmos-tmp-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+          const tmpPath = path.join(dirPath, tmpName);
+
+          // Suppress watcher echo for BOTH the final path (the real save)
+          // and the tmp path (chokidar would otherwise add+unlink it),
+          // before any disk activity so chokidar sees the suppression
+          // first.
+          try {
+            const w = PortfolioWatcher.getInstance();
+            w.suppressOnce(filePath);
+            w.suppressOnce(tmpPath);
+          } catch {
+            /* ignore — non-fatal */
+          }
+
+          fs.writeFileSync(tmpPath, buffer);
+          try {
+            fs.renameSync(tmpPath, filePath);
+          } catch (renameErr) {
+            // Cleanup tmp on failure so we don't leak.
+            try { fs.unlinkSync(tmpPath); } catch { /* ignore */ }
+            throw renameErr;
+          }
+
+          const finalStats = fs.statSync(filePath);
+          return {
+            success: true,
+            filePath,
+            mtimeMs: finalStats.mtime.getTime(),
+            size: finalStats.size,
+          };
+        } catch (error) {
+          return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Unknown error',
+          };
+        }
+      }
+    );
     
     ipcMain.handle('fs:stat', async (event, filePath: string) => {
       try {

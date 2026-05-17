@@ -112,6 +112,26 @@
  flex-shrink: 0;
 }
 
+/* Inline action button inside the save-error banner (e.g. "Reload from disk"
+ * shown when a save is rejected because the file changed on disk). */
+.file-viewer-save-error-action {
+ margin-left: auto;
+ padding: 4px 10px;
+ background: #dc2626;
+ color: white;
+ border: none;
+ border-radius: 4px;
+ font-size: 12px;
+ font-weight: 500;
+ cursor: pointer;
+ flex-shrink: 0;
+ transition: background 0.15s ease;
+}
+
+.file-viewer-save-error-action:hover {
+ background: #b91c1c;
+}
+
 /* ===========================
  Overlay Code Editor (Monaco Editor)
  =========================== */

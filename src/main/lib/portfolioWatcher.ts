@@ -49,6 +49,20 @@ export class PortfolioWatcher {
   private flushTimer: NodeJS.Timeout | null = null;
   private readonly DEBOUNCE_MS = 100;
 
+  /**
+   * Per-path one-shot suppression. When the main process is about to write
+   * a file itself (e.g. via fs:writeFile from the renderer's editor), it
+   * calls `suppressOnce(path)` immediately *before* the write. The
+   * subsequent chokidar add/change event for that path is dropped exactly
+   * once, preventing the editor's own save from echoing back through
+   * `kosmos:fs-changed` and clobbering the just-saved Monaco buffer.
+   *
+   * TTL guards against the case where the watcher never observes the
+   * event (e.g. write failed): the entry self-expires after `ttlMs`.
+   */
+  private suppress: Map<string, number> = new Map(); // absPath -> expiresAt (ms)
+  private readonly SUPPRESS_TTL_MS = 2000;
+
   static getInstance(): PortfolioWatcher {
     if (!PortfolioWatcher._instance) {
       PortfolioWatcher._instance = new PortfolioWatcher();
@@ -123,6 +137,7 @@ export class PortfolioWatcher {
       this.flushTimer = null;
     }
     this.buffer.clear();
+    this.suppress.clear();
 
     const w = this.watcher;
     this.watcher = null;
@@ -141,11 +156,46 @@ export class PortfolioWatcher {
   }
 
   private enqueue(absPath: string, kind: Kind): void {
+    // Self-write suppression: if main just wrote this file, drop the
+    // very next event for it (one-shot, expires after TTL).
+    const expiresAt = this.suppress.get(absPath);
+    if (expiresAt !== undefined) {
+      this.suppress.delete(absPath);
+      if (expiresAt > Date.now()) {
+        return;
+      }
+      // Expired entry — fall through and process normally.
+    }
+
     // Last-write-wins on the same path within the debounce window: a
     // create + immediate delete collapses to delete, etc.
     this.buffer.set(absPath, kind);
     if (this.flushTimer) return;
     this.flushTimer = setTimeout(() => this.flush(), this.DEBOUNCE_MS);
+  }
+
+  /**
+   * Suppress the next chokidar event for `absPath`. Call this right
+   * before performing a main-process write so the watcher's echo does
+   * not propagate back to the renderer and overwrite an active edit.
+   * No-op if the watcher is not running.
+   */
+  suppressOnce(absPath: string, ttlMs: number = this.SUPPRESS_TTL_MS): void {
+    if (!this.watcher) return;
+    try {
+      const normalized = path.resolve(absPath);
+      this.suppress.set(normalized, Date.now() + ttlMs);
+
+      // Opportunistic GC of stale entries (cheap; bounded buffer).
+      if (this.suppress.size > 64) {
+        const now = Date.now();
+        for (const [p, exp] of this.suppress) {
+          if (exp <= now) this.suppress.delete(p);
+        }
+      }
+    } catch {
+      /* ignore — non-fatal */
+    }
   }
 
   private flush(): void {

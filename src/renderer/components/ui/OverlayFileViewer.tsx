@@ -547,6 +547,21 @@ export const OverlayFileViewer: React.FC<OverlayFileViewerProps> = ({
   const monacoContainerRef = useRef<HTMLDivElement>(null);
   /** Baseline content for isDirty comparison (last saved value or initial value) */
   const savedContentRef = useRef<string>('');
+  /**
+   * File metadata captured on load and round-tripped on save:
+   *  - mtimeMs: passed back as expectedMtimeMs so the main process can
+   *    reject the save with `conflict:true` if the file changed on disk
+   *    since we loaded it (e.g. an MCP write).
+   *  - bom: re-applied on write so we don't silently strip the BOM.
+   *  - eol: re-applied on write so CRLF files don't flip to LF.
+   *  Updated after every successful save.
+   */
+  const fileMetaRef = useRef<{
+    mtimeMs: number;
+    bom: boolean;
+    eol: 'lf' | 'crlf' | 'mixed';
+  } | null>(null);
+  const [conflictDetected, setConflictDetected] = useState(false);
   const iframeRef = useRef<HTMLIFrameElement>(null);
   // Track the currently loaded file identifier for synchronous file change detection
   const loadedFileKeyRef = useRef<string | null>(null);
@@ -608,6 +623,8 @@ export const OverlayFileViewer: React.FC<OverlayFileViewerProps> = ({
       setIsEditing(false);
       setIsDirty(false);
       setSaveError(null);
+      setConflictDetected(false);
+      fileMetaRef.current = null;
       loadedFileKeyRef.current = null;
       // Destroy Monaco editor
       if (monacoEditorRef.current) {
@@ -626,6 +643,8 @@ export const OverlayFileViewer: React.FC<OverlayFileViewerProps> = ({
     setIsEditing(false);
     setIsDirty(false);
     setSaveError(null);
+    setConflictDetected(false);
+    fileMetaRef.current = null;
 
     // text / json / code / markdown / html / csv all need text content loading
     if (category === 'text' || category === 'code' || category === 'json' || category === 'markdown' || category === 'html' || category === 'csv') {
@@ -633,26 +652,70 @@ export const OverlayFileViewer: React.FC<OverlayFileViewerProps> = ({
       setViewMode('render'); // Reset view mode
 
       if (isLocalFile(file.url)) {
-        // Local file: read via electronAPI
+        // Local file: read via the editor-grade IPC so we get back
+        // {mtimeMs, bom, eol} for round-tripping on save. Fall back to
+        // the legacy raw read if the safe variant isn't available
+        // (older builds / unexpected error paths).
         const localPath = getLocalPath(file.url);
-        window.electronAPI?.fs
-          ?.readFile(localPath, 'utf-8')
-          .then((result) => {
-            if (cancelled) return;
-            if (result.success && result.content !== undefined) {
-              setTextContent(result.content);
-              loadedFileKeyRef.current = fileKey;
-            } else {
-              setLoadError(result.error || 'Failed to load file');
-            }
-            setIsLoading(false);
-          })
-          .catch((err) => {
-            if (cancelled) return;
-            console.error('[OverlayFileViewer] Failed to load local text:', err);
-            setLoadError('Failed to load file');
-            setIsLoading(false);
-          });
+        const api: any = window.electronAPI?.fs;
+        const readSafe: ((p: string) => Promise<any>) | undefined = api?.readTextFileSafe;
+
+        // Legacy fallback path — preserves pre-Phase-4 behavior so any
+        // failure of the new safe reader never regresses preview/edit.
+        const loadViaLegacy = (priorError?: string) => {
+          return (api?.readFile(localPath, 'utf-8') as Promise<any> | undefined)
+            ?.then((result: any) => {
+              if (cancelled) return;
+              if (result?.success && result.content !== undefined) {
+                setTextContent(result.content);
+                loadedFileKeyRef.current = fileKey;
+                // fileMetaRef stays null — save() will skip the mtime
+                // conflict check but still go through the atomic writer.
+              } else {
+                setLoadError(result?.error || priorError || 'Failed to load file');
+              }
+              setIsLoading(false);
+            })
+            .catch((err: unknown) => {
+              if (cancelled) return;
+              console.error('[OverlayFileViewer] Legacy readFile failed:', err);
+              setLoadError('Failed to load file');
+              setIsLoading(false);
+            });
+        };
+
+        if (readSafe) {
+          readSafe(localPath)
+            .then((safe: any) => {
+              if (cancelled) return;
+              if (safe && safe.success) {
+                setTextContent(safe.content as string);
+                fileMetaRef.current = {
+                  mtimeMs: safe.mtimeMs as number,
+                  bom: !!safe.bom,
+                  eol: (safe.eol as 'lf' | 'crlf' | 'mixed') || 'lf',
+                };
+                loadedFileKeyRef.current = fileKey;
+                setIsLoading(false);
+                return;
+              }
+              // safe.success === false (e.g. UTF-16). Fall back to the
+              // legacy raw read so the file at least previews.
+              return loadViaLegacy(safe?.error);
+            })
+            .catch((err: unknown) => {
+              if (cancelled) return;
+              console.warn(
+                '[OverlayFileViewer] readTextFileSafe threw; falling back to readFile:',
+                err
+              );
+              // IPC threw — fall through rather than surfacing as a load
+              // error, so we never regress vs the pre-Phase-4 behavior.
+              loadViaLegacy();
+            });
+        } else {
+          loadViaLegacy();
+        }
       } else {
         // Non-local file (http, https, blob, data, etc.): load via fetch
         fetch(file.url)
@@ -799,13 +862,45 @@ export const OverlayFileViewer: React.FC<OverlayFileViewerProps> = ({
     const content = monacoEditorRef.current?.getValue() ?? '';
     setIsSaving(true);
     setSaveError(null);
+    setConflictDetected(false);
     try {
       const localPath = getLocalPath(file.url);
-      const result = await window.electronAPI?.fs?.writeFile(localPath, content, 'utf-8');
+      const api: any = window.electronAPI?.fs;
+      const meta = fileMetaRef.current;
+
+      // Prefer the safe writer (atomic + conflict detection + EOL/BOM
+      // round-trip + watcher echo suppression). Fall back only if it's
+      // not exposed (older preload) and we have no captured metadata.
+      let result: any;
+      if (api?.writeTextFileSafe && meta) {
+        result = await api.writeTextFileSafe(localPath, content, {
+          expectedMtimeMs: meta.mtimeMs,
+          bom: meta.bom,
+          eol: meta.eol,
+        });
+      } else if (api?.writeTextFileSafe) {
+        // No metadata (legacy load path) — skip conflict check but still
+        // benefit from atomic write.
+        result = await api.writeTextFileSafe(localPath, content, {});
+      } else {
+        result = await api?.writeFile(localPath, content, 'utf-8');
+      }
+
       if (result?.success) {
         setTextContent(content);
         savedContentRef.current = content;
         setIsDirty(false);
+        // Update the metadata baseline for the next save's conflict check.
+        if (result.mtimeMs !== undefined && meta) {
+          fileMetaRef.current = { ...meta, mtimeMs: result.mtimeMs };
+        }
+      } else if (result?.conflict) {
+        // File was modified on disk by something else (typically an MCP
+        // tool) since we loaded it. Tell the user; don't overwrite.
+        setConflictDetected(true);
+        setSaveError(
+          'This file was changed on disk by another process. Reload to see the new version (your edits will be lost) or cancel and copy your changes out manually.'
+        );
       } else {
         setSaveError(result?.error || 'Failed to save file');
       }
@@ -816,6 +911,41 @@ export const OverlayFileViewer: React.FC<OverlayFileViewerProps> = ({
       setIsSaving(false);
     }
   }, [file, isEditable, isDirty]);
+
+  /**
+   * Discard the active edit and reload the on-disk version. Used to
+   * resolve a save conflict — the user accepts losing their unsaved
+   * changes in exchange for the latest on-disk content.
+   */
+  const handleReloadFromDisk = useCallback(async () => {
+    if (!file || !isLocalFile(file.url)) return;
+    const api: any = window.electronAPI?.fs;
+    if (!api?.readTextFileSafe) return;
+    try {
+      const localPath = getLocalPath(file.url);
+      const safe = await api.readTextFileSafe(localPath);
+      if (!safe?.success) {
+        setSaveError(safe?.error || 'Failed to reload file');
+        return;
+      }
+      setTextContent(safe.content as string);
+      fileMetaRef.current = {
+        mtimeMs: safe.mtimeMs as number,
+        bom: !!safe.bom,
+        eol: (safe.eol as 'lf' | 'crlf' | 'mixed') || 'lf',
+      };
+      savedContentRef.current = safe.content as string;
+      if (monacoEditorRef.current) {
+        monacoEditorRef.current.setValue(safe.content as string);
+      }
+      setIsDirty(false);
+      setConflictDetected(false);
+      setSaveError(null);
+    } catch (err) {
+      console.error('[OverlayFileViewer] Failed to reload from disk:', err);
+      setSaveError('Failed to reload file');
+    }
+  }, [file]);
 
   // Keyboard events
   useEffect(() => {
@@ -960,6 +1090,16 @@ export const OverlayFileViewer: React.FC<OverlayFileViewerProps> = ({
             <div className="file-viewer-save-error">
               <AlertTriangle size={14} />
               <span>{saveError}</span>
+              {conflictDetected && (
+                <button
+                  type="button"
+                  className="file-viewer-save-error-action"
+                  onClick={handleReloadFromDisk}
+                  title="Discard your edits and load the latest version from disk"
+                >
+                  Reload from disk
+                </button>
+              )}
             </div>
           )}
           <div
