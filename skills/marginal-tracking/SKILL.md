@@ -19,6 +19,11 @@ Read the target's `tracking.md` to understand:
 Read `key-drivers.md` to know which metrics matter.
 
 ### Step 2: Fetch Latest Data
+**Cache first.** Follow `skills/_cache-policy.md`:
+- For each endpoint, read `{target_dir}/data-cache/tushare/{endpoint}.meta.json`. Within TTL (daily = 12h; shareholder = 30d; financials = 7d) → reuse the CSV, skip the `*_collect` call.
+- On cache miss, call the collect tool with `out_dir = {target_dir}/data-cache/tushare/` and write the sibling `meta.json`.
+- For marginal tracking, **prefer cache for shareholder/financials but always force-refresh `daily`** so price comparison reflects the latest close.
+
 Use Tushare to get latest available data:
 - Latest daily quote (price, volume, turnover)
 - Latest financial data (if new report published)

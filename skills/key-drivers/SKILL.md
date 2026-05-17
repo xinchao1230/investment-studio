@@ -23,6 +23,14 @@ description: "Build a full investment thesis (短期/长期逻辑 + 3-5 leading 
 ### Phase 2 — Collect (parallel)
 Run these in parallel. Skip any that error out, but record the gap.
 
+**Cache first.** Before any `*_collect` call, follow `skills/_cache-policy.md`:
+for each endpoint, read `{target_dir}/data-cache/{source}/{endpoint}.meta.json`
+and reuse the existing CSV when fresh (within TTL). On cache miss, call the
+collect tool with `out_dir = {target_dir}/data-cache/{source}/` and immediately
+write the sibling `meta.json`. Force refresh on "最新数据 / 刷新 / 重新拉取".
+
+TTL: income/balancesheet/cashflow/peer_comparison = 7d, daily = 12h, capital_flow = 6h, shareholder = 30d.
+
 **Financial baseline:**
 - `tushare_collect` for A 股 / 港股 — last 3 fiscal years + latest quarter:
   - income statement (营收 / 毛利率 / 净利润 / 经营现金流)

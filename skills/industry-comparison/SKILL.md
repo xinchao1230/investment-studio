@@ -17,6 +17,11 @@ If industry name: use `pro.stock_basic(industry='...')` to get peer list.
 If stock codes provided: use those directly.
 
 ### Step 2: Fetch Comparable Data
+**Cache first.** Workspace-scoped: cache root is `{workspace_dir}/_data-cache/tushare/{symbol}/`. Follow `skills/_cache-policy.md`:
+- For each peer + each endpoint, read `{workspace_dir}/_data-cache/tushare/{symbol}/{endpoint}.meta.json`. Within TTL (financials = 7d; daily = 12h) → reuse the CSV, skip the `*_collect` call.
+- On cache miss, call `tushare_collect` / `peer_collect` with `out_dir = {workspace_dir}/_data-cache/tushare/{symbol}/` and write the sibling `meta.json`.
+- Force refresh when the user says "最新数据 / 刷新 / 重新拉取".
+
 For each company, fetch:
 - Market cap
 - PE (TTM), PB, PS

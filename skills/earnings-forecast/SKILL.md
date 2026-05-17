@@ -13,6 +13,12 @@ license: MIT
 
 ## Workflow
 
+### Step 0: Check Cache (MANDATORY)
+Before any `*_collect` call, follow `skills/_cache-policy.md`:
+- Read `{target_dir}/data-cache/tushare/{endpoint}.meta.json` for each endpoint (income / balancesheet / cashflow). Within TTL (7d for financials) → reuse the CSV, skip Step 1's `*_collect` for that endpoint.
+- On cache miss, call the collect tool with `out_dir = {target_dir}/data-cache/tushare/` and write the sibling `meta.json` after success.
+- Force refresh when the user says "最新数据 / 刷新 / 重新拉取".
+
 ### Step 1: Fetch Historical Data
 Use Tushare to get 3-5 years of quarterly financial data:
 - Revenue breakdown (if available via segments)

@@ -14,6 +14,12 @@ license: MIT
 
 This is a multi-step deep analysis. Each section can be executed by a separate agent in parallel.
 
+### Step 0: Check Cache (MANDATORY)
+Before any Tushare call, follow `skills/_cache-policy.md`:
+- For each endpoint (income / balancesheet / cashflow / peer_comparison / daily), read `{target_dir}/data-cache/tushare/{endpoint}.meta.json`. Within TTL (financials/peer = 7d; daily = 12h) → reuse the CSV.
+- On cache miss, call the relevant collect tool with `out_dir = {target_dir}/data-cache/tushare/` and write the sibling `meta.json`.
+- Force refresh when the user says "最新数据 / 刷新 / 重新拉取".
+
 ### Step 1: Company Overview
 Fetch via Tushare:
 - Company basic info: `pro.stock_basic(ts_code='...')`

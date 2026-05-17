@@ -23,6 +23,12 @@ df = pro.stock_basic(list_status='L')
 ```
 
 ### Step 2: Fetch Key Metrics
+**Cache first.** Workspace-scoped: cache root is `{workspace_dir}/_data-cache/tushare/{symbol}/`. Follow `skills/_cache-policy.md`:
+- For each stock + each endpoint, read `{workspace_dir}/_data-cache/tushare/{symbol}/{endpoint}.meta.json`. Within TTL (financials = 7d; daily = 12h) → reuse the CSV, skip the `*_collect` call.
+- On cache miss, call `tushare_collect` with `out_dir = {workspace_dir}/_data-cache/tushare/{symbol}/` and write the sibling `meta.json`.
+- Force refresh when the user says "最新数据 / 刷新 / 重新拉取".
+- **Universe scan**: when filtering the full A-share list by criteria, batch-fetch and cache each stock once — subsequent screening passes reuse the cache freely.
+
 For each stock:
 - Price, market cap
 - PE, PB, PS (TTM)

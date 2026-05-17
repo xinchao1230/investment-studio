@@ -43,35 +43,43 @@ version: 1.0.0
 
 ## 3. Phase 1 — 数据采集
 
-按顺序调用以下工具，产出 `raw_data/` 目录：
+**Cache 优先：** 在调用任何 `*_collect` 工具之前，先按 `skills/_cache-policy.md` 检查 `{targetDir}/data-cache/` 是否已有新鲜数据：
+
+1. 对每个 endpoint 读 `{targetDir}/data-cache/{source}/{endpoint}.meta.json`，命中（`fetched_at + ttl_days > now`）→ 直接复用现有 CSV，**跳过**该 endpoint 的 `*_collect` 调用。
+2. Cache miss 时，将下述工具的 `out_dir` 设为 `{targetDir}/data-cache/{source}/`（如 `tushare/`、`yfinance/`），写完 CSV 后立即 `create_file` 写同名 `{endpoint}.meta.json`。
+3. **Force refresh：** 用户说"最新数据 / 刷新 / 重新拉取 / force refresh" → 跳过缓存判定，重新拉取并覆盖。
+
+成功后，把 cache 路径**符号链接 / 复制**到 `{targetDir}/research/stock-analyze/{date}/raw_data/`（保留以往报告与 raw 数据强绑定的目录约定）。
+
+TTL 速查：income / balancesheet / cashflow / peer_comparison = 7d；daily = 12h；capital_flow = 6h；shareholder = 30d。
 
 ### 3.1 `tushare_collect`（A股必选）
 
-- **输入：** `ts_code`（如 `600036.SH`），`out_dir`（`{targetDir}/research/stock-analyze/{date}/raw_data`）
-- **产出：** `income.csv`, `balance.csv`, `cashflow.csv`, `daily.csv`, `basic_info.json`
+- **输入：** `ts_code`（如 `600036.SH`），`out_dir`（`{targetDir}/data-cache/tushare/`）
+- **产出：** `income.csv`, `balancesheet.csv`, `cashflow.csv`, `daily.csv`, `basic_info.json`
 - **错误处理：** `retryable: true` → 重试 1 次；不可重试 → 记录缺失，Phase 2 降级运行
 
 ### 3.2 `yfinance_collect`（仅港股/美股）
 
-- **输入：** `symbol`（如 `AAPL`），`out_dir`，`period`（默认 `5y`）
-- **产出：** `yf_income.csv`, `yf_balance.csv`, `yf_cashflow.csv`, `yf_daily.csv`
+- **输入：** `symbol`（如 `AAPL`），`out_dir`（`{targetDir}/data-cache/yfinance/`），`period`（默认 `5y`）
+- **产出：** `income_annual.csv`, `balance_annual.csv`, `cashflow_annual.csv`, `history.csv`
 - **错误处理：** `retryable: true` → 重试 1 次；失败 → 跳过，标注 `[DATA_GAP: yfinance unavailable]`
 
 ### 3.3 `peer_collect`
 
-- **输入：** `ts_code`，`peer_codes`（同行业 3-5 家），`out_dir`
+- **输入：** `ts_code`，`peer_codes`（同行业 3-5 家），`out_dir`（`{targetDir}/data-cache/tushare/`）
 - **产出：** `peer_comparison.csv`
 - **错误处理：** `retryable: true` → 重试 1 次；失败 → 跳过 peer 对比，Phase 4 估值章节标注 `[PEER_DATA_MISSING]`
 
 ### 3.4 `capital_flow`
 
-- **输入：** `symbol`（A股代码，如 `600036`），`out_dir`
+- **输入：** `symbol`（A股代码，如 `600036`），`out_dir`（`{targetDir}/data-cache/tushare/`）
 - **产出：** `capital_flow.csv`
 - **错误处理：** `retryable: true` → 重试 1 次；失败 → 跳过，技术面章节不含资金流分析
 
 ### 3.5 `pdf_download_extract`（可选 — 年报 PDF）
 
-- **输入：** `url`（年报下载链接），`out_dir`
+- **输入：** `url`（年报下载链接），`out_dir`（`{targetDir}/research/stock-analyze/{date}/raw_data/`，PDF 不进 cache）
 - **产出：** `annual_report.txt`, `annual_tables.json`
 - **错误处理：** 失败 → 跳过，标注 `[PDF_UNAVAILABLE]`，不影响后续流程
 
