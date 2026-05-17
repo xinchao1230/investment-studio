@@ -1401,80 +1401,46 @@ export class MCPClientManager {
 
   /**
    * Perform reconnect operation
-   * 🔧 Fix: If no existing client instance, perform a full connect operation to recreate the instance
+   *
+   * 🔧 Always recreate the client so config changes (KOSMOS placeholders in
+   * `env`, `command`, `args`, `url`) are picked up on the next spawn.
+   * Reusing the cached `VscMcpClient` would respawn the child process with
+   * the env/args captured at the *original* construction time — silently
+   * dropping anything the user changed after first connect (e.g. saving a
+   * Tushare token in Settings).
+   *
+   * Flow: cleanup existing client (if any) → drop from maps → `_performConnect`,
+   * which re-reads the latest config from ProfileCacheManager and re-runs
+   * placeholder substitution.
    */
   private async _performReconnect(serverName: string): Promise<void> {
-
     if (!this.currentUserAlias) {
       throw new Error('Manager not initialized with user alias');
     }
 
-    // Check if client exists
     const client = this.mcpClients.get(serverName);
-    
-    if (!client) {
-      // 🆕 No existing client instance, perform a full connect operation to recreate the instance and connect
-      // This solves the issue where reconnect fails due to no client instance in error state
-      await this._performConnect(serverName);
-      return;
-    }
-
-    // 🔧 Existing client instance found, attempt reconnection directly
-    // 🆕 Refactor: Use internal methods to update state
-    this._updateServerStatus(serverName, 'connecting');
-
-    try {
-      // Reuse existing client, call connectToServer() to reconnect
-      const result = await client.connectToServer();
-      
-      if (result === 'connected') {
-        // Get tools
-        const tools = await client.getTools();
-        
-        if (tools && tools.length > 0) {
-          // Success
-          // 🔧 Important: Update toolToServerMap first, then set status='connected'
-          this._updateToolMappings(serverName, tools);
-          
-          // 🆕 Refactor: Use internal methods to update runtime state
-          this._updateServerTools(serverName, tools);
-          this._updateServerError(serverName, null);
-          this._updateServerStatus(serverName, 'connected');
-          
-        } else {
-          // No tools
-          this._removeToolMappings(serverName);
-          const error = new Error('Reconnection successful but no tools returned from server');
-          // 🆕 Refactor: Use internal methods to update runtime state
-          this._updateServerError(serverName, error);
-          this._updateServerStatus(serverName, 'error');
-          this._updateServerTools(serverName, []); // Clear tools list for error state
-          
-          // Don't throw error - reconnect operation completed, just in error state          return;
-        }
-      } else {
-        // Connection failed
-        const error = result instanceof Error ? result : new Error('Reconnection failed');
-        // 🆕 Refactor: Use internal methods to update runtime state
-        this._updateServerError(serverName, error);
-        this._updateServerTools(serverName, []); // Clear tools list for error state
-        this._updateServerStatus(serverName, 'error');
-        
-        // Don't throw error - reconnect operation completed, just in error state
-        return;
-      }
-    } catch (error) {
-      // Exception occurred
+    if (client) {
+      this._updateServerStatus(serverName, 'disconnecting');
       this._removeToolMappings(serverName);
-      const err = error instanceof Error ? error : new Error('Reconnect failed');
-      // 🆕 Refactor: Use internal methods to update runtime state
-      this._updateServerError(serverName, err);
-      this._updateServerTools(serverName, []); // Clear tools list for error state
-      this._updateServerStatus(serverName, 'error');
-      
-      // Don't throw error - reconnect operation completed, just in error state
-      return;
+      try {
+        await client.cleanup();
+      } catch (err) {
+        // Cleanup failure should not block reconnect — log and move on.
+        const msg = err instanceof Error ? err.message : String(err);
+        advancedLogger?.warn(
+          `[MCPClientManager] cleanup() failed during reconnect for "${serverName}": ${msg}`,
+          '_performReconnect',
+          { serverName }
+        );
+      }
+      this.mcpClients.delete(serverName);
+      this.clientImplementations.delete(serverName);
+      this._updateServerTools(serverName, []);
     }
+
+    // _performConnect handles all status/error/tool updates and error states
+    // (sets 'error' status on failure, never throws past the caller).
+    await this._performConnect(serverName);
   }
 
   /**
