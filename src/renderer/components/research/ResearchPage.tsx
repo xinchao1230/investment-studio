@@ -955,6 +955,20 @@ export const ResearchPage: React.FC = () => {
     [findOwningCode, setTabsByCode],
   );
 
+  // In-editor save → refresh our content cache directly. The fs watcher
+  // echo is intentionally suppressed by writeTextFileSafe for our own
+  // writes, so we can't rely on the watcher to invalidate the cache here.
+  const handleTabSaved = useCallback(
+    (_tabId: string, absPath: string, content: string) => {
+      fileContentCacheRef.current.set(absPath, {
+        content,
+        mtime: Date.now(),
+      });
+      setContentCacheVersion((v) => v + 1);
+    },
+    [],
+  );
+
   // Derived: tabs visible in the center pane (subset for the selected target).
   // Reads from fileContentCacheRef; `contentCacheVersion` is in the deps so
   // we re-derive whenever an async content read completes.
@@ -1192,6 +1206,7 @@ export const ResearchPage: React.FC = () => {
           activeTabId={activeTabId}
           onTabSelect={handleTabSelect}
           onTabClose={handleTabClose}
+          onTabSaved={handleTabSaved}
         />
       )}
       {!rightCollapsed && activeMode === 'workspace' && (

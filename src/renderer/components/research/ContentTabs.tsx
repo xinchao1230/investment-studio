@@ -32,6 +32,10 @@ interface ContentTabsProps {
   activeTabId: string;
   onTabSelect: (id: string) => void;
   onTabClose: (id: string) => void;
+  /** Notified after a successful in-editor save so the parent can
+   *  refresh its file-content cache (the fs watcher echo is suppressed
+   *  for our own writes). */
+  onTabSaved?: (tabId: string, filePath: string, content: string) => void;
 }
 
 const STATUS_MAP: Record<string, string> = {
@@ -78,6 +82,7 @@ export const ContentTabs: React.FC<ContentTabsProps> = ({
   activeTabId,
   onTabSelect,
   onTabClose,
+  onTabSaved,
 }) => {
   const activeTab = tabs.find((t) => t.id === activeTabId);
   const { isDirty } = useDirtyEditors();
@@ -198,6 +203,34 @@ export const ContentTabs: React.FC<ContentTabsProps> = ({
     () => tabs.filter((t) => editingTabs.has(t.id)),
     [tabs, editingTabs],
   );
+
+  // Restore focus to the active edit pane after tab switches AND after
+  // entering edit mode. When the active tab's container goes from
+  // display:none → display:block, the browser silently drops focus
+  // from any element inside it (the textarea Monaco uses internally).
+  // Subsequent mouse clicks DO try to re-focus, but in our renderer
+  // something in the tree wins the focus race intermittently, so the
+  // editor visually shows a cursor without actually receiving keys.
+  // The user can "fix" it by alt-tabbing out and back — that's the
+  // browser's focus-recovery on window activation. Doing the focus
+  // ourselves on tab change makes it reliable.
+  //
+  // We use a microtask + rAF so the layout flip from display:none →
+  // display:block has happened before we focus.
+  useEffect(() => {
+    if (!activeTabId) return;
+    if (!editingTabs.has(activeTabId)) return;
+    let raf = 0;
+    const t = window.setTimeout(() => {
+      raf = requestAnimationFrame(() => {
+        paneRefs.current.get(activeTabId)?.focus();
+      });
+    }, 0);
+    return () => {
+      window.clearTimeout(t);
+      if (raf) cancelAnimationFrame(raf);
+    };
+  }, [activeTabId, editingTabs]);
 
   if (tabs.length === 0) {
     return (
@@ -324,6 +357,7 @@ export const ContentTabs: React.FC<ContentTabsProps> = ({
               filePath={tab.filePath}
               language={languageForTab(tab)}
               onDirtyChange={handleDirtyChange(tab.id)}
+              onSaved={(fp, content) => onTabSaved?.(tab.id, fp, content)}
             />
           </div>
         ))}

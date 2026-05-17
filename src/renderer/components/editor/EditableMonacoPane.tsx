@@ -32,7 +32,6 @@ import React, {
   useEffect,
   useImperativeHandle,
   useRef,
-  useState,
 } from 'react';
 import type * as monaco from 'monaco-editor';
 import { AlertTriangle, RotateCw } from 'lucide-react';
@@ -48,6 +47,10 @@ export interface EditableMonacoPaneHandle {
   isDirty(): boolean;
   getContent(): string;
   reloadFromDisk(): Promise<void>;
+  /** Focus the underlying Monaco editor (its hidden textarea). Safe
+   *  to call even before the async mount completes — it's a no-op
+   *  until the editor exists. */
+  focus(): void;
 }
 
 export interface EditableMonacoPaneProps {
@@ -57,6 +60,11 @@ export interface EditableMonacoPaneProps {
   language?: string;
   /** Called every time isDirty changes — parent uses this to drive a Save button. */
   onDirtyChange?(dirty: boolean): void;
+  /** Called after a successful save with the just-written content so
+   *  upstream caches (e.g. ResearchPage's fileContentCacheRef) can
+   *  refresh without waiting for a watcher echo (which is suppressed
+   *  for our own writes). */
+  onSaved?(filePath: string, content: string): void;
   /** Force read-only regardless of file status. */
   readOnly?: boolean;
   className?: string;
@@ -66,23 +74,18 @@ const EditableMonacoPane = forwardRef<
   EditableMonacoPaneHandle,
   EditableMonacoPaneProps
 >(function EditableMonacoPane(
-  { filePath, language = 'plaintext', onDirtyChange, readOnly = false, className },
+  { filePath, language = 'plaintext', onDirtyChange, onSaved, readOnly = false, className },
   ref,
 ) {
   const file = useEditableTextFile({ filePath });
+  const onSavedRef = useRef(onSaved);
+  onSavedRef.current = onSaved;
   const containerRef = useRef<HTMLDivElement | null>(null);
   const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null);
   const changeDisposableRef = useRef<{ dispose(): void } | null>(null);
-  // Forces a re-render once Monaco has finished its async mount so
-  // the readOnly-sync effect below can grab editorRef.current.
-  // Without this, the editor would stay in whatever readOnly state it
-  // was created with — the readOnly effect runs in render order and
-  // would have already early-returned (editorRef.current=null) by the
-  // time the async import resolves.
-  const [editorEpoch, setEditorEpoch] = useState(0);
-  // We update `editor.setValue` reactively from `file.content`. To
-  // avoid re-firing the change listener (and incorrectly marking the
-  // buffer dirty against itself), gate the listener with this flag.
+  // Set true around programmatic editor.setValue() (e.g. reloadFromDisk)
+  // so the onDidChangeModelContent listener doesn't re-flag the buffer
+  // as dirty against itself.
   const suppressNextChangeRef = useRef(false);
   // `file.save` / etc. change identity on every render; mirror in a
   // ref so the keydown listener captures the latest without
@@ -96,12 +99,36 @@ const EditableMonacoPane = forwardRef<
   useImperativeHandle(
     ref,
     () => ({
-      save: () => fileApiRef.current.save(),
+      save: async () => {
+        const result = await fileApiRef.current.save();
+        if (result.ok && filePath && onSavedRef.current) {
+          try {
+            onSavedRef.current(filePath, fileApiRef.current.content ?? '');
+          } catch (e) {
+            // eslint-disable-next-line no-console
+            console.warn('[EditableMonacoPane] onSaved callback threw', e);
+          }
+        }
+        return result;
+      },
       isDirty: () => fileApiRef.current.isDirty,
       getContent: () => fileApiRef.current.content ?? '',
-      reloadFromDisk: () => fileApiRef.current.reloadFromDisk(),
+      reloadFromDisk: async () => {
+        await fileApiRef.current.reloadFromDisk();
+        // After reload, the hook's content has updated. Push it into
+        // the live editor so the user sees the on-disk version.
+        const editor = editorRef.current;
+        const next = fileApiRef.current.content;
+        if (editor && next !== null && editor.getValue() !== next) {
+          suppressNextChangeRef.current = true;
+          editor.setValue(next);
+        }
+      },
+      focus: () => {
+        editorRef.current?.focus();
+      },
     }),
-    [],
+    [filePath],
   );
 
   // -----------------------------------------------------------------
@@ -142,14 +169,6 @@ const EditableMonacoPane = forwardRef<
     let disposed = false;
     const initialValue = file.content ?? '';
     const initialReadOnly = initialReadOnlyAtMount;
-    // eslint-disable-next-line no-console
-    console.log('[EditableMonacoPane] mounting Monaco', {
-      filePath,
-      status: file.status,
-      canEdit: file.canEdit,
-      initialReadOnly,
-      contentLen: initialValue.length,
-    });
 
     import(/* webpackChunkName: "monaco-editor" */ 'monaco-editor').then(
       (monacoModule) => {
@@ -186,14 +205,8 @@ const EditableMonacoPane = forwardRef<
           tabCompletion: 'off',
           wordBasedSuggestions: 'off',
         });
-        // eslint-disable-next-line no-console
-        console.log('[EditableMonacoPane] Monaco created', {
-          filePath,
-          readOnlyApplied: editor.getOption(monacoModule.editor.EditorOption.readOnly),
-        });
 
         editorRef.current = editor;
-        setEditorEpoch((n) => n + 1);
 
         changeDisposableRef.current = editor.onDidChangeModelContent(() => {
           if (suppressNextChangeRef.current) {
@@ -219,56 +232,14 @@ const EditableMonacoPane = forwardRef<
       editorRef.current?.dispose();
       editorRef.current = null;
     };
-    // We deliberately depend only on filePath + language + contentReady:
+    // We deliberately depend only on filePath + language + statusSettled:
     // switching files / language remounts Monaco; content arriving for
-    // the first time triggers the initial mount. Subsequent content
-    // updates (typing, reloadFromDisk) are pushed via setValue in the
-    // next effect.
+    // the first time triggers the initial mount. We do NOT depend on
+    // file.content (typing must NOT remount) or on canEdit/status
+    // (those are captured at create-time; transitions only happen
+    // pre-mount in normal flow).
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filePath, language, statusSettled]);
-
-  // -----------------------------------------------------------------
-  // Apply external content updates (e.g. reloadFromDisk) to the live
-  // editor without re-creating it. Only fires when the buffer
-  // diverges from what Monaco currently shows.
-  // -----------------------------------------------------------------
-  useEffect(() => {
-    const editor = editorRef.current;
-    if (!editor) return;
-    if (file.content === null) return;
-    if (editor.getValue() === file.content) return;
-    suppressNextChangeRef.current = true;
-    editor.setValue(file.content);
-  }, [file.content]);
-
-  // -----------------------------------------------------------------
-  // Read-only / unsupported mode → flip Monaco readOnly without
-  // re-mounting. Cheap and reactive.
-  // -----------------------------------------------------------------
-  useEffect(() => {
-    const editor = editorRef.current;
-    if (!editor) return;
-    const ro = readOnly || file.status !== 'ready' || !file.canEdit;
-    // eslint-disable-next-line no-console
-    console.log('[EditableMonacoPane] updateOptions readOnly', {
-      filePath,
-      ro,
-      status: file.status,
-      canEdit: file.canEdit,
-      propReadOnly: readOnly,
-      editorEpoch,
-    });
-    editor.updateOptions({ readOnly: ro });
-    if (!ro) {
-      // If we just transitioned to editable, make sure focus is in
-      // the editor so the user can start typing immediately.
-      try {
-        editor.focus();
-      } catch {
-        /* noop */
-      }
-    }
-  }, [readOnly, file.status, file.canEdit, filePath, editorEpoch]);
 
   // -----------------------------------------------------------------
   // Ctrl+S / Cmd+S to save. Listener is window-level but only fires
@@ -282,11 +253,21 @@ const EditableMonacoPane = forwardRef<
       if (!editor || !editor.hasTextFocus()) return;
       if (!fileApiRef.current.canSave) return;
       e.preventDefault();
-      void fileApiRef.current.save();
+      void (async () => {
+        const result = await fileApiRef.current.save();
+        if (result.ok && filePath && onSavedRef.current) {
+          try {
+            onSavedRef.current(filePath, fileApiRef.current.content ?? '');
+          } catch (e2) {
+            // eslint-disable-next-line no-console
+            console.warn('[EditableMonacoPane] onSaved callback threw', e2);
+          }
+        }
+      })();
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, []);
+  }, [filePath]);
 
   // -----------------------------------------------------------------
   // Render
