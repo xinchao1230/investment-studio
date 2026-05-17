@@ -43,6 +43,21 @@ def test_tushare_collect_handles_failure_gracefully(tmp_path):
     assert "boom" in out["error"]
     assert out["retryable"] is True
 
+
+@pytest.mark.parametrize("bad_code", ["09988.HK", "AAPL", "600036", "600036.sh ", ""])
+def test_tushare_collect_rejects_non_a_share_codes(tmp_path, bad_code):
+    """Non-A-share codes must fail fast (retryable=False) so the agent reroutes."""
+    class ShouldNotBeCalledClient:
+        def income(self, **kw):
+            raise AssertionError("client should not be invoked on invalid code")
+
+    out = tushare_collect(bad_code, str(tmp_path), _client=ShouldNotBeCalledClient())
+    assert out["ok"] is False
+    assert out["retryable"] is False
+    assert "A-share" in out["error"]
+    # No CSV files should be created for invalid codes.
+    assert not (tmp_path / "income.csv").exists()
+
 from research_mcp.tools.data_collect import yfinance_collect
 
 
@@ -131,6 +146,22 @@ def test_peer_collect_handles_failure_gracefully(tmp_path):
     assert out["ok"] is False
     assert "peer_boom" in out["error"]
 
+
+def test_peer_collect_rejects_non_a_share_codes(tmp_path):
+    """Any non-A-share code in target or peers must short-circuit before any API call."""
+    class ShouldNotBeCalledClient:
+        def daily_basic(self, **kw):
+            raise AssertionError("must not call client on invalid codes")
+
+    out = peer_collect("600036.SH", ["09988.HK"], str(tmp_path), _client=ShouldNotBeCalledClient())
+    assert out["ok"] is False
+    assert out["retryable"] is False
+    assert "A-share" in out["error"]
+
+    out2 = peer_collect("AAPL", ["600036.SH"], str(tmp_path), _client=ShouldNotBeCalledClient())
+    assert out2["ok"] is False
+    assert out2["retryable"] is False
+
 from research_mcp.tools.data_collect import capital_flow
 
 
@@ -172,3 +203,16 @@ def test_capital_flow_handles_failure_gracefully(tmp_path):
     assert out["ok"] is False
     assert "ak_boom" in out["error"]
     assert out["retryable"] is False
+
+
+@pytest.mark.parametrize("bad_symbol", ["09988.HK", "AAPL", "60036", "abcdef.SH", ""])
+def test_capital_flow_rejects_non_a_share_symbols(tmp_path, bad_symbol):
+    """Non-A-share symbols must short-circuit before any akshare call."""
+    class ShouldNotBeCalledAk:
+        def stock_individual_fund_flow(self, **kw):
+            raise AssertionError("must not call akshare on invalid symbol")
+
+    out = capital_flow(bad_symbol, str(tmp_path), _client=ShouldNotBeCalledAk())
+    assert out["ok"] is False
+    assert out["retryable"] is False
+    assert "A-share" in out["error"]

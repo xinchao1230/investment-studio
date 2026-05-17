@@ -1,11 +1,44 @@
 import asyncio
 import json
+import sys
+import time
+import traceback
 from mcp.server import Server
 from mcp.server.stdio import stdio_server
 import mcp.types as types
 from .tools.env import check_env
 
+
+def _trace(msg: str) -> None:
+    """Emit a single stderr trace line. Captured by Electron host as DEBUG [stderr]."""
+    try:
+        print(f"[trace] [server] {msg}", file=sys.stderr, flush=True)
+    except Exception:
+        pass
+
+
+# ---------------------------------------------------------------------------
+# Eager preload of heavy modules at server startup so the first tool call does
+# not hang for 60+ seconds on `import pandas`. Cost is paid during MCP server
+# spawn (before initialize handshake completes), where the user sees only a
+# normal "starting MCP server" state — not a stuck tool-call spinner.
+# ---------------------------------------------------------------------------
+_preload_t0 = time.monotonic()
+_trace("preload >>> import pandas")
+import pandas as _preload_pandas  # noqa: F401
+_trace(f"preload <<< import pandas elapsed={time.monotonic() - _preload_t0:.2f}s")
+
+_t = time.monotonic()
+_trace("preload >>> import tushare")
+try:
+    import tushare as _preload_tushare  # noqa: F401
+    _trace(f"preload <<< import tushare elapsed={time.monotonic() - _t:.2f}s")
+except Exception as e:
+    _trace(f"preload !!! import tushare FAILED: {type(e).__name__}: {e}")
+
+
 app = Server("research-mcp")
+
 
 @app.list_tools()
 async def list_tools() -> list[types.Tool]:
@@ -17,7 +50,11 @@ async def list_tools() -> list[types.Tool]:
         ),
         types.Tool(
             name="tushare_collect",
-            description="Fetch annual/quarterly financials for an A-share ticker via Tushare and dump to CSV in out_dir.",
+            description=(
+                "Fetch annual/quarterly financials for an A-share ticker via Tushare and dump to CSV in out_dir. "
+                "A-share only — ts_code MUST end in .SH/.SZ/.BJ. "
+                "For HK stocks (e.g. 09988.HK) use yfinance_collect; for US stocks use yfinance_collect."
+            ),
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -30,7 +67,11 @@ async def list_tools() -> list[types.Tool]:
         ),
         types.Tool(
             name="yfinance_collect",
-            description="Fetch financials and price history for a US equity via yfinance and dump to CSV in out_dir.",
+            description=(
+                "Fetch financials and price history for a HK or US equity via yfinance and dump to CSV in out_dir. "
+                "Use for HK stocks (e.g. 09988.HK, 00700.HK) and US stocks (e.g. AAPL, MSFT). "
+                "For A-shares use tushare_collect instead."
+            ),
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -43,7 +84,10 @@ async def list_tools() -> list[types.Tool]:
         ),
         types.Tool(
             name="peer_collect",
-            description="Fetch peer comparison data (valuation + financials) for a list of A-share tickers via Tushare.",
+            description=(
+                "Fetch peer comparison data (valuation + financials) for a list of A-share tickers via Tushare. "
+                "A-share only — all codes MUST end in .SH/.SZ/.BJ."
+            ),
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -56,7 +100,10 @@ async def list_tools() -> list[types.Tool]:
         ),
         types.Tool(
             name="capital_flow",
-            description="Fetch capital flow data for an A-share ticker via akshare (no token needed).",
+            description=(
+                "Fetch capital flow data for an A-share ticker via akshare (no token needed). "
+                "A-share only — symbol MUST be a 6-digit code (e.g. 600036 or 600036.SH)."
+            ),
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -171,12 +218,18 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent]:
         if name == "check_env":
             result = check_env()
         elif name == "tushare_collect":
+            _trace(f"_dispatch >>> import data_collect.tushare_collect")
+            t_imp = time.monotonic()
             from .tools.data_collect import tushare_collect
+            _trace(f"_dispatch <<< import data_collect.tushare_collect elapsed={time.monotonic() - t_imp:.2f}s")
+            _trace(f"_dispatch >>> call tushare_collect()")
+            t_fn = time.monotonic()
             result = tushare_collect(
                 ts_code=arguments["ts_code"],
                 out_dir=arguments["out_dir"],
                 start_date=arguments.get("start_date", ""),
             )
+            _trace(f"_dispatch <<< call tushare_collect() elapsed={time.monotonic() - t_fn:.2f}s")
         elif name == "yfinance_collect":
             from .tools.data_collect import yfinance_collect
             result = yfinance_collect(
@@ -250,7 +303,22 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent]:
             result = {"ok": False, "error": f"unknown tool: {name}", "retryable": False}
         return result
 
-    result = await asyncio.to_thread(_dispatch)
+    t0 = time.monotonic()
+    # Truncate args preview to avoid blowing up the log; show keys + lengths.
+    try:
+        args_preview = ", ".join(f"{k}={str(v)[:80]}" for k, v in arguments.items())
+    except Exception:
+        args_preview = "<unrepr>"
+    _trace(f"call_tool START name={name} args=[{args_preview}]")
+    try:
+        result = await asyncio.to_thread(_dispatch)
+    except Exception as e:
+        _trace(f"call_tool EXC name={name} after {time.monotonic() - t0:.2f}s: {type(e).__name__}: {e}")
+        _trace(traceback.format_exc())
+        raise
+    elapsed = time.monotonic() - t0
+    status = "ok" if isinstance(result, dict) and result.get("ok") else "fail"
+    _trace(f"call_tool DONE name={name} status={status} elapsed={elapsed:.2f}s")
     return [types.TextContent(type="text", text=json.dumps(result, ensure_ascii=False))]
 
 async def main():

@@ -9,11 +9,95 @@ in pytest while keeping the file-writing logic fully exercised.
 from __future__ import annotations
 
 import os
+import re
+import sys
+import time
+import traceback
 from pathlib import Path
 
-import pandas as pd
+# Module-load instrumentation — diagnose slow lazy import on first tool call.
+_modload_t0 = time.monotonic()
+try:
+    print(f"[trace] data_collect MODULE_LOAD start", file=sys.stderr, flush=True)
+except Exception:
+    pass
 
+_t = time.monotonic()
+import pandas as pd
+try:
+    print(f"[trace] data_collect MODULE_LOAD import pandas elapsed={time.monotonic() - _t:.2f}s", file=sys.stderr, flush=True)
+except Exception:
+    pass
+
+_t = time.monotonic()
 from research_mcp.lib.result import ok, fail
+try:
+    print(f"[trace] data_collect MODULE_LOAD import result elapsed={time.monotonic() - _t:.2f}s total={time.monotonic() - _modload_t0:.2f}s", file=sys.stderr, flush=True)
+except Exception:
+    pass
+
+
+# ---------------------------------------------------------------------------
+# Observability — emit trace lines on stderr so the host (Electron MCP client)
+# captures them as `DEBUG [stderr] [trace] ...` log entries. This is the only
+# way to see what tushare/yfinance/akshare are actually doing during a hang.
+# ---------------------------------------------------------------------------
+
+
+def _trace(tag: str, msg: str) -> None:
+    """Emit a single stderr trace line. Flushed immediately so the host sees it
+    even when the call is still blocked on a network read."""
+    try:
+        print(f"[trace] {tag} {msg}", file=sys.stderr, flush=True)
+    except Exception:
+        # Never let logging crash a tool.
+        pass
+
+
+def _timed_call(tag: str, label: str, fn, **kwargs):
+    """Call `fn(**kwargs)`, logging start, finish-with-rowcount, and exception."""
+    _trace(tag, f">>> {label} kwargs={kwargs}")
+    t0 = time.monotonic()
+    try:
+        result = fn(**kwargs)
+        elapsed = time.monotonic() - t0
+        rows = "?"
+        try:
+            if result is None:
+                rows = "None"
+            elif hasattr(result, "__len__"):
+                rows = str(len(result))
+        except Exception:
+            pass
+        _trace(tag, f"<<< {label} rows={rows} elapsed={elapsed:.2f}s")
+        return result
+    except Exception as e:
+        elapsed = time.monotonic() - t0
+        _trace(tag, f"!!! {label} EXC after {elapsed:.2f}s: {type(e).__name__}: {e}")
+        _trace(tag, traceback.format_exc())
+        raise
+
+
+# ---------------------------------------------------------------------------
+# Shared validators
+# ---------------------------------------------------------------------------
+
+_A_SHARE_CODE_RE = re.compile(r"^\d{6}\.(SH|SZ|BJ)$", re.IGNORECASE)
+
+
+def _is_a_share_code(code: str) -> bool:
+    """Return True if `code` is a Tushare A-share ticker (e.g. 600036.SH)."""
+    return bool(isinstance(code, str) and _A_SHARE_CODE_RE.match(code))
+
+
+def _a_share_routing_hint(code: str) -> str:
+    """Return a hint string suggesting which tool to use for a non-A-share code."""
+    if isinstance(code, str) and code.upper().endswith(".HK"):
+        return "For HK stocks use yfinance_collect with the .HK ticker (e.g. 09988.HK)."
+    return (
+        "For HK stocks use yfinance_collect with .HK suffix (e.g. 09988.HK); "
+        "for US stocks use yfinance_collect with the bare symbol (e.g. AAPL)."
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -22,12 +106,32 @@ from research_mcp.lib.result import ok, fail
 
 def _build_tushare_client():
     """Build default tushare pro_api client from env."""
+    t0 = time.monotonic()
+    try:
+        print(f"[trace] _build_tushare_client >>> import tushare", file=sys.stderr, flush=True)
+    except Exception:
+        pass
     import tushare as ts
+    t1 = time.monotonic()
+    try:
+        print(f"[trace] _build_tushare_client <<< import tushare elapsed={t1 - t0:.2f}s", file=sys.stderr, flush=True)
+    except Exception:
+        pass
     token = os.environ.get("TUSHARE_TOKEN", "")
     if not token:
         raise RuntimeError("TUSHARE_TOKEN not set")
     ts.set_token(token)
-    return ts.pro_api()
+    try:
+        print(f"[trace] _build_tushare_client >>> ts.pro_api()", file=sys.stderr, flush=True)
+    except Exception:
+        pass
+    client = ts.pro_api()
+    t2 = time.monotonic()
+    try:
+        print(f"[trace] _build_tushare_client <<< ts.pro_api() elapsed={t2 - t1:.2f}s total={t2 - t0:.2f}s", file=sys.stderr, flush=True)
+    except Exception:
+        pass
+    return client
 
 
 def tushare_collect(
@@ -48,6 +152,18 @@ def tushare_collect(
     Returns:
         Result dict with ok, paths, summary or error fields.
     """
+    if not _is_a_share_code(ts_code):
+        return fail(
+            error=(
+                f"tushare_collect only supports A-share codes "
+                f"(e.g. 600036.SH, 000001.SZ, 832000.BJ). Got '{ts_code}'. "
+                + _a_share_routing_hint(ts_code)
+            ),
+            retryable=False,
+        )
+    tag = f"tushare_collect[{ts_code}]"
+    t_total = time.monotonic()
+    _trace(tag, f"START out_dir={out_dir!r} start_date={start_date!r}")
     try:
         os.makedirs(out_dir, exist_ok=True)
         client = _client or _build_tushare_client()
@@ -57,7 +173,7 @@ def tushare_collect(
         summary: dict = {"ts_code": ts_code}
 
         # Income statement
-        df_income = client.income(ts_code=ts_code, start_date=sd)
+        df_income = _timed_call(tag, "client.income", client.income, ts_code=ts_code, start_date=sd)
         if df_income is None:
             df_income = pd.DataFrame()
         p = Path(out_dir) / "income.csv"
@@ -66,7 +182,7 @@ def tushare_collect(
         summary["income_rows"] = len(df_income)
 
         # Balance sheet
-        df_balance = client.balancesheet(ts_code=ts_code, start_date=sd)
+        df_balance = _timed_call(tag, "client.balancesheet", client.balancesheet, ts_code=ts_code, start_date=sd)
         if df_balance is None:
             df_balance = pd.DataFrame()
         p = Path(out_dir) / "balancesheet.csv"
@@ -75,7 +191,7 @@ def tushare_collect(
         summary["balance_rows"] = len(df_balance)
 
         # Cash flow
-        df_cashflow = client.cashflow(ts_code=ts_code, start_date=sd)
+        df_cashflow = _timed_call(tag, "client.cashflow", client.cashflow, ts_code=ts_code, start_date=sd)
         if df_cashflow is None:
             df_cashflow = pd.DataFrame()
         p = Path(out_dir) / "cashflow.csv"
@@ -83,8 +199,10 @@ def tushare_collect(
         paths.append("cashflow.csv")
         summary["cashflow_rows"] = len(df_cashflow)
 
+        _trace(tag, f"DONE ok total_elapsed={time.monotonic() - t_total:.2f}s summary={summary}")
         return ok(paths=paths, summary=summary)
     except Exception as e:
+        _trace(tag, f"FAIL after {time.monotonic() - t_total:.2f}s: {type(e).__name__}: {e}")
         return fail(error=f"tushare_collect failed: {e}", retryable=True)
 
 
@@ -205,6 +323,19 @@ def peer_collect(
     Returns:
         Result dict with ok, paths, summary or error fields.
     """
+    invalid = [c for c in [ts_code, *peer_codes] if not _is_a_share_code(c)]
+    if invalid:
+        return fail(
+            error=(
+                f"peer_collect only supports A-share codes "
+                f"(e.g. 600036.SH). Invalid: {invalid}. "
+                + _a_share_routing_hint(invalid[0])
+            ),
+            retryable=False,
+        )
+    tag = f"peer_collect[{ts_code}+{len(peer_codes)}peers]"
+    t_total = time.monotonic()
+    _trace(tag, f"START peers={peer_codes} out_dir={out_dir!r}")
     try:
         os.makedirs(out_dir, exist_ok=True)
         client = _client or _build_peer_client()
@@ -215,7 +346,7 @@ def peer_collect(
         # Fetch daily_basic (valuation) for each code
         rows = []
         for code in all_codes:
-            df = client.daily_basic(ts_code=code)
+            df = _timed_call(tag, f"client.daily_basic({code})", client.daily_basic, ts_code=code)
             if df is not None and not df.empty:
                 row = df.iloc[0].to_dict()
                 row["ts_code"] = code
@@ -230,7 +361,7 @@ def peer_collect(
         # Fetch fina_indicator for each code
         fina_rows = []
         for code in all_codes:
-            df = client.fina_indicator(ts_code=code)
+            df = _timed_call(tag, f"client.fina_indicator({code})", client.fina_indicator, ts_code=code)
             if df is not None and not df.empty:
                 row = df.iloc[0].to_dict()
                 row["ts_code"] = code
@@ -242,8 +373,10 @@ def peer_collect(
         paths.append("peer_financials.csv")
         summary["financials_rows"] = len(df_fina)
 
+        _trace(tag, f"DONE ok total_elapsed={time.monotonic() - t_total:.2f}s summary={summary}")
         return ok(paths=paths, summary=summary)
     except Exception as e:
+        _trace(tag, f"FAIL after {time.monotonic() - t_total:.2f}s: {type(e).__name__}: {e}")
         return fail(error=f"peer_collect failed: {e}", retryable=True)
 
 
@@ -276,17 +409,36 @@ def capital_flow(
     Returns:
         Result dict with ok, paths, summary or error fields.
     """
+    # Accept either bare 6-digit A-share code or full Tushare-style code.
+    bare_code = symbol.split(".")[0] if isinstance(symbol, str) else ""
+    if not (isinstance(symbol, str) and re.match(r"^\d{6}$", bare_code)
+            and ("." not in symbol or _is_a_share_code(symbol))):
+        return fail(
+            error=(
+                f"capital_flow only supports A-share codes "
+                f"(e.g. 600036, 600036.SH, 000001.SZ). Got '{symbol}'. "
+                + _a_share_routing_hint(symbol)
+            ),
+            retryable=False,
+        )
+    tag = f"capital_flow[{symbol}]"
+    t_total = time.monotonic()
+    _trace(tag, f"START out_dir={out_dir!r}")
     try:
         os.makedirs(out_dir, exist_ok=True)
         ak = _client or _build_akshare_module()
         paths: list[str] = []
         summary: dict = {"symbol": symbol}
 
-        # Normalize: strip suffix if present (akshare uses bare codes)
-        bare_code = symbol.split(".")[0]
-
         # Individual stock fund flow
-        df_flow = ak.stock_individual_fund_flow(stock=bare_code, market="sh" if bare_code.startswith("6") else "sz")
+        market = "sh" if bare_code.startswith("6") else "sz"
+        df_flow = _timed_call(
+            tag,
+            f"ak.stock_individual_fund_flow(stock={bare_code},market={market})",
+            ak.stock_individual_fund_flow,
+            stock=bare_code,
+            market=market,
+        )
         if df_flow is None:
             df_flow = pd.DataFrame()
         p = Path(out_dir) / "individual_fund_flow.csv"
@@ -295,7 +447,12 @@ def capital_flow(
         summary["flow_rows"] = len(df_flow)
 
         # Fund flow ranking (market-wide, latest day)
-        df_rank = ak.stock_individual_fund_flow_rank(indicator="today")
+        df_rank = _timed_call(
+            tag,
+            "ak.stock_individual_fund_flow_rank(indicator=today)",
+            ak.stock_individual_fund_flow_rank,
+            indicator="today",
+        )
         if df_rank is None:
             df_rank = pd.DataFrame()
         p = Path(out_dir) / "fund_flow_rank.csv"
@@ -303,6 +460,8 @@ def capital_flow(
         paths.append("fund_flow_rank.csv")
         summary["rank_rows"] = len(df_rank)
 
+        _trace(tag, f"DONE ok total_elapsed={time.monotonic() - t_total:.2f}s summary={summary}")
         return ok(paths=paths, summary=summary)
     except Exception as e:
+        _trace(tag, f"FAIL after {time.monotonic() - t_total:.2f}s: {type(e).__name__}: {e}")
         return fail(error=f"capital_flow failed: {e}", retryable=False)

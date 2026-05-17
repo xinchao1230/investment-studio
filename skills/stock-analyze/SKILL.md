@@ -13,14 +13,18 @@ version: 1.0.0
 
 - `/stock-analyze 招商银行`
 - `/stock-analyze 600036`
+- `/stock-analyze 09988.HK`
 - `/stock-analyze AAPL`
 
-**解析规则：**
+**解析规则（先按代码格式路由，再调工具，禁止用 `tushare_collect` 试探港股/美股）：**
 
 1. 提取第一个非空 token 作为 `company`
-2. 调用 `tushare_collect`（`ts_code` 字段）验证代码是否有效；若用户输入的是中文公司名，通过 `tushare_collect` 的 ticker lookup 解析为 `ts_code`（如 `600036.SH`）
-3. 若 Tushare 无法解析（港股/美股），使用 `yfinance_collect` 的 `symbol` 字段作为 fallback
-4. 确定 `market`（A股/港股/美股）和 `ticker`
+2. 按代码格式判断 `market` + 选择采集工具：
+   - 结尾是 `.HK`（如 `09988.HK`、`00700.HK`） → `market = 港股`，使用 `yfinance_collect`
+   - 结尾是 `.SH` / `.SZ` / `.BJ`，或纯 6 位数字（如 `600036`） → `market = A股`，使用 `tushare_collect`（数字代码先补全后缀：`6xxxxx` → `.SH`，`0xxxxx`/`3xxxxx` → `.SZ`，`4xxxxx`/`8xxxxx` → `.BJ`）
+   - 纯字母代码（如 `AAPL`、`MSFT`、`NVDA`） → `market = 美股`，使用 `yfinance_collect`
+   - 用户输入是中文公司名 → 先用 `bing_web_search` / `google_web_search` 查官方代码与上市地，再回到上面三条路由
+3. **不要**用 `tushare_collect` 验证港股/美股代码 —— 它会立刻 `ok:false` 返回 `Got '09988.HK'. For HK stocks use yfinance_collect...`，浪费一次调用
 
 **输出变量：** `{company}`, `{ts_code}`, `{market}`, `{ticker}`, `{targetDir}`
 

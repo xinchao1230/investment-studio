@@ -139,13 +139,29 @@ export class VscMcpClient {
    * @returns The tool's response content as a string
    */
   async executeTool({ toolName, toolArgs }: { toolName: string, toolArgs: { [key: string]: unknown } }): Promise<string> {
+    const serverName = this.server?.name ?? 'unknown';
+    const startedAt = Date.now();
+    let argsPreview = '';
+    try {
+      argsPreview = JSON.stringify(toolArgs);
+      if (argsPreview.length > 500) argsPreview = argsPreview.slice(0, 500) + '...';
+    } catch {
+      argsPreview = '<unserializable>';
+    }
+    advancedLogger.info(
+      `[VscMcpClient] >>> executeTool start server=${serverName} tool=${toolName} args=${argsPreview}`,
+    );
     try {
       if (!this.isConnected) {
         throw new Error('Client is not connected to server');
       }
 
       const result = await this.mcp.callTool(toolName, toolArgs);
-      
+      const elapsedMs = Date.now() - startedAt;
+      advancedLogger.info(
+        `[VscMcpClient] <<< executeTool ok server=${serverName} tool=${toolName} elapsedMs=${elapsedMs}`,
+      );
+
       // Return the content from the tool result - handle different response formats
       if (typeof result === 'string') {
         return result;
@@ -168,6 +184,11 @@ export class VscMcpClient {
         return String(result);
       }
     } catch (e) {
+      const elapsedMs = Date.now() - startedAt;
+      const msg = e instanceof Error ? e.message : String(e);
+      advancedLogger.error(
+        `[VscMcpClient] !!! executeTool FAIL server=${serverName} tool=${toolName} elapsedMs=${elapsedMs} error=${msg}`,
+      );
       throw e instanceof Error ? e : new Error(String(e));
     }
   }
