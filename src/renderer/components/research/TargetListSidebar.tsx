@@ -71,13 +71,10 @@ interface TargetListSidebarProps {
   onTrashFile?: (sourceAbs: string) => Promise<{ success: boolean; error?: string }>;
   /** Optional slot rendered above the tree (e.g. add-target combobox). */
   topSlot?: React.ReactNode;
-  /** Whether the add-target slot is currently visible. When it becomes
-   *  visible, the sidebar auto-closes its built-in search so the two
-   *  inputs are mutually exclusive. */
+  /** Whether the add-target slot is currently visible. The sidebar uses
+   *  this only to drive the toolbar button's pressed/active state — the
+   *  open/close lifecycle itself is owned by the parent. */
   addFormOpen?: boolean;
-  /** Fired when the user opens the search input. Parent can close the
-   *  add-target form to keep both inputs mutually exclusive. */
-  onOpenSearch?: () => void;
   // --- Target ↔ Chat binding ---
   /** chats[code] → sessions for that target (undefined = not yet loaded). */
   chatsByCode?: Record<string, ResearchChatSessionMeta[] | undefined>;
@@ -155,7 +152,6 @@ export const TargetListSidebar: React.FC<TargetListSidebarProps> = ({
   onTrashFile,
   topSlot,
   addFormOpen,
-  onOpenSearch,
   chatsByCode,
   activeChatSessionId,
   onSelectChat,
@@ -203,8 +199,6 @@ export const TargetListSidebar: React.FC<TargetListSidebarProps> = ({
   // `${code}::${cat}` for a sub-category folder.
   const [dropHover, setDropHover] = useState<string | null>(null);
   const fileTreeFocusRef = useRef<HTMLDivElement | null>(null);
-  const [searchQuery, setSearchQuery] = useState('');
-  const searchInputRef = React.useRef<HTMLInputElement | null>(null);
 
   // In-app confirm/rename dialog state. We avoid window.confirm() and
   // window.prompt() because on Electron + Windows those native dialogs
@@ -253,38 +247,6 @@ export const TargetListSidebar: React.FC<TargetListSidebarProps> = ({
     }
     setPendingDeleteChat(null);
   }, [pendingDeleteChat, onDeleteStellaChat, onDeleteChat, onDeleteAnyChat]);
-
-  // Search is owned locally; add-form open state is owned by parent. We
-  // derive `searchOpen` so that whenever the parent shows the add-form,
-  // search is hidden in the same render — no useEffect, no race.
-  const [searchOpenLocal, setSearchOpenLocal] = useState(false);
-  const searchOpen = searchOpenLocal && !addFormOpen;
-
-  const openSearch = useCallback(() => {
-    if (addFormOpen) onOpenSearch?.();   // ask parent to close add-form
-    setSearchOpenLocal(true);
-    setTimeout(() => searchInputRef.current?.focus(), 0);
-  }, [addFormOpen, onOpenSearch]);
-
-  const closeSearch = useCallback(() => {
-    setSearchOpenLocal(false);
-    setSearchQuery('');
-  }, []);
-
-  const toggleSearch = useCallback(() => {
-    if (searchOpen) closeSearch();
-    else openSearch();
-  }, [searchOpen, openSearch, closeSearch]);
-
-  const q = searchQuery.trim().toLowerCase();
-  const filteredTargets = q
-    ? targets.filter(
-        (t) =>
-          t.name.toLowerCase().includes(q) ||
-          t.stock_code.toLowerCase().includes(q) ||
-          (t.industry ?? '').toLowerCase().includes(q),
-      )
-    : targets;
 
   // ---- File tree move/rename/delete helpers ---------------------------
 
@@ -570,24 +532,15 @@ export const TargetListSidebar: React.FC<TargetListSidebarProps> = ({
         </button>
         <div className="flex-1" />
         {activeMode === 'workspace' ? (
-          <>
+          <div className="flex items-center gap-1">
             <button
               type="button"
-              className={`rw-side-icon-btn ${searchOpen ? 'is-active' : ''}`}
-              title="Search targets"
-              aria-label="Search targets"
-              aria-pressed={searchOpen}
-              onClick={toggleSearch}
+              className={`rw-side-icon-btn ${addFormOpen ? 'is-active' : ''}`}
+              onClick={onAddTarget}
+              title="查找或添加 Target"
+              aria-pressed={addFormOpen}
             >
               <Search size={14} />
-            </button>
-            <button
-              type="button"
-              className="rw-side-icon-btn"
-              onClick={onAddTarget}
-              title="Add target"
-            >
-              <Plus size={14} />
             </button>
             <button
               type="button"
@@ -597,7 +550,7 @@ export const TargetListSidebar: React.FC<TargetListSidebarProps> = ({
             >
               <MoreHorizontal size={14} />
             </button>
-          </>
+          </div>
         ) : (
           onNewStellaChat && (
             <button
@@ -613,20 +566,6 @@ export const TargetListSidebar: React.FC<TargetListSidebarProps> = ({
       </div>
 
       {topSlot}
-
-      {activeMode === 'workspace' && searchOpen && (
-        <div className="px-3 py-2 rw-divider">
-          <input
-            ref={searchInputRef}
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Escape') closeSearch(); }}
-            placeholder="名称 / 代码 / 行业"
-            className="w-full text-xs px-2 py-1 border border-[var(--rw-border)] rounded bg-white focus:outline-none focus:border-blue-500"
-          />
-        </div>
-      )}
 
       {/* Body — Ask tab: unified chat list (Stella + every target-bound chat) */}
       {activeMode === 'stella' && (
@@ -744,13 +683,8 @@ export const TargetListSidebar: React.FC<TargetListSidebarProps> = ({
             No targets yet
           </div>
         )}
-        {targets.length > 0 && filteredTargets.length === 0 && (
-          <div className="px-3 py-4 text-xs text-[var(--rw-text-3)] text-center">
-            无匹配结果
-          </div>
-        )}
 
-        {filteredTargets.map((target) => {
+        {targets.map((target) => {
           const code = target.stock_code;
           const isExpanded = expandedCodes.has(code);
           const files = filesByCode[code];

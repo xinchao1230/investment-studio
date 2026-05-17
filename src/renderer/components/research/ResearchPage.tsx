@@ -806,8 +806,11 @@ export const ResearchPage: React.FC = () => {
   );
 
   const handleOpenAddForm = useCallback(() => {
+    // Toggle: clicking the Plus button while the combobox is already open
+    // dismisses it. This mirrors VSCode's quick-input behavior and gives
+    // users a keyboard-free way to close the unified "find or add" widget.
     setAddError(null);
-    setShowAddForm(true);
+    setShowAddForm((prev) => !prev);
   }, []);
 
   const handleSubmitAddTarget = useCallback(async (code: string, name: string) => {
@@ -1135,7 +1138,6 @@ export const ResearchPage: React.FC = () => {
             onRenameFile={handleRenameFile}
             onTrashFile={trashFile}
             addFormOpen={showAddForm}
-            onOpenSearch={handleCancelAddTarget}
             chatsByCode={targetChats.chatsByCode}
             activeChatSessionId={targetChats.active?.chatSessionId ?? null}
             onSelectChat={handleSelectChat}
@@ -1167,6 +1169,8 @@ export const ResearchPage: React.FC = () => {
                 error={addError}
                 onSubmit={handleSubmitAddTarget}
                 onCancel={handleCancelAddTarget}
+                existingTargets={targets}
+                onSelectExisting={handleSelectTarget}
               />
             ) : null}
           />
