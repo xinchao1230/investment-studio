@@ -53,7 +53,7 @@ version: 1.0.0
 2. Cache miss 时，将下述工具的 `out_dir` 设为 `{targetDir}/data-cache/{source}/`（如 `tushare/`、`yfinance/`），写完 CSV 后立即 `create_file` 写同名 `{endpoint}.meta.json`。
 3. **Force refresh：** 用户说"最新数据 / 刷新 / 重新拉取 / force refresh" → 跳过缓存判定，重新拉取并覆盖。
 
-成功后，把 cache 路径**符号链接 / 复制**到 `{targetDir}/research/stock-analyze/{date}/raw_data/`（保留以往报告与 raw 数据强绑定的目录约定）。
+成功后，把 cache 路径**符号链接 / 复制**到 `{targetDir}/研报/stock-analyze/{date}/raw_data/`（保留以往报告与 raw 数据强绑定的目录约定）。
 
 TTL 速查：income / balancesheet / cashflow / peer_comparison = 7d；daily = 12h；capital_flow = 6h；shareholder = 30d。
 
@@ -83,7 +83,7 @@ TTL 速查：income / balancesheet / cashflow / peer_comparison = 7d；daily = 1
 
 ### 3.5 `pdf_download_extract`（可选 — 年报 PDF）
 
-- **输入：** `url`（年报下载链接），`out_dir`（`{targetDir}/research/stock-analyze/{date}/raw_data/`，PDF 不进 cache）
+- **输入：** `url`（年报下载链接），`out_dir`（`{targetDir}/研报/stock-analyze/{date}/raw_data/`，PDF 不进 cache）
 - **产出：** `annual_report.txt`, `annual_tables.json`
 - **错误处理：** 失败 → 跳过，标注 `[PDF_UNAVAILABLE]`，不影响后续流程
 
@@ -95,7 +95,7 @@ TTL 速查：income / balancesheet / cashflow / peer_comparison = 7d；daily = 1
 
 ### 4.1 `derived_metrics`
 
-- **输入：** `income_csv`, `balance_csv`, `cashflow_csv`, `out_dir`（`{targetDir}/research/stock-analyze/{date}/metrics`）
+- **输入：** `income_csv`, `balance_csv`, `cashflow_csv`, `out_dir`（`{targetDir}/研报/stock-analyze/{date}/metrics`）
 - **产出：** `derived_metrics.json`（毛利率、净利率、ROE、ROA、FCF、增长率等）
 - **错误处理：** `retryable: true` → 重试 1 次；失败 → 终止（无法生成报告核心数据）
 
@@ -189,7 +189,7 @@ issues:
 
 ## 8. Phase 6 — 监控对比
 
-**条件：** `{targetDir}/research/stock-analyze/` 下存在更早日期目录（即非首次分析该 ticker）
+**条件：** `{targetDir}/研报/stock-analyze/` 下存在更早日期目录（即非首次分析该 ticker）
 
 **工具：** `monitor_compare`
 
@@ -205,14 +205,14 @@ issues:
 
 **工具：** `assemble_report`
 
-- **输入：** `snapshot_json_path`, `out_dir`（`{targetDir}/research/stock-analyze/{date}`），`ticker`, `company_name`
+- **输入：** `snapshot_json_path`, `out_dir`（`{targetDir}/研报/stock-analyze/{date}`），`ticker`, `company_name`
 - **产出：** `report.md`（完整拼装后的最终报告）
 
 **交付步骤：**
 
-1. 调用 `assemble_report` 生成 `{targetDir}/research/stock-analyze/{YYYY-MM-DD}/report.md`
+1. 调用 `assemble_report` 生成 `{targetDir}/研报/stock-analyze/{YYYY-MM-DD}/report.md`
 2. 复制一份到 `{targetDir}/{company}-{YYYY-MM-DD}.md`（左侧文件树一眼可见）
-3. 写入 `{targetDir}/research/stock-analyze/{YYYY-MM-DD}/_run.log`，内容为本次运行的所有工具调用时间线：
+3. 写入 `{targetDir}/研报/stock-analyze/{YYYY-MM-DD}/_run.log`，内容为本次运行的所有工具调用时间线：
    ```
    [HH:MM:SS] check_env → OK
    [HH:MM:SS] tushare_collect(600036.SH) → 5 files
