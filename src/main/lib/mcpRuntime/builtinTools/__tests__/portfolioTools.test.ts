@@ -40,7 +40,7 @@ describe('PortfolioTools', () => {
       expect(profile.name).toBe('洛阳钼业');
       expect(profile.industry).toBe('有色金属');
       expect(profile.listed).toBe(true);
-      expect(profile.follow_date as string).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+      expect(profile.follow_date as string).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
     });
 
     it('rejects duplicate name', async () => {

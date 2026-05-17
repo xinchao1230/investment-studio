@@ -85,7 +85,20 @@ export function usePortfolio(): PortfolioHook {
       console.log('[usePortfolio] portfolio_list_targets result:', result);
       const parsed = unwrapToolResult(result);
       if (Array.isArray(parsed)) {
-        setTargets(parsed);
+        // Newest-first ordering by follow_date so a freshly-added target
+        // appears at the top of the sidebar instead of buried at the bottom
+        // (the underlying tool returns targets in fs.readdirSync order, which
+        // is platform-dependent and unrelated to recency). Ties fall back to
+        // case-insensitive name so the order stays stable.
+        const sorted = [...parsed].sort((a, b) => {
+          const da = typeof a?.follow_date === 'string' ? a.follow_date : '';
+          const db = typeof b?.follow_date === 'string' ? b.follow_date : '';
+          if (da !== db) return db.localeCompare(da);
+          const na = typeof a?.name === 'string' ? a.name : '';
+          const nb = typeof b?.name === 'string' ? b.name : '';
+          return na.localeCompare(nb, 'zh');
+        });
+        setTargets(sorted);
       } else {
         console.warn('[usePortfolio] list_targets unwrap not array:', parsed);
       }

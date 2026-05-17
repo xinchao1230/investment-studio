@@ -382,7 +382,10 @@ export class PortfolioTools {
     fs.mkdirSync(path.join(targetDir, 'research'), { recursive: true });
     fs.mkdirSync(path.join(targetDir, 'models'), { recursive: true });
 
-    const now = new Date().toISOString().split('T')[0];
+    // ISO datetime with millisecond precision so the renderer can sort
+    // "newest first" even when multiple targets are added the same day
+    // (a YYYY-MM-DD field collapses every same-day add into one bucket).
+    const now = new Date().toISOString();
     const profile = yaml.dump({
       stock_code: stockCode,
       name: name,
