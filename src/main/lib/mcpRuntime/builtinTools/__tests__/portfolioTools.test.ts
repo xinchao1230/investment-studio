@@ -87,13 +87,55 @@ describe('PortfolioTools', () => {
       expect(profile.listed).toBe(false);
     });
 
-    it('renders unlisted key-drivers without empty parens and includes 现金跑道', async () => {
+    it('renders unlisted key-drivers as an empty skeleton (no Ctrip boilerplate)', async () => {
       await PortfolioTools.executeInitTarget({ stock_code: '', name: '私募基金A' });
       const kdPath = path.join(tmpDir, '私募基金A', 'key-drivers.md');
       const content = fs.readFileSync(kdPath, 'utf-8');
       expect(content).toContain('# 私募基金A - Key Drivers');
       expect(content).not.toMatch(/\(\s*\)/);
+
+      // Standard section anchors expected by downstream reader skills
+      expect(content).toContain('## 投资逻辑');
+      expect(content).toContain('## 核心跟踪变量');
+
+      // Unlisted-specific sections
+      expect(content).toContain('## 单位经济与资金');
       expect(content).toContain('现金跑道');
+      expect(content).toContain('## 退出路径与风险');
+
+      // No leaked Ctrip-template content
+      expect(content).not.toContain('携程');
+      expect(content).not.toContain('take rate');
+      expect(content).not.toContain('同程');
+    });
+
+    it('renders listed key-drivers as an empty skeleton with 估值参考 section', async () => {
+      await PortfolioTools.executeInitTarget({ stock_code: '603993', name: '洛阳钼业' });
+      const kdPath = path.join(tmpDir, '洛阳钼业', 'key-drivers.md');
+      const content = fs.readFileSync(kdPath, 'utf-8');
+
+      expect(content).toContain('# 洛阳钼业 (603993) - Key Drivers');
+      expect(content).toContain('## 投资逻辑');
+      expect(content).toContain('## 核心跟踪变量');
+      expect(content).toContain('## 估值参考');
+      expect(content).toContain('## 风险');
+
+      // Listed variant must not include unlisted-only sections
+      expect(content).not.toContain('## 单位经济与资金');
+      expect(content).not.toContain('## 退出路径与风险');
+
+      // No leaked Ctrip-template content
+      expect(content).not.toContain('携程');
+      expect(content).not.toContain('take rate');
+      expect(content).not.toContain('同程');
+    });
+
+    it('tracking.md includes the usage guidance blockquote', async () => {
+      await PortfolioTools.executeInitTarget({ stock_code: '603993', name: '洛阳钼业' });
+      const tracking = fs.readFileSync(path.join(tmpDir, '洛阳钼业', 'tracking.md'), 'utf-8');
+      expect(tracking).toContain('# 洛阳钼业 (603993) - Marginal Change Tracking');
+      expect(tracking).toContain('基本面边际变化');
+      expect(tracking).toContain('| Date | Item | Previous | Current | Note |');
     });
 
     it('notes.md / tracking.md titles drop empty parens for unlisted', async () => {

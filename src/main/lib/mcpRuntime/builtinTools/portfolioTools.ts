@@ -320,7 +320,7 @@ export class PortfolioTools {
     );
     fs.writeFileSync(
       path.join(targetDir, 'tracking.md'),
-      `${this.formatTitle(name, rawCode, 'Marginal Change Tracking')}\n\n| Date | Item | Previous | Current | Note |\n|------|------|----------|---------|------|\n`,
+      `${this.formatTitle(name, rawCode, 'Marginal Change Tracking')}\n\n> 用于记录“基本面边际变化”——关键指标 vs 上期 / 预期、行业政策、公司公告等。\n> 建议每次跟踪 skill 自动 append；手动补充时按时间倒序。\n\n| Date | Item | Previous | Current | Note |\n|------|------|----------|---------|------|\n`,
       'utf-8',
     );
 
@@ -332,62 +332,74 @@ export class PortfolioTools {
   }
 
   /**
-   * Build a realistic example key-drivers.md for a **listed** company (uses
-   * 携程 as a placeholder template until LLM-driven generation is wired in).
-   * Returns a fully-formed markdown document with a 投资逻辑 section + 核心
-   * 跟踪变量 list.
+   * Build an empty skeleton key-drivers.md for a **listed** company.
+   * Section headers are intentionally preserved so reader skills
+   * (earnings-review, marginal-tracking, deep-report) can still find the
+   * standard anchors; bodies are left blank for the LLM (or user) to fill.
    */
   private static buildListedKeyDrivers(name: string, stockCode: string): string {
     return `${this.formatTitle(name, stockCode, 'Key Drivers')}
 
 ## 投资逻辑
 
-**短期逻辑**：未来 1-3 个月股价的核心催化在于反垄断调查进展与整改落地边界，若处罚和业务约束弱于市场悲观预期，叠加旺季出行数据继续强劲，市场将修复对携程酒店佣金率、流量壁垒和盈利能力的担忧，带来估值修复。
+**短期逻辑**：
 
-**长期逻辑**：一是出境游和国际业务渗透率提升推动收入结构继续向高利润酒店与海外 OTA 倾斜；二是高星酒店直连、供应链和服务能力构筑竞争壁垒，支撑较强议价能力与稳定利润率；三是依托品牌、库存和全球化布局，携程有望持续扩大在中国高价值酒旅用户中的份额，并把国内优势复制到海外市场。
+**长期逻辑**：
 
 ## 核心跟踪变量
 
-1. 出境游机酒预订 GMV 恢复斜率
-2. 国际 OTA 平台海外收入占比提升
-3. 高星酒店直连库存覆盖率
-4. 交通票务 take rate 变化趋势
-5. 酒店业务综合 take rate 稳定性
-6. 同程采购携程库存的比例变化
-7. 企业出海带动海外本地化运营进展
+1.
+2.
+3.
+
+## 估值参考
+
+| 可比公司 | 代码 | PS | PE | EV/Sales | 备注 |
+|---------|------|----|----|----------|------|
+|         |      |    |    |          |      |
+
+## 风险
+
+-
 `;
   }
 
   /**
-   * Build an example key-drivers.md for an **unlisted / private** company.
-   * Drops the listed-company estimation framing (PE/take rate/估值修复) and
-   * focuses on PMF, unit economics, cash runway, financing and exit paths.
+   * Build an empty skeleton key-drivers.md for an **unlisted / private**
+   * company. Differs from the listed variant by carrying a 单位经济与资金
+   * section in place of pure 估值参考 framing, and a 退出路径与风险 closer
+   * instead of a plain 风险 list.
    */
   private static buildUnlistedKeyDrivers(name: string): string {
     return `${this.formatTitle(name, '', 'Key Drivers')}
 
 ## 投资逻辑
 
-**短期逻辑**：（未来 6-12 个月的关键里程碑 / 融资节点 / 重大客户签约 / 产品发布。）
+**短期逻辑**：
 
-**长期逻辑**：（市场空间、商业模式壁垒、可达成的稳态盈利模型 / 退出预期。）
+**长期逻辑**：
 
 ## 核心跟踪变量
 
-1. 关键运营指标（月活 / 订单量 / GMV / DAU）
-2. 单位经济（LTV/CAC、毛利率、付费转化率）
-3. 现金跑道（months of runway）与下一轮融资进度
-4. 关键合同与客户集中度（前 5 大客户收入占比、续约率）
-5. 团队稳定性与关键人物（创始人 / CTO / 核心销售）
-6. 退出路径（IPO 窗口 / 战略并购 / 老股转让）
+1.
+2.
+3.
+
+## 单位经济与资金
+
+- 关键运营指标：
+- 单位经济（LTV/CAC、毛利率）：
+- 现金跑道：
 
 ## 估值参考（可比公司）
-
-（列 3-5 家二级市场可比公司，记录其 PS / PE / EV-Sales 倍数及最近一期财务数据，作为估值锚。建议用 \`tushare_collect\` / \`yfinance_collect\` 抓取后整理到 \`earnings/comparables_*.csv\`。）
 
 | 可比公司 | 代码 | PS | PE | EV/Sales | 备注 |
 |---------|------|----|----|----------|------|
 |         |      |    |    |          |      |
+
+## 退出路径与风险
+
+-
 `;
   }
 
