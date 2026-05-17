@@ -679,10 +679,10 @@ export const ResearchPage: React.FC = () => {
     // Layer 2 of the anti-bug defense: even if a previous delete didn't flush
     // (crash, race, etc.), defensively clear any persisted tab state for
     // this stock_code so the newly-recreated target starts clean.
+    const effectiveKey = c || n;
     setTabsByCode((prev) => {
       // For unlisted targets, the effective key is the company name (since
       // portfolioTools stores stock_code === name in that case).
-      const effectiveKey = c || n;
       if (!(effectiveKey in prev)) return prev;
       const next = { ...prev };
       delete next[effectiveKey];
@@ -690,7 +690,11 @@ export const ResearchPage: React.FC = () => {
     });
     flushNow();
     setShowAddForm(false);
-  }, [initTarget, setTabsByCode, flushNow]);
+    // Activate the newly-created target so the right pane immediately reflects
+    // it (chat header + welcome cards become target-scoped). handleSelectTarget
+    // also expands its tree row and starts loading file tree + chats.
+    await handleSelectTarget(effectiveKey);
+  }, [initTarget, setTabsByCode, flushNow, handleSelectTarget]);
 
   const handleCancelAddTarget = useCallback(() => {
     setShowAddForm(false);
