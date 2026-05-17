@@ -68,6 +68,7 @@ import type { MainTokenMonitor } from './lib/auth/tokenMonitor';
 import { createLogger, resetGlobalLogger } from './lib/unifiedLogger';
 import { safeConsole, exitSafeLog } from './lib/utilities/safeConsole';
 import { isFeatureEnabled } from './lib/featureFlags';
+import { PortfolioWatcher } from './lib/portfolioWatcher';
 
 // 🚀 Lazy-loaded module cache
 let _profileCacheManager: ProfileCacheManager | null = null;
@@ -1382,6 +1383,12 @@ class ElectronApp {
           }
           PortfolioTools.setWorkspaceDir(portfolioDir);
         }
+        // Start the portfolio watcher (idempotent) so external MCP file
+        // writes (e.g. research-mcp via Python) trigger kosmos:fs-changed.
+        PortfolioWatcher.getInstance().start(
+          PortfolioTools.getWorkspaceDir(),
+          () => BrowserWindow.getAllWindows(),
+        );
         return { success: true, data: PortfolioTools.getWorkspaceDir() };
       } catch (error) {
         return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
@@ -1451,6 +1458,11 @@ class ElectronApp {
             }
             PortfolioTools.setWorkspaceDir(portfolioDir);
           }
+          // Start the portfolio watcher (idempotent).
+          PortfolioWatcher.getInstance().start(
+            PortfolioTools.getWorkspaceDir(),
+            () => BrowserWindow.getAllWindows(),
+          );
         }
         
         // Initialize if not already initialized
@@ -4846,6 +4858,13 @@ class ElectronApp {
       } catch (mem0Error) {
         const errorMessage = mem0Error instanceof Error ? mem0Error.message : String(mem0Error);
         safeConsole.warn(`Mem0 cleanup failed or timed out: ${errorMessage}`);
+      }
+
+      // Stop portfolio file watcher before MCP cleanup (cheap; sync).
+      try {
+        PortfolioWatcher.getInstance().stop();
+      } catch (watcherErr) {
+        safeConsole.warn(`PortfolioWatcher stop failed: ${watcherErr instanceof Error ? watcherErr.message : String(watcherErr)}`);
       }
 
       // Phase 2: Clean up MCP clients and child processes

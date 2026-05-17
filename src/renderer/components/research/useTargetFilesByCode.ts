@@ -72,11 +72,12 @@ export function useTargetFilesByCode(
           }
         }
       }
-      // Only refresh codes we've already loaded at least once.
+      // Refresh every affected target — including ones never expanded —
+      // so file counts / badges stay accurate. loadFiles is idempotent
+      // and cheap (single IPC + directory scan); the 100ms watcher
+      // debounce upstream already coalesces bursts.
       for (const code of affected) {
-        if (filesByCodeRef.current[code]) {
-          void loadFiles(code, { force: true });
-        }
+        void loadFiles(code, { force: true });
       }
     },
     [workspaceDir, targetsByDir, loadFiles],
