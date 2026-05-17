@@ -218,6 +218,8 @@
   text-align: left;
   cursor: pointer;
   transition: background 0.15s ease, border-color 0.15s ease;
+  min-width: 0;
+  overflow: hidden;
 }
 [data-theme="research"] .rw-stella-welcome-card:hover {
   background: var(--rw-bg-card-hover, rgba(127, 127, 127, 0.12));
@@ -228,11 +230,19 @@
   font-weight: 600;
   color: var(--rw-text-1);
   line-height: 18px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
 }
 [data-theme="research"] .rw-stella-welcome-card-desc {
   font-size: 12px;
   color: var(--rw-text-3);
   line-height: 16px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
 }
 
 /* "未上市" pill rendered inline next to the workspace-mode header title
