@@ -106,15 +106,19 @@ const EditableMonacoPane = forwardRef<
   // -----------------------------------------------------------------
   // Mount Monaco when we have content and a container. Re-mount when
   // filePath changes (so undo history doesn't carry across files).
+  //
+  // We deliberately depend on `contentReady` (not file.content) so
+  // we mount exactly once per file load — typing into the buffer
+  // mutates file.content but must NOT re-mount Monaco.
   // -----------------------------------------------------------------
+  const contentReady = file.content !== null;
   useEffect(() => {
     if (!containerRef.current) return;
-    if (file.content === null) return;
-    if (file.status === 'loading' || file.status === 'idle') return;
+    if (!contentReady) return;
 
     const container = containerRef.current;
     let disposed = false;
-    const initialValue = file.content;
+    const initialValue = fileApiRef.current.content ?? '';
 
     import(/* webpackChunkName: "monaco-editor" */ 'monaco-editor').then(
       (monacoModule) => {
@@ -183,11 +187,13 @@ const EditableMonacoPane = forwardRef<
       editorRef.current?.dispose();
       editorRef.current = null;
     };
-    // We deliberately depend only on filePath + language: switching
-    // files / language remounts Monaco. Content updates from
-    // reloadFromDisk are pushed via setValue in the next effect.
+    // We deliberately depend only on filePath + language + contentReady:
+    // switching files / language remounts Monaco; content arriving for
+    // the first time triggers the initial mount. Subsequent content
+    // updates (typing, reloadFromDisk) are pushed via setValue in the
+    // next effect.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filePath, language]);
+  }, [filePath, language, contentReady]);
 
   // -----------------------------------------------------------------
   // Apply external content updates (e.g. reloadFromDisk) to the live
