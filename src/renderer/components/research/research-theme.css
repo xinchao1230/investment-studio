@@ -275,6 +275,27 @@
   flex-shrink: 0;
 }
 
+/* Target-attribution pill prefixed to a chat row in the Ask tab's unified
+ * chat list. Compact and color-muted so it does not steal attention from
+ * the chat title. */
+[data-theme="research"] .rw-chat-row-pill {
+  display: inline-flex;
+  align-items: center;
+  font-size: 10px;
+  line-height: 1;
+  padding: 2px 5px;
+  margin-right: 5px;
+  border-radius: 3px;
+  background: rgba(99, 102, 241, 0.10);
+  color: rgba(67, 56, 202, 0.95);
+  max-width: 84px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex-shrink: 0;
+  user-select: none;
+}
+
 /* Subtitle under the header — used in workspace mode to show the stock code
  * below the target name (when not unlisted). */
 [data-theme="research"] .rw-stella-welcome-subtitle {

@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Target } from './TargetListSidebar';
 import { useFsChanged, pathStartsWith } from '../../hooks/useFsChanged';
+import { researchChatIpc } from './researchChatIpc';
 
 export interface TargetFile {
   relPath: string;
@@ -154,10 +155,20 @@ export function usePortfolio(): PortfolioHook {
   const deleteTarget = useCallback(
     async (code: string): Promise<{ success: boolean; error?: string }> => {
       try {
+        // Release any chat sessions bound to this target before trashing it,
+        // so the chats survive the deletion as ordinary "Ask Stella" history
+        // instead of becoming orphaned rows pointing at a target directory
+        // that no longer exists. Best-effort: a failure here is logged but
+        // doesn't block the actual delete (which is what the user asked for).
+        try {
+          await researchChatIpc.unbindTarget(code);
+        } catch (unbindErr) {
+          console.warn('[usePortfolio] unbindTarget failed (proceeding with delete):', unbindErr);
+        }
+
         const result = await window.electronAPI.builtinTools.execute('portfolio_delete_target', {
           stock_code: code,
         });
-        console.log('[usePortfolio] portfolio_delete_target result:', result);
         if (!result || !result.success) {
           const error = (result && result.error) || 'Unknown error';
           console.error('[usePortfolio] delete_target failed:', error);

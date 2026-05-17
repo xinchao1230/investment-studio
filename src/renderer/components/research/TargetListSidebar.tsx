@@ -101,6 +101,29 @@ interface TargetListSidebarProps {
   onNewStellaChat?: () => void;
   onDeleteStellaChat?: (chatSessionId: string) => void;
   onRenameStellaChat?: (chatSessionId: string, newTitle: string) => void;
+
+  // --- Ask tab unified list (all chats, including target-bound) ---
+  /**
+   * The full chronological list of every chat session under the active
+   * chat config. When present, the Ask tab renders this list instead of
+   * the legacy Stella-only list. Each entry may carry a `targetCode`;
+   * rows with non-null targetCode get a small pill in front of the title.
+   */
+  allChats?: ResearchChatSessionMeta[];
+  /** Active session id used for the Ask list's is-active highlight. */
+  liveChatSessionId?: string | null;
+  /** Click handler for any row in the Ask list. Routes by targetCode. */
+  onSelectAnyChat?: (chatSessionId: string, targetCode: string | null) => void;
+  /** Delete handler — routed to the right hook by targetCode. */
+  onDeleteAnyChat?: (chatSessionId: string, targetCode: string | null) => void;
+  /** Rename handler — routed to the right hook by targetCode. */
+  onRenameAnyChat?: (chatSessionId: string, targetCode: string | null, newTitle: string) => void;
+  /**
+   * Lookup display label for a target pill. The renderer needs to map
+   * `targetCode` to a short pill string (e.g. `00700.HK`, `海底捞`).
+   * Falls back to the raw targetCode when this map doesn't have an entry.
+   */
+  targetPillLookup?: (targetCode: string) => string;
 }
 
 const SUBCATEGORIES = ['纪要', '专家交流', '公司交流', '研报', '模型', '公告', '其它'];
@@ -147,6 +170,12 @@ export const TargetListSidebar: React.FC<TargetListSidebarProps> = ({
   onNewStellaChat,
   onDeleteStellaChat,
   onRenameStellaChat,
+  allChats,
+  liveChatSessionId,
+  onSelectAnyChat,
+  onDeleteAnyChat,
+  onRenameAnyChat,
+  targetPillLookup,
 }) => {
   const { showError, showSuccess } = useToast();
   const clipboard = useTargetTreeClipboard();
@@ -185,7 +214,10 @@ export const TargetListSidebar: React.FC<TargetListSidebarProps> = ({
   // and keystrokes are dropped — switching to any other OS window and back
   // restores keyboard input. Using an in-app <Dialog> keeps focus inside
   // the same WebContents and avoids the bug entirely.
-  type ChatRef = { kind: 'stella' | 'workspace'; code?: string; sessionId: string; title: string };
+  type ChatRef =
+    | { kind: 'stella'; code?: undefined; sessionId: string; title: string }
+    | { kind: 'workspace'; code: string; sessionId: string; title: string }
+    | { kind: 'ask'; code?: undefined; targetCode: string | null; sessionId: string; title: string };
   const [pendingDeleteChat, setPendingDeleteChat] = useState<ChatRef | null>(null);
   const [pendingRenameChat, setPendingRenameChat] = useState<ChatRef | null>(null);
   const [renameDraft, setRenameDraft] = useState('');
@@ -201,22 +233,26 @@ export const TargetListSidebar: React.FC<TargetListSidebarProps> = ({
     if (next && next !== pendingRenameChat.title) {
       if (pendingRenameChat.kind === 'stella') {
         onRenameStellaChat?.(pendingRenameChat.sessionId, next);
-      } else if (pendingRenameChat.code) {
+      } else if (pendingRenameChat.kind === 'workspace') {
         onRenameChat?.(pendingRenameChat.code, pendingRenameChat.sessionId, next);
+      } else if (pendingRenameChat.kind === 'ask') {
+        onRenameAnyChat?.(pendingRenameChat.sessionId, pendingRenameChat.targetCode, next);
       }
     }
     setPendingRenameChat(null);
-  }, [pendingRenameChat, renameDraft, onRenameStellaChat, onRenameChat]);
+  }, [pendingRenameChat, renameDraft, onRenameStellaChat, onRenameChat, onRenameAnyChat]);
 
   const confirmDeleteChat = useCallback(() => {
     if (!pendingDeleteChat) return;
     if (pendingDeleteChat.kind === 'stella') {
       onDeleteStellaChat?.(pendingDeleteChat.sessionId);
-    } else if (pendingDeleteChat.code) {
+    } else if (pendingDeleteChat.kind === 'workspace') {
       onDeleteChat?.(pendingDeleteChat.code, pendingDeleteChat.sessionId);
+    } else if (pendingDeleteChat.kind === 'ask') {
+      onDeleteAnyChat?.(pendingDeleteChat.sessionId, pendingDeleteChat.targetCode);
     }
     setPendingDeleteChat(null);
-  }, [pendingDeleteChat, onDeleteStellaChat, onDeleteChat]);
+  }, [pendingDeleteChat, onDeleteStellaChat, onDeleteChat, onDeleteAnyChat]);
 
   // Search is owned locally; add-form open state is owned by parent. We
   // derive `searchOpen` so that whenever the parent shows the add-form,
@@ -592,61 +628,106 @@ export const TargetListSidebar: React.FC<TargetListSidebarProps> = ({
         </div>
       )}
 
-      {/* Body — Stella global chat list */}
+      {/* Body — Ask tab: unified chat list (Stella + every target-bound chat) */}
       {activeMode === 'stella' && (
         <div className="flex-1 overflow-y-auto pt-1">
-          {stellaChats === undefined && (
-            <div className="px-3 py-4 text-xs text-[var(--rw-text-3)] text-center">
-              Loading…
-            </div>
-          )}
-          {stellaChats && stellaChats.length === 0 && (
-            <div className="px-3 py-4 text-xs text-[var(--rw-text-3)] text-center">
-              No chats yet
-            </div>
-          )}
-          {stellaChats && [...stellaChats]
-            // Sort by creation time descending (chatSession_id lex order). Do
-            // not use last_updated: keeps the list stable across streaming
-            // updates and rename so it does not flicker mid-chat.
-            .sort((a, b) => b.chatSession_id.localeCompare(a.chatSession_id))
-            .map((chat) => (
-              <div
-                key={chat.chatSession_id}
-                className={`rw-tree-row rw-chat-row group ${stellaActiveSessionId === chat.chatSession_id ? 'is-active' : ''}`}
-                style={{ paddingLeft: 12 }}
-                onClick={() => onSelectStellaChat?.(chat.chatSession_id)}
-              >
-                <MessageSquare size={13} className="flex-shrink-0 mr-1 text-[var(--rw-text-3)]" />
-                <span className="truncate flex-1">{chat.title || 'Untitled'}</span>
-                {onRenameStellaChat && (
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      openRename({ kind: 'stella', sessionId: chat.chatSession_id, title: chat.title || '' });
-                    }}
-                    className="ml-1 p-0.5 rounded opacity-0 group-hover:opacity-100 hover:bg-black/10 text-[var(--rw-text-3)] transition-opacity"
-                    title="Rename"
-                  >
-                    <Pencil size={11} />
-                  </button>
-                )}
-                {onDeleteStellaChat && (
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setPendingDeleteChat({ kind: 'stella', sessionId: chat.chatSession_id, title: chat.title || 'Untitled' });
-                    }}
-                    className="ml-1 p-0.5 rounded opacity-0 group-hover:opacity-100 hover:bg-black/10 text-[var(--rw-text-3)] hover:text-red-500 transition-opacity"
-                    title="Delete chat"
-                  >
-                    <Trash2 size={11} />
-                  </button>
-                )}
-              </div>
-            ))}
+          {/*
+            Prefer the unified `allChats` feed when supplied; fall back to the
+            Stella-only list for compatibility (e.g. if a future caller wires
+            the sidebar without the unified hook).
+          */}
+          {(() => {
+            const useUnified = allChats !== undefined;
+            const list = useUnified ? allChats : stellaChats;
+            const activeId = useUnified
+              ? (liveChatSessionId ?? stellaActiveSessionId ?? null)
+              : (stellaActiveSessionId ?? null);
+
+            if (list === undefined) {
+              return (
+                <div className="px-3 py-4 text-xs text-[var(--rw-text-3)] text-center">
+                  Loading…
+                </div>
+              );
+            }
+            if (list.length === 0) {
+              return (
+                <div className="px-3 py-4 text-xs text-[var(--rw-text-3)] text-center">
+                  No chats yet
+                </div>
+              );
+            }
+            // Already sorted by chatSession_id asc in main (listAll). For
+            // the legacy stellaChats fallback, sort defensively here so the
+            // ordering contract holds regardless of feed.
+            const sorted = useUnified
+              ? list
+              : [...list].sort((a, b) => a.chatSession_id.localeCompare(b.chatSession_id));
+
+            return sorted.map((chat) => {
+              const targetCode = chat.targetCode ?? null;
+              const pill = targetCode
+                ? (targetPillLookup ? targetPillLookup(targetCode) : targetCode)
+                : null;
+              const isActive = activeId === chat.chatSession_id;
+              return (
+                <div
+                  key={chat.chatSession_id}
+                  className={`rw-tree-row rw-chat-row group ${isActive ? 'is-active' : ''}`}
+                  style={{ paddingLeft: 12 }}
+                  onClick={() => {
+                    if (useUnified) {
+                      onSelectAnyChat?.(chat.chatSession_id, targetCode);
+                    } else {
+                      onSelectStellaChat?.(chat.chatSession_id);
+                    }
+                  }}
+                >
+                  <MessageSquare size={13} className="flex-shrink-0 mr-1 text-[var(--rw-text-3)]" />
+                  {pill && (
+                    <span className="rw-chat-row-pill" title={targetCode || ''}>
+                      {pill}
+                    </span>
+                  )}
+                  <span className="truncate flex-1">{chat.title || 'Untitled'}</span>
+                  {(useUnified ? onRenameAnyChat : onRenameStellaChat) && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (useUnified) {
+                          openRename({ kind: 'ask', targetCode, sessionId: chat.chatSession_id, title: chat.title || '' });
+                        } else {
+                          openRename({ kind: 'stella', sessionId: chat.chatSession_id, title: chat.title || '' });
+                        }
+                      }}
+                      className="ml-1 p-0.5 rounded opacity-0 group-hover:opacity-100 hover:bg-black/10 text-[var(--rw-text-3)] transition-opacity"
+                      title="Rename"
+                    >
+                      <Pencil size={11} />
+                    </button>
+                  )}
+                  {(useUnified ? onDeleteAnyChat : onDeleteStellaChat) && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (useUnified) {
+                          setPendingDeleteChat({ kind: 'ask', targetCode, sessionId: chat.chatSession_id, title: chat.title || 'Untitled' });
+                        } else {
+                          setPendingDeleteChat({ kind: 'stella', sessionId: chat.chatSession_id, title: chat.title || 'Untitled' });
+                        }
+                      }}
+                      className="ml-1 p-0.5 rounded opacity-0 group-hover:opacity-100 hover:bg-black/10 text-[var(--rw-text-3)] hover:text-red-500 transition-opacity"
+                      title="Delete chat"
+                    >
+                      <Trash2 size={11} />
+                    </button>
+                  )}
+                </div>
+              );
+            });
+          })()}
         </div>
       )}
 

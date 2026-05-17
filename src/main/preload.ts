@@ -1292,12 +1292,23 @@ export interface ElectronAPI {
       };
       error?: string;
     }>;
+    /** Return every chat session for the active chat (ignores targetCode filter). */
+    listAll: () => Promise<{
+      success: boolean;
+      data?: {
+        chatId: string | null;
+        sessions: Array<{ chatSession_id: string; last_updated: string; title: string; targetCode?: string | null; targetDir?: string }>;
+      };
+      error?: string;
+    }>;
     create: (
       targetCode: string | null,
       opts?: { title?: string; targetDir?: string },
     ) => Promise<{ success: boolean; data?: { chatId: string; chatSessionId: string }; error?: string }>;
     delete: (chatSessionId: string) => Promise<{ success: boolean; error?: string }>;
     rename: (chatSessionId: string, title: string) => Promise<{ success: boolean; error?: string }>;
+    /** Release every chat bound to this target back to the Stella pool (targetCode -> null). */
+    unbindTarget: (targetCode: string) => Promise<{ success: boolean; data?: { unboundCount: number }; error?: string }>;
     setLastActive: (targetCode: string | null, chatSessionId: string) => Promise<{ success: boolean; error?: string }>;
     getLastActive: (targetCode: string | null) => Promise<{ success: boolean; data?: string | null; error?: string }>;
   };
@@ -2329,12 +2340,15 @@ export const electronAPI: ElectronAPI = {
   researchChat: {
     listByTarget: (targetCode: string | null) =>
       ipcRenderer.invoke('researchChat:listByTarget', targetCode),
+    listAll: () => ipcRenderer.invoke('researchChat:listAll'),
     create: (targetCode: string | null, opts?: { title?: string; targetDir?: string }) =>
       ipcRenderer.invoke('researchChat:create', targetCode, opts),
     delete: (chatSessionId: string) =>
       ipcRenderer.invoke('researchChat:delete', chatSessionId),
     rename: (chatSessionId: string, title: string) =>
       ipcRenderer.invoke('researchChat:rename', chatSessionId, title),
+    unbindTarget: (targetCode: string) =>
+      ipcRenderer.invoke('researchChat:unbindTarget', targetCode),
     setLastActive: (targetCode: string | null, chatSessionId: string) =>
       ipcRenderer.invoke('researchChat:setLastActive', targetCode, chatSessionId),
     getLastActive: (targetCode: string | null) =>

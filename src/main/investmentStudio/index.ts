@@ -276,6 +276,29 @@ function registerResearchChatIpc(deps: InvestmentStudioDeps): void {
     }
   });
 
+  // Return every chat session for the active chat, regardless of target
+  // binding. Each session keeps its `targetCode` field so the renderer
+  // can decorate target-bound rows with a stock-code pill. Used by the
+  // Ask tab's unified chat list (see useAllChats / TargetListSidebar).
+  // Sorted ascending by chatSession_id (= creation time) so the oldest
+  // chat appears at the top of the list, mirroring a chronological feed.
+  ipcMain.handle('researchChat:listAll', async () => {
+    try {
+      const alias = deps.getCurrentUserAlias();
+      if (!alias) return { success: false, error: 'No current user session' };
+      const chatId = await resolveResearchChatId();
+      if (!chatId) return { success: true, data: { chatId: null, sessions: [] } };
+      const pcManager = await deps.getProfileCacheManager();
+      const all = await pcManager.getChatSessionsAsync(alias, chatId);
+      const sorted = [...all].sort((a: any, b: any) =>
+        String(a.chatSession_id || '').localeCompare(String(b.chatSession_id || '')),
+      );
+      return { success: true, data: { chatId, sessions: sorted } };
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+    }
+  });
+
   ipcMain.handle('researchChat:create', async (
     _event,
     targetCode: string | null,
@@ -354,6 +377,53 @@ function registerResearchChatIpc(deps: InvestmentStudioDeps): void {
         updatedFile as any,
       );
       return ok ? { success: true } : { success: false, error: 'Failed to rename chat session' };
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+    }
+  });
+
+  // Release every chat session bound to a target so they go back to the
+  // global "Ask Stella" pool (targetCode -> null). Used by the renderer's
+  // deleteTarget flow before the underlying target directory is trashed,
+  // so chat history is preserved but no longer points to a target that
+  // will cease to exist.
+  ipcMain.handle('researchChat:unbindTarget', async (_event, targetCode: string) => {
+    try {
+      const alias = deps.getCurrentUserAlias();
+      if (!alias) return { success: false, error: 'No current user session' };
+      if (!targetCode || typeof targetCode !== 'string') {
+        return { success: false, error: 'targetCode is required' };
+      }
+      const chatId = await resolveResearchChatId();
+      if (!chatId) return { success: true, data: { unboundCount: 0 } };
+
+      const pcManager = await deps.getProfileCacheManager();
+      const all = await pcManager.getChatSessionsAsync(alias, chatId);
+      const matching = all.filter((s: any) =>
+        (s.targetCode === undefined ? null : s.targetCode) === targetCode,
+      );
+
+      let unboundCount = 0;
+      for (const meta of matching) {
+        const sessionId = (meta as any).chatSession_id as string;
+        const file = await pcManager.getChatSessionFile(alias, chatId, sessionId);
+        if (!file) continue;
+        // Strip target binding fields from BOTH the meta index AND the
+        // session file. We delete instead of setting to null so the
+        // session looks identical to a freshly-created Stella chat.
+        const nextFile = { ...file } as any;
+        delete nextFile.targetCode;
+        delete nextFile.targetDir;
+        const ok = await pcManager.updateChatSession(
+          alias,
+          chatId,
+          sessionId,
+          { targetCode: null, targetDir: null } as any,
+          nextFile as any,
+        );
+        if (ok) unboundCount += 1;
+      }
+      return { success: true, data: { unboundCount } };
     } catch (error) {
       return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
     }

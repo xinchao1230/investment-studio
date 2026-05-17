@@ -8,6 +8,7 @@ import { usePortfolio, TargetFile, MoveResult } from './usePortfolio';
 import { useTargetFilesByCode } from './useTargetFilesByCode';
 import { useTargetChats } from './useTargetChats';
 import { useStellaChats } from './useStellaChats';
+import { useAllChats } from './useAllChats';
 import { useTabsByCode } from './useTabsByCode';
 import { useResearchSelection } from './useResearchSelection';
 import {
@@ -94,6 +95,11 @@ export const ResearchPage: React.FC = () => {
   // Not persisted by design — always defaults to 'workspace' on app start.
   const [activeMode, setActiveMode] = useState<'workspace' | 'stella'>('workspace');
   const stella = useStellaChats();
+  // Ask tab shows a unified list of *all* chats (both Stella-scoped and
+  // target-bound). The list itself is owned here; selection still
+  // dispatches into stella / targetChats hooks based on the row's
+  // targetCode (see handleSelectAnyChat below).
+  const allChats = useAllChats();
   // Source of truth for the chat session id the agent engine is *actually*
   // bound to right now. Survives across stella↔target tab switches and
   // includes "leftover" sessions that aren't tracked by either hook.
@@ -314,11 +320,15 @@ export const ResearchPage: React.FC = () => {
     });
   }, [selectedCode]);
 
-  // When active chat changes, tell the chat engine to switch sessions so
-  // the embedded ChatView reflects the right history.
+  // When the target-bound active chat changes, tell the chat engine to
+  // switch sessions so the embedded ChatView reflects the right history.
+  //
+  // We do NOT gate this on `activeMode === 'workspace'` anymore: the Ask
+  // tab's unified chat list can route a click to `targetChats.selectChat
+  // ForTarget` while sidebar stays on stella mode. In that case we still
+  // want the right pane to follow. Stella vs target ownership is decided
+  // by which hook's `active` actually changes, not by the visible tab.
   useEffect(() => {
-    // In Stella mode, the stella effect below owns the active session.
-    if (activeMode === 'stella') return;
     if (!targetChats.active) return;
     const { chatId, chatSessionId } = targetChats.active;
     (async () => {
@@ -331,12 +341,15 @@ export const ResearchPage: React.FC = () => {
         console.error('[ResearchPage] switchToChatSession failed:', err);
       }
     })();
-  }, [targetChats.active, activeMode]);
+  }, [targetChats.active]);
 
-  // Stella mode: when the active Stella session changes, switch the chat
-  // engine to it (mirrors the target effect above).
+  // When the stella-scoped active chat changes, switch the chat engine
+  // to it. Same rationale as the target effect above — no activeMode
+  // guard, so an Ask-tab click on a target-bound row (which calls
+  // targetChats.selectChatForTarget and CLEARS stella.active in the
+  // process via useStellaChats internals if implemented; otherwise
+  // leaves it alone) is handled by the right effect.
   useEffect(() => {
-    if (activeMode !== 'stella') return;
     if (!stella.active) return;
     const { chatId, chatSessionId } = stella.active;
     (async () => {
@@ -347,7 +360,7 @@ export const ResearchPage: React.FC = () => {
         console.error('[ResearchPage] switchToChatSession (stella) failed:', err);
       }
     })();
-  }, [stella.active, activeMode]);
+  }, [stella.active]);
 
   // Investment-studio: backend's postProcessForPortfolioInitTarget will
   // re-bind a Stella-scoped chat (targetCode = null) to a newly-created
@@ -419,19 +432,20 @@ export const ResearchPage: React.FC = () => {
 
   // Mode switch: ensure the right chat session is active for the new mode.
   // - workspace: re-select the current target's chat (no-op if unchanged).
-  // - stella: select (or auto-create) the most-recent Stella chat.
+  // - stella (Ask tab): do nothing. Ask is now a unified preview list of
+  //   every chat; switching tabs should NOT hijack the agent engine's
+  //   currently-bound session. The list highlights whichever session
+  //   `liveChatSessionId` points to, and the user clicks a row to switch.
   const handleModeChange = useCallback(
     async (mode: 'workspace' | 'stella') => {
       if (mode === activeMode) return;
       setActiveMode(mode);
-      if (mode === 'stella') {
-        await stella.selectChat();
-      } else if (selectedCode) {
+      if (mode === 'workspace' && selectedCode) {
         const target = targetsRef.current.find((t) => t.stock_code === selectedCode);
         await targetChats.selectChatForTarget(selectedCode, target);
       }
     },
-    [activeMode, selectedCode, stella, targetChats],
+    [activeMode, selectedCode, targetChats],
   );
 
   // Post-hydration restore: when sessionStorage rehydrates a selectedCode
@@ -510,6 +524,69 @@ export const ResearchPage: React.FC = () => {
       await targetChats.selectChatForTarget(code, target, chatSessionId);
     },
     [targetChats],
+  );
+
+  // Ask tab dispatcher: route a click on any chat row in the unified
+  // list to the right selection hook, based on whether the row is
+  // target-bound. Crucially, we DO NOT call `setActiveMode('workspace')`
+  // here — the user explicitly clicks the Workspace tab when they want
+  // to leave triage mode. This is the "preview mode" UX:
+  //
+  // - Stella row (targetCode === null): just route to stella.selectChat.
+  //   selectedCode is cleared so the right pane shows the global header.
+  // - Target row: route to targetChats.selectChatForTarget with the
+  //   preferred session id, and set selectedCode so any target-aware
+  //   chrome (right-pane breadcrumb / pill) follows. Sidebar stays on
+  //   the Ask list with the clicked row highlighted.
+  const handleSelectAnyChat = useCallback(
+    async (chatSessionId: string, targetCode: string | null) => {
+      if (targetCode === null) {
+        setSelectedCode(null);
+        await stella.selectChat(chatSessionId);
+        return;
+      }
+      const target = targetsRef.current.find((t) => t.stock_code === targetCode);
+      setSelectedCode(targetCode);
+      await targetChats.selectChatForTarget(targetCode, target, chatSessionId);
+    },
+    [stella, targetChats, setSelectedCode],
+  );
+
+  const handleDeleteAnyChat = useCallback(
+    async (chatSessionId: string, targetCode: string | null) => {
+      // If the chat being deleted is the one the agent engine currently
+      // talks to, the underlying hook's deleteChat (stella/target) only
+      // performs its fallback when its own `active` happens to match.
+      // In Ask-list flows the live session can come from EITHER hook, so
+      // we also clear the agent engine cache here as a belt-and-suspenders
+      // measure — preventing the right pane from continuing to render the
+      // deleted session's messages.
+      const wasLive = liveChatSessionId === chatSessionId;
+      if (targetCode === null) {
+        await stella.deleteChat(chatSessionId);
+      } else {
+        await targetChats.deleteChat(targetCode, chatSessionId);
+      }
+      if (wasLive) {
+        agentChatSessionCacheManager.setCurrentChatSessionId(null, null);
+      }
+      // Refresh the unified Ask list so the deleted row disappears even
+      // when no chatSession:updated event fires for the structural change.
+      void allChats.refresh();
+    },
+    [stella, targetChats, liveChatSessionId, allChats],
+  );
+
+  const handleRenameAnyChat = useCallback(
+    async (chatSessionId: string, targetCode: string | null, title: string) => {
+      if (targetCode === null) {
+        await stella.renameChat(chatSessionId, title);
+      } else {
+        await targetChats.renameChat(targetCode, chatSessionId, title);
+      }
+      void allChats.refresh();
+    },
+    [stella, targetChats, allChats],
   );
 
   const handleNewChat = useCallback(
@@ -799,6 +876,16 @@ export const ResearchPage: React.FC = () => {
     async () => {
       if (!pendingDelete) return;
       const { code } = pendingDelete;
+      // Snapshot chats bound to this target BEFORE delete runs (because
+      // deleteTarget→unbindTarget will strip the binding, making them
+      // unfindable by code afterwards). We need this list to detect
+      // whether the agent engine's *live* session belongs to one of the
+      // soon-to-be-unbound chats — if so, the right pane will otherwise
+      // keep rendering messages from a chat the user just orphaned.
+      const boundChats = targetChats.chatsByCode[code] ?? [];
+      const boundChatIds = new Set(boundChats.map((c) => c.chatSession_id));
+      const liveBelongedToTarget =
+        liveChatSessionId != null && boundChatIds.has(liveChatSessionId);
       setDeleteBusy(true);
       const result = await deleteTarget(code);
       setDeleteBusy(false);
@@ -808,16 +895,14 @@ export const ResearchPage: React.FC = () => {
         return;
       }
       setPendingDelete(null);
-      // Cascade-delete: remove all chat sessions bound to this target.
-      const chats = targetChats.chatsByCode[code];
-      if (chats && chats.length > 0) {
-        await Promise.all(
-          chats.map((c) =>
-            targetChats.deleteChat(code, c.chatSession_id).catch((err) => {
-              console.error('[ResearchPage] cascade-delete chat failed:', err);
-            }),
-          ),
-        );
+      // Phase 3 design: chats bound to this target are *unbound*, not
+      // deleted (see researchChatIpc.unbindTarget inside deleteTarget) —
+      // they survive as ordinary "Ask Stella" history. So no cascade-
+      // delete loop here. Instead, if the agent engine was actively
+      // talking to one of those chats, clear its cache so the right pane
+      // resets instead of continuing to render the now-orphaned session.
+      if (liveBelongedToTarget) {
+        agentChatSessionCacheManager.setCurrentChatSessionId(null, null);
       }
       // Cleanup: clear this target's tab state entirely (Layer 1 of the
       // anti-bug defense against recreated same-stockCode targets) and flush
@@ -848,8 +933,11 @@ export const ResearchPage: React.FC = () => {
       // Flush selection state immediately so a quick re-add or app close
       // can't leave a stale selection of a now-deleted target.
       flushSelection();
+      // The unified Ask list needs to refresh so the just-unbound chats
+      // surface as Stella rows (no pill) instead of disappearing.
+      void allChats.refresh();
     },
-    [pendingDelete, deleteTarget, targetChats, setTabsByCode, flushNow, setExpandedCodes, setSelectedCode, flushSelection],
+    [pendingDelete, deleteTarget, targetChats, liveChatSessionId, allChats, setTabsByCode, flushNow, setExpandedCodes, setSelectedCode, flushSelection],
   );
 
   const handleTabClose = useCallback(
@@ -1058,6 +1146,17 @@ export const ResearchPage: React.FC = () => {
             onNewStellaChat={() => stella.createChat()}
             onDeleteStellaChat={(sid) => stella.deleteChat(sid)}
             onRenameStellaChat={(sid, t) => stella.renameChat(sid, t)}
+            allChats={allChats.chats}
+            liveChatSessionId={liveChatSessionId}
+            onSelectAnyChat={handleSelectAnyChat}
+            onDeleteAnyChat={handleDeleteAnyChat}
+            onRenameAnyChat={handleRenameAnyChat}
+            targetPillLookup={(code) => {
+              const t = targetsRef.current.find((tt) => tt.stock_code === code);
+              if (!t) return code;
+              // Unlisted targets store stock_code === name; collapse to one label.
+              return t.stock_code === t.name ? t.name : t.stock_code;
+            }}
             width={leftWidth}
             onCollapse={toggleLeftCollapsed}
             topSlot={showAddForm ? (

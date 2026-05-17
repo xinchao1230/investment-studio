@@ -42,6 +42,20 @@ export async function listByTarget(
   return data ?? { chatId: null, sessions: [] };
 }
 
+/**
+ * List every chat session for the active chat config, regardless of
+ * `targetCode`. Backend returns sorted by chatSession_id descending.
+ * Used by the Ask tab's unified chat list.
+ */
+export async function listAll(): Promise<{
+  chatId: string | null;
+  sessions: ResearchChatSessionMeta[];
+}> {
+  const res = await api().listAll();
+  const data = unwrap<{ chatId: string | null; sessions: ResearchChatSessionMeta[] }>(res, 'listAll');
+  return data ?? { chatId: null, sessions: [] };
+}
+
 /** Create a new chat session bound to a target. Returns `{ chatId, chatSessionId }`. */
 export async function createChat(
   targetCode: string | null,
@@ -63,6 +77,18 @@ export async function renameChat(chatSessionId: string, title: string): Promise<
   unwrap<void>(res, 'rename');
 }
 
+/**
+ * Release every chat session bound to the given target back to the
+ * Stella pool (targetCode -> null). Used by deleteTarget so chats
+ * survive the target removal as plain Stella history. Returns the
+ * number of sessions unbound.
+ */
+export async function unbindTarget(targetCode: string): Promise<number> {
+  const res = await api().unbindTarget(targetCode);
+  const data = unwrap<{ unboundCount: number }>(res, 'unbindTarget');
+  return data?.unboundCount ?? 0;
+}
+
 /** Record the most-recently-active chat session for a target. */
 export async function setLastActive(targetCode: string | null, chatSessionId: string): Promise<void> {
   const res = await api().setLastActive(targetCode, chatSessionId);
@@ -77,9 +103,11 @@ export async function getLastActive(targetCode: string | null): Promise<string |
 
 export const researchChatIpc = {
   listByTarget,
+  listAll,
   create: createChat,
   delete: deleteChat,
   rename: renameChat,
+  unbindTarget,
   setLastActive,
   getLastActive,
 };
