@@ -964,12 +964,14 @@ export const ResearchPage: React.FC = () => {
     const pathPrefix = `${target.name}.${target.stock_code.split('.').pop() ?? target.stock_code}`;
     return sortedTabs(state).map((rec) => {
       const cached = fileContentCacheRef.current.get(rec.absPath);
+      const lower = rec.absPath.toLowerCase();
+      const isCSV = lower.endsWith('.csv') || lower.endsWith('.tsv');
       return {
         id: rec.absPath,
         label: rec.absPath.split(/[\\/]/).pop() ?? rec.absPath,
         filePath: rec.absPath,
         content: cached?.content ?? '',
-        type: 'markdown' as const,
+        type: (isCSV ? 'csv' : 'markdown') as 'csv' | 'markdown',
         mtime: cached?.mtime ?? 0,
         pathPrefix,
       };

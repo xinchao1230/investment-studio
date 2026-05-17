@@ -3,13 +3,14 @@ import { X, Search, Download, MoreHorizontal } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { UniverSheet } from './UniverSheet';
+import { CSVTable } from '../ui/OverlayFileViewer';
 
 export interface Tab {
   id: string;
   label: string;
   filePath: string;
   content: string;
-  type: 'markdown' | 'spreadsheet';
+  type: 'markdown' | 'spreadsheet' | 'csv';
   sheetData?: any;
   mtime?: number;
   /** Optional breadcrumb prefix shown before the filename (e.g. "携程集团.HK"). */
@@ -158,6 +159,13 @@ export const ContentTabs: React.FC<ContentTabsProps> = ({
         activeTab.type === 'spreadsheet' && activeTab.sheetData ? (
           <div className="flex-1 overflow-auto">
             <UniverSheet data={activeTab.sheetData} />
+          </div>
+        ) : activeTab.type === 'csv' ? (
+          <div className="flex-1 overflow-auto min-h-0">
+            <CSVTable
+              content={activeTab.content}
+              delimiter={/\.tsv$/i.test(activeTab.filePath) ? '\t' : ','}
+            />
           </div>
         ) : (
           <div className="flex-1 overflow-auto">

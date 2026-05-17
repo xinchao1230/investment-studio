@@ -30,7 +30,7 @@ import '../../styles/OverlayFileViewer.css';
 // ============================================================
 
 /** File type classification */
-type FileCategory = 'code' | 'text' | 'json' | 'markdown' | 'html' | 'pdf' | 'office' | 'other';
+type FileCategory = 'code' | 'text' | 'csv' | 'json' | 'markdown' | 'html' | 'pdf' | 'office' | 'other';
 
 /** View mode for renderable files */
 type RenderViewMode = 'render' | 'source';
@@ -133,10 +133,12 @@ const CODE_EXTENSION_LANG: Record<string, string> = {
 const CODE_EXTENSIONS = new Set(Object.keys(CODE_EXTENSION_LANG));
 
 const TEXT_EXTENSIONS = new Set([
-  'txt', 'csv', 'tsv',
+  'txt',
   'cfg', 'conf', 'env', 'log',
   'gitignore',
 ]);
+
+const CSV_EXTENSIONS = new Set(['csv', 'tsv']);
 
 const PDF_EXTENSIONS = new Set(['pdf']);
 
@@ -172,6 +174,7 @@ function classifyFile(file: OverlayFileDescriptor): FileCategory {
   if (HTML_EXTENSIONS.has(ext)) return 'html';
   if (MARKDOWN_EXTENSIONS.has(ext)) return 'markdown';
   if (JSON_EXTENSIONS.has(ext)) return 'json';
+  if (CSV_EXTENSIONS.has(ext)) return 'csv';
   if (CODE_EXTENSIONS.has(ext)) return 'code';
   if (TEXT_EXTENSIONS.has(ext)) return 'text';
   if (PDF_EXTENSIONS.has(ext)) return 'pdf';
@@ -193,6 +196,8 @@ function getFileIcon(category: FileCategory) {
       return <Code size={20} />;
     case 'text':
       return <FileText size={20} />;
+    case 'csv':
+      return <FileSpreadsheet size={20} />;
     case 'json':
       return <Braces size={20} />;
     case 'markdown':
@@ -343,6 +348,159 @@ const ReadonlyMonacoViewer: React.FC<{ content: string; language: string }> = ({
   );
 };
 
+// ============================================================
+// CSV / TSV Table viewer (read-only)
+// ============================================================
+
+/**
+ * RFC 4180-style CSV parser. Handles:
+ *   - Quoted fields (containing delimiter / newline)
+ *   - Escaped quotes ("") inside a quoted field
+ *   - CRLF / LF line endings
+ *   - Leading UTF-8 BOM
+ */
+function parseCSV(text: string, delimiter: string): string[][] {
+  if (!text) return [];
+  if (text.charCodeAt(0) === 0xfeff) text = text.slice(1);
+
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let field = '';
+  let inQuotes = false;
+  const len = text.length;
+
+  for (let i = 0; i < len; i++) {
+    const ch = text[i];
+
+    if (inQuotes) {
+      if (ch === '"') {
+        if (i + 1 < len && text[i + 1] === '"') {
+          field += '"';
+          i++;
+        } else {
+          inQuotes = false;
+        }
+      } else {
+        field += ch;
+      }
+      continue;
+    }
+
+    if (ch === '"') {
+      inQuotes = true;
+      continue;
+    }
+    if (ch === delimiter) {
+      row.push(field);
+      field = '';
+      continue;
+    }
+    if (ch === '\r') {
+      if (i + 1 < len && text[i + 1] === '\n') i++;
+      row.push(field);
+      rows.push(row);
+      row = [];
+      field = '';
+      continue;
+    }
+    if (ch === '\n') {
+      row.push(field);
+      rows.push(row);
+      row = [];
+      field = '';
+      continue;
+    }
+    field += ch;
+  }
+
+  if (field.length > 0 || row.length > 0) {
+    row.push(field);
+    rows.push(row);
+  }
+
+  // Drop trailing empty row (artifact of trailing newline)
+  if (rows.length > 0) {
+    const last = rows[rows.length - 1];
+    if (last.length === 1 && last[0] === '') rows.pop();
+  }
+
+  return rows;
+}
+
+export interface CSVTableProps {
+  content: string;
+  /** Field delimiter. Defaults to ',' (comma). Pass '\t' for TSV. */
+  delimiter?: string;
+  /** Cap rows rendered to avoid jank on huge files. Default 5000. */
+  maxRows?: number;
+}
+
+export const CSVTable: React.FC<CSVTableProps> = ({
+  content,
+  delimiter = ',',
+  maxRows = 5000,
+}) => {
+  const { header, body, truncated, totalRows, colCount } = useMemo(() => {
+    const rows = parseCSV(content, delimiter);
+    if (rows.length === 0) {
+      return { header: [] as string[], body: [] as string[][], truncated: false, totalRows: 0, colCount: 0 };
+    }
+    const head = rows[0];
+    const rest = rows.slice(1);
+    const isTruncated = rest.length > maxRows;
+    const cols = Math.max(head.length, ...rest.map((r) => r.length));
+    return {
+      header: head,
+      body: isTruncated ? rest.slice(0, maxRows) : rest,
+      truncated: isTruncated,
+      totalRows: rest.length,
+      colCount: cols,
+    };
+  }, [content, delimiter, maxRows]);
+
+  if (header.length === 0) {
+    return (
+      <div className="csv-table-empty">(empty file)</div>
+    );
+  }
+
+  return (
+    <div className="csv-table-wrap">
+      <div className="csv-table-scroll">
+        <table className="csv-table">
+          <thead>
+            <tr>
+              <th className="csv-table-rownum" aria-label="row" />
+              {Array.from({ length: colCount }).map((_, ci) => (
+                <th key={ci} title={header[ci] ?? ''}>
+                  {header[ci] ?? ''}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {body.map((row, ri) => (
+              <tr key={ri}>
+                <td className="csv-table-rownum">{ri + 1}</td>
+                {Array.from({ length: colCount }).map((_, ci) => (
+                  <td key={ci} title={row[ci] ?? ''}>
+                    {row[ci] ?? ''}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {truncated && (
+        <div className="csv-table-truncated">
+          Showing first {body.length.toLocaleString()} of {totalRows.toLocaleString()} rows.
+        </div>
+      )}
+    </div>
+  );
+};
+
 // Front Matter table component (for displaying YAML metadata in Markdown files)
 const OverlayFrontMatterTable: React.FC<{ frontMatter: FrontMatter }> = ({ frontMatter }) => {
   const entries = Object.entries(frontMatter);
@@ -416,7 +574,7 @@ export const OverlayFileViewer: React.FC<OverlayFileViewerProps> = ({
   const isEditable = useMemo(() => {
     if (!file) return false;
     if (!isLocalFile(file.url)) return false;
-    return category === 'text' || category === 'code' || category === 'json' || category === 'markdown' || category === 'html';
+    return category === 'text' || category === 'code' || category === 'json' || category === 'markdown' || category === 'html' || category === 'csv';
   }, [file, category]);
 
   // Auto-fetch file size (when file.size is missing and file is local)
@@ -469,8 +627,8 @@ export const OverlayFileViewer: React.FC<OverlayFileViewerProps> = ({
     setIsDirty(false);
     setSaveError(null);
 
-    // text / json / code / markdown / html all need text content loading
-    if (category === 'text' || category === 'code' || category === 'json' || category === 'markdown' || category === 'html') {
+    // text / json / code / markdown / html / csv all need text content loading
+    if (category === 'text' || category === 'code' || category === 'json' || category === 'markdown' || category === 'html' || category === 'csv') {
       setIsLoading(true);
       setViewMode('render'); // Reset view mode
 
@@ -883,6 +1041,15 @@ export const OverlayFileViewer: React.FC<OverlayFileViewerProps> = ({
       // ---------- Text ----------
       case 'text':
         return <ReadonlyMonacoViewer content={textContent ?? ''} language={getMonacoLanguage(ext)} />;
+
+      // ---------- CSV / TSV ----------
+      case 'csv':
+        return (
+          <CSVTable
+            content={textContent ?? ''}
+            delimiter={ext === 'tsv' ? '\t' : ','}
+          />
+        );
 
       // ---------- PDF ----------
       case 'pdf': {
