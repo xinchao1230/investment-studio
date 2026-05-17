@@ -1,10 +1,11 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { MessageSquare, LayoutDashboard } from 'lucide-react';
 import { useLayout } from './LayoutProvider';
 import { AuthData } from '../../types/authTypes';
 import NavigationSection from './NavigationSection';
 import UserSection from './UserSection';
+import { useDirtyEditors } from '../../contexts/DirtyEditorsContext';
 import '../../styles/LeftNavigation.css';
 
 interface LeftNavigationProps {
@@ -40,8 +41,24 @@ const LeftNavigation: React.FC<LeftNavigationProps> = ({
   const { leftPanelCollapsed } = useLayout();
   const location = useLocation();
   const navigate = useNavigate();
+  const { hasAnyDirty } = useDirtyEditors();
   const isChat = location.pathname.startsWith('/agent');
   const isResearch = location.pathname.startsWith('/research');
+
+  // Wrap navigate() so any unsaved-editor state pops a confirm before
+  // the route change actually unmounts ContentTabs (which would drop
+  // Monaco buffers without warning otherwise).
+  const guardedNavigate = useCallback(
+    (to: string) => {
+      if (location.pathname === to) return;
+      if (hasAnyDirty()) {
+        const ok = window.confirm('有未保存的修改，确定离开当前页面？修改将丢失。');
+        if (!ok) return;
+      }
+      navigate(to);
+    },
+    [navigate, hasAnyDirty, location.pathname],
+  );
 
   const navigationClasses = [
     'left-navigation',
@@ -61,7 +78,7 @@ const LeftNavigation: React.FC<LeftNavigationProps> = ({
           type="button"
           className={`mode-btn ${isChat ? 'active' : ''}`}
           title="Chat"
-          onClick={() => navigate('/agent')}
+          onClick={() => guardedNavigate('/agent')}
         >
           <MessageSquare size={18} />
         </button>
@@ -69,7 +86,7 @@ const LeftNavigation: React.FC<LeftNavigationProps> = ({
           type="button"
           className={`mode-btn ${isResearch ? 'active' : ''}`}
           title="Workspace"
-          onClick={() => navigate('/research')}
+          onClick={() => guardedNavigate('/research')}
         >
           <LayoutDashboard size={18} />
         </button>

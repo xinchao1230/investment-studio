@@ -11,6 +11,10 @@ import { AppRoutes } from './routes/AppRoutes';
 import WindowsTitleBar from './components/layout/WindowsTitleBar';
 import { useMcpConnectionFailureToast } from './lib/mcp/useMcpConnectionFailureToast';
 import { createLogger } from './lib/utilities/logger';
+import {
+  DirtyEditorsProvider,
+  useDirtyEditors,
+} from './contexts/DirtyEditorsContext';
 
 const logger = createLogger('[App]');
 
@@ -25,11 +29,36 @@ const McpConnectionFailureToastListener: React.FC = () => {
   return null;
 };
 
+/**
+ * App-level beforeunload guard. When any editor in the renderer has
+ * unsaved changes, fire the standard beforeunload prompt so the user
+ * gets a chance to cancel the close / reload.
+ *
+ * Note: Electron's renderer beforeunload reaches the main process as
+ * `will-prevent-unload`. main.ts also needs to handle that event for
+ * the prompt to actually block app quit; see Phase 5.5 in the plan.
+ */
+const UnsavedChangesGuard: React.FC = () => {
+  const { hasAnyDirty } = useDirtyEditors();
+  useEffect(() => {
+    const handler = (e: BeforeUnloadEvent) => {
+      if (!hasAnyDirty()) return;
+      e.preventDefault();
+      // Chrome requires returnValue to be set for the prompt to appear.
+      e.returnValue = '';
+    };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, [hasAnyDirty]);
+  return null;
+};
+
 const AppContent: React.FC = () => {
   return (
     <HashRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
       {/* McpConnectionFailureToastListener must be inside HashRouter because it uses useNavigate */}
       <McpConnectionFailureToastListener />
+      <UnsavedChangesGuard />
       <div className="h-screen flex flex-col overflow-hidden">
         <WindowsTitleBar />
         <div className="flex-1 min-h-0">
@@ -223,7 +252,9 @@ const App: React.FC = () => {
       <AuthProvider>
         <ReauthProvider>
           <ProfileDataProvider>
-            <AppContent />
+            <DirtyEditorsProvider>
+              <AppContent />
+            </DirtyEditorsProvider>
           </ProfileDataProvider>
         </ReauthProvider>
       </AuthProvider>
