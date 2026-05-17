@@ -4008,6 +4008,38 @@ class ElectronApp {
         };
       }
     });
+
+    // Save-As: copy an existing local file to a user-chosen destination via native dialog.
+    // Default location: system Downloads folder. Returns { canceled: true } if user cancels.
+    ipcMain.handle('workspace:saveAs', async (event, sourcePath: string, suggestedName?: string) => {
+      try {
+        if (!sourcePath || !fs.existsSync(sourcePath)) {
+          return { success: false, error: 'Source file does not exist' };
+        }
+
+        const path = await import('path');
+        const defaultFileName = suggestedName || path.basename(sourcePath);
+        const downloadsDir = app.getPath('downloads');
+        const defaultPath = path.join(downloadsDir, defaultFileName);
+
+        const win = BrowserWindow.fromWebContents(event.sender);
+        const dialogResult = win
+          ? await dialog.showSaveDialog(win, { defaultPath })
+          : await dialog.showSaveDialog({ defaultPath });
+
+        if (dialogResult.canceled || !dialogResult.filePath) {
+          return { success: true, canceled: true };
+        }
+
+        await fs.promises.copyFile(sourcePath, dialogResult.filePath);
+        return { success: true, canceled: false, savedPath: dialogResult.filePath };
+      } catch (error) {
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : 'Unknown error',
+        };
+      }
+    });
     
     // Get default Workspace path
     ipcMain.handle('workspace:getDefaultWorkspacePath', async (event, alias: string, chatId: string) => {

@@ -964,6 +964,10 @@ export interface ElectronAPI {
     showInFolder: (
       targetPath: string,
     ) => Promise<{ success: boolean; error?: string }>;
+    saveAs: (
+      sourcePath: string,
+      suggestedName?: string,
+    ) => Promise<{ success: boolean; canceled?: boolean; savedPath?: string; error?: string }>;
     getDefaultWorkspacePath: (
       alias: string,
       chatId: string,
@@ -2147,6 +2151,8 @@ export const electronAPI: ElectronAPI = {
       ipcRenderer.invoke('workspace:openPath', targetPath),
     showInFolder: (targetPath: string) =>
       ipcRenderer.invoke('workspace:showInFolder', targetPath),
+    saveAs: (sourcePath: string, suggestedName?: string) =>
+      ipcRenderer.invoke('workspace:saveAs', sourcePath, suggestedName),
     getDefaultWorkspacePath: (alias: string, chatId: string) =>
       ipcRenderer.invoke('workspace:getDefaultWorkspacePath', alias, chatId),
   },

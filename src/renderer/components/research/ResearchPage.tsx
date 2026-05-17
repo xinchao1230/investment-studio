@@ -20,6 +20,8 @@ import {
 } from './tabState';
 import { LayoutProvider } from '../layout/LayoutProvider';
 import { PasteToWorkspaceProvider } from '../chat/workspace/PasteToWorkspaceProvider';
+import { OverlayFileViewer, OverlayFileDescriptor } from '../ui/OverlayFileViewer';
+import { OverlayImageViewer } from '../ui/OverlayImageViewer';
 import { agentChatSessionCacheManager, useCurrentChatSessionId } from '../../lib/chat/agentChatSessionCacheManager';
 import { profileDataManager } from '@renderer/lib/userData';
 import { useFsChanged } from '../../hooks/useFsChanged';
@@ -939,6 +941,52 @@ export const ResearchPage: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedCode, setTabsByCode]);
 
+  // Global overlay viewers for chat tool-call file/image links.
+  // The chat pane (and its tool-call views) dispatches `fileViewer:open` /
+  // `imageViewer:open` CustomEvents when the user clicks a generated file
+  // card. The default AppLayout listens for these globally, but the Research
+  // route renders without AppLayout, so we host our own listeners + overlay
+  // viewers here. Without this, clicking a file in the chat would do nothing.
+  const [fileViewerState, setFileViewerState] = useState<{
+    isOpen: boolean;
+    file: OverlayFileDescriptor | null;
+  }>({ isOpen: false, file: null });
+  const [imageViewerState, setImageViewerState] = useState<{
+    isOpen: boolean;
+    images: Array<{ id: string; url: string; alt?: string }>;
+    initialIndex: number;
+  }>({ isOpen: false, images: [], initialIndex: 0 });
+
+  useEffect(() => {
+    const onOpenFile = (event: Event) => {
+      const detail = (event as CustomEvent).detail;
+      if (!detail?.file) return;
+      setFileViewerState({ isOpen: true, file: detail.file });
+    };
+    const onOpenImage = (event: Event) => {
+      const detail = (event as CustomEvent).detail;
+      if (!detail?.images) return;
+      setImageViewerState({
+        isOpen: true,
+        images: detail.images,
+        initialIndex: detail.initialIndex ?? 0,
+      });
+    };
+    window.addEventListener('fileViewer:open', onOpenFile);
+    window.addEventListener('imageViewer:open', onOpenImage);
+    return () => {
+      window.removeEventListener('fileViewer:open', onOpenFile);
+      window.removeEventListener('imageViewer:open', onOpenImage);
+    };
+  }, []);
+
+  const handleCloseFileViewer = useCallback(() => {
+    setFileViewerState({ isOpen: false, file: null });
+  }, []);
+  const handleCloseImageViewer = useCallback(() => {
+    setImageViewerState({ isOpen: false, images: [], initialIndex: 0 });
+  }, []);
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-full text-gray-400 text-sm">
@@ -1107,6 +1155,18 @@ export const ResearchPage: React.FC = () => {
         </DialogContent>
       </Dialog>
     </div>
+    {/* Global overlay viewers for chat tool-call file/image links. */}
+    <OverlayFileViewer
+      file={fileViewerState.file}
+      isOpen={fileViewerState.isOpen}
+      onClose={handleCloseFileViewer}
+    />
+    <OverlayImageViewer
+      images={imageViewerState.images}
+      initialIndex={imageViewerState.initialIndex}
+      isOpen={imageViewerState.isOpen}
+      onClose={handleCloseImageViewer}
+    />
     </PasteToWorkspaceProvider>
     </LayoutProvider>
   );

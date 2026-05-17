@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import {
   X,
   Download,
+  FolderOpen,
   FileText,
   FileSpreadsheet,
   FileIcon,
@@ -702,14 +703,19 @@ export const OverlayFileViewer: React.FC<OverlayFileViewerProps> = ({
     };
   }, [isOpen]);
 
-  // Download / open file location
-  const handleDownload = useCallback(() => {
+  // Download / Save As
+  // - Local file: open native Save dialog (default: system Downloads folder),
+  //   then copy source -> chosen destination via main-process IPC.
+  // - Remote URL: trigger browser-native download via temporary <a download>.
+  const handleDownload = useCallback(async () => {
     if (!file) return;
     try {
       if (isLocalFile(file.url)) {
-        // Local file: show in Finder / Explorer
         const localPath = getLocalPath(file.url);
-        window.electronAPI?.workspace?.openPath(localPath);
+        const result = await window.electronAPI?.workspace?.saveAs?.(localPath, file.name);
+        if (result && !result.success) {
+          console.error('[OverlayFileViewer] Save As failed:', result.error);
+        }
       } else {
         // Non-local file: trigger browser download
         const link = document.createElement('a');
@@ -721,6 +727,17 @@ export const OverlayFileViewer: React.FC<OverlayFileViewerProps> = ({
       }
     } catch (error) {
       console.error('Failed to download file:', error);
+    }
+  }, [file]);
+
+  // Reveal local file in OS file manager (Explorer / Finder).
+  const handleReveal = useCallback(() => {
+    if (!file || !isLocalFile(file.url)) return;
+    try {
+      const localPath = getLocalPath(file.url);
+      window.electronAPI?.workspace?.showInFolder(localPath);
+    } catch (error) {
+      console.error('Failed to reveal file:', error);
     }
   }, [file]);
 
@@ -1054,11 +1071,21 @@ export const OverlayFileViewer: React.FC<OverlayFileViewerProps> = ({
                     <Pencil size={24} />
                   </button>
                 )}
+                {isLocalFile(file.url) && (
+                  <button
+                    className="file-viewer-header-btn"
+                    onClick={handleReveal}
+                    aria-label="Show in folder"
+                    title="Show in folder"
+                  >
+                    <FolderOpen size={24} />
+                  </button>
+                )}
                 <button
                   className="file-viewer-header-btn"
                   onClick={handleDownload}
-                  aria-label="Download"
-                  title="Download"
+                  aria-label="Save as"
+                  title="Save as…"
                 >
                   <Download size={24} />
                 </button>
