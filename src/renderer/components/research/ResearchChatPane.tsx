@@ -96,7 +96,7 @@ function buildWorkspaceCards(
     {
       kind: 'task',
       title: '投资逻辑',
-      description: '梳理并写入 key-drivers.md',
+      description: '建立投资框架',
       prompt: `请基于公开资料，梳理 ${label} 的投资逻辑（短期 + 长期）、3-5 条核心跟踪变量、估值参考、主要风险，并用 portfolio_update_key_drivers 写入 key-drivers.md。`,
     },
   ];
