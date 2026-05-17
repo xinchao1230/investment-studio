@@ -1,8 +1,6 @@
 ---
 name: key-drivers
-description: "Build the investment thesis (key drivers + tracking variables + valuation + risks) for a research target and persist it to key-drivers.md"
-version: 1.0.0
-license: MIT
+description: "Build a full investment thesis (短期/长期逻辑 + 3-5 leading tracking variables + 估值参考 + 风险) for a research target and write it to key-drivers.md. Use when the user wants to: (1) build / fill in / 梳理 an investment thesis for a stock or company, (2) populate or refresh a target's key-drivers.md, (3) define what metrics to track for a research target, or (4) run the /key-drivers slash command."
 ---
 
 # Key Drivers (投资逻辑构建)
@@ -11,14 +9,8 @@ license: MIT
 - stock_code: Stock code (e.g. 600519, 09961.HK). For unlisted/private companies, pass the company name as a synthetic placeholder.
 - company_name: Company name in Chinese (e.g. 携程集团). Optional but strongly recommended — used in headers and validation.
 
-## Goal
-Produce a fully-formed `key-drivers.md` for the target that contains:
-1. 投资逻辑（短期 + 长期）
-2. 3-5 条核心跟踪变量（leading + measurable）
-3. 估值参考（3-5 家可比公司表）
-4. 主要风险
-
-**Hard quality bar — no fabrication, no platitudes.** Every claim must trace to a concrete data point (Tushare/yfinance metric, public announcement, regulatory filing, or sell-side title) collected in Phase 2.
+## Principle
+**No fabrication, no platitudes.** Every claim must trace to a concrete data point (Tushare/yfinance metric, public announcement, regulatory filing, or sell-side title) collected in Phase 2. The Phase 6 reviewer is the sole quality gate — do not write to disk until every check passes.
 
 ## Workflow
 
@@ -26,7 +18,7 @@ Produce a fully-formed `key-drivers.md` for the target that contains:
 1. Resolve `stock_code` → market (A 股 / 港股 / 美股 / unlisted) by suffix or numeric prefix.
 2. Call `portfolio_list_targets` to find the matching target folder.
    - If missing: call `portfolio_init_target` with `{ stock_code, name }` first, then proceed.
-3. Read existing `key-drivers.md` (if non-empty) via `read_file` to detect prior content the user may want preserved — if it already contains substantive thesis (not just the empty skeleton), **stop and ask the user** whether to overwrite.
+3. Read existing `key-drivers.md` (if non-empty) via `read_file`. If it already contains substantive thesis (not just the empty skeleton), **stop and ask the user** whether to overwrite.
 
 ### Phase 2 — Collect (parallel)
 Run these in parallel. Skip any that error out, but record the gap.
@@ -50,23 +42,18 @@ Run these in parallel. Skip any that error out, but record the gap.
 ### Phase 3 — Distill thesis
 Write two paragraphs, **each ≤ 120 words**:
 
-- **短期逻辑** (1-3 month catalysts): events / data prints / regulatory decisions / earnings that should move the stock within a quarter. Must cite at least **2 concrete catalysts** from Phase 2 (e.g. "Q3 出境游 GMV 增速即将公布", "反垄断调查整改方案预计 12 月落地").
-- **长期逻辑** (3-5 year structural): unit economics, moat, market structure, optionality. Must cite at least **2 structural drivers** with supporting metrics (e.g. "高星酒店直连库存覆盖率从 35% → 58%", "海外业务 GMV 占比从 12% → 24%").
-
-**Forbidden patterns** (auto-fail on Phase 6 review):
-- "看好长期发展" / "前景广阔" without numbers
-- Restating the company's marketing copy verbatim
-- 短期 and 长期 paragraphs describing the same theme
+- **短期逻辑** (1-3 month catalysts): events / data prints / regulatory decisions / earnings that should move the stock within a quarter. Cite at least **2 concrete catalysts** from Phase 2 (e.g. "Q3 出境游 GMV 增速即将公布", "反垄断调查整改方案预计 12 月落地").
+- **长期逻辑** (3-5 year structural): unit economics, moat, market structure, optionality. Cite at least **2 structural drivers** with supporting metrics (e.g. "高星酒店直连库存覆盖率从 35% → 58%", "海外业务 GMV 占比从 12% → 24%").
 
 ### Phase 4 — Tracking variables
 Produce **3-5** variables that are:
 
 - **Leading** — not lagging (e.g. ✅ "出境游订单 GMV 增速" / ❌ "全年净利润")
-- **Measurable** — must be quantitative with a clear data source (`tushare_collect`, IR releases, third-party trackers)
+- **Measurable** — quantitative with a clear data source (`tushare_collect`, IR releases, third-party trackers)
 - **Disaggregated** — sub-segment KPIs preferred over aggregates (e.g. ✅ "酒店业务 take rate" / ❌ "公司总收入")
 - **Company-specific** — not generic ("营收增速" is too generic; what drives that revenue is the variable)
 
-For each variable record:
+For each variable, record:
 1. Name
 2. Why it matters (one line)
 3. Data source / how to fetch
@@ -80,11 +67,11 @@ For each variable record:
 - Add a one-line summary above the table: "Trades at X PE vs peer median Y, premium/discount driven by …"
 
 **Risk (3-5 entries):**
-- Each risk must be specific and actionable (not "macroeconomic risk"). Examples: monopoly probe outcome, top-3 customer concentration, key-person dependency, sector regulation, FX exposure, etc.
+- Make each risk specific and actionable (not "macroeconomic risk"). Examples: monopoly probe outcome, top-3 customer concentration, key-person dependency, sector regulation, FX exposure.
 - Pair each risk with a leading signal that would detect it materializing.
 
 ### Phase 6 — Reviewer self-check (single pass)
-Before writing, validate the draft against this checklist. **Any ✗ → revise, do NOT write to disk:**
+Validate the draft against this checklist. **Any ✗ → revise, do NOT write to disk:**
 
 | # | Check | Pass criterion |
 |---|---|---|
