@@ -36,6 +36,14 @@ try:
 except Exception as e:
     _trace(f"preload !!! import tushare FAILED: {type(e).__name__}: {e}")
 
+_t = time.monotonic()
+_trace("preload >>> import yfinance")
+try:
+    import yfinance as _preload_yfinance  # noqa: F401
+    _trace(f"preload <<< import yfinance elapsed={time.monotonic() - _t:.2f}s")
+except Exception as e:
+    _trace(f"preload !!! import yfinance FAILED: {type(e).__name__}: {e}")
+
 
 app = Server("research-mcp")
 
@@ -231,12 +239,18 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent]:
             )
             _trace(f"_dispatch <<< call tushare_collect() elapsed={time.monotonic() - t_fn:.2f}s")
         elif name == "yfinance_collect":
+            _trace(f"_dispatch >>> import data_collect.yfinance_collect")
+            t_imp = time.monotonic()
             from .tools.data_collect import yfinance_collect
+            _trace(f"_dispatch <<< import data_collect.yfinance_collect elapsed={time.monotonic() - t_imp:.2f}s")
+            _trace(f"_dispatch >>> call yfinance_collect()")
+            t_fn = time.monotonic()
             result = yfinance_collect(
                 symbol=arguments["symbol"],
                 out_dir=arguments["out_dir"],
                 period=arguments.get("period", "5y"),
             )
+            _trace(f"_dispatch <<< call yfinance_collect() elapsed={time.monotonic() - t_fn:.2f}s")
         elif name == "peer_collect":
             from .tools.data_collect import peer_collect
             result = peer_collect(

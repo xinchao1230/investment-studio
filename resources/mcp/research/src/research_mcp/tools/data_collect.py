@@ -212,8 +212,25 @@ def tushare_collect(
 
 def _build_yfinance_ticker(symbol: str):
     """Build default yfinance Ticker."""
+    t0 = time.monotonic()
+    try:
+        print(f"[trace] _build_yfinance_ticker >>> import yfinance", file=sys.stderr, flush=True)
+    except Exception:
+        pass
     import yfinance as yf
-    return yf.Ticker(symbol)
+    t1 = time.monotonic()
+    try:
+        print(f"[trace] _build_yfinance_ticker <<< import yfinance elapsed={t1 - t0:.2f}s", file=sys.stderr, flush=True)
+        print(f"[trace] _build_yfinance_ticker >>> yf.Ticker({symbol!r})", file=sys.stderr, flush=True)
+    except Exception:
+        pass
+    ticker = yf.Ticker(symbol)
+    t2 = time.monotonic()
+    try:
+        print(f"[trace] _build_yfinance_ticker <<< yf.Ticker() elapsed={t2 - t1:.2f}s total={t2 - t0:.2f}s", file=sys.stderr, flush=True)
+    except Exception:
+        pass
+    return ticker
 
 
 def yfinance_collect(
@@ -234,14 +251,17 @@ def yfinance_collect(
     Returns:
         Result dict with ok, paths, summary or error fields.
     """
+    tag = f"yfinance_collect[{symbol.upper()}]"
+    t_total = time.monotonic()
+    _trace(tag, f"START out_dir={out_dir!r} period={period!r}")
     try:
         os.makedirs(out_dir, exist_ok=True)
         ticker = _client or _build_yfinance_ticker(symbol)
         paths: list[str] = []
         summary: dict = {"symbol": symbol.upper()}
 
-        # Income statement (annual)
-        df_income = ticker.financials
+        # Income statement (annual) — yfinance lazily fetches on first property access
+        df_income = _timed_call(tag, "ticker.financials", lambda: ticker.financials)
         if df_income is None:
             df_income = pd.DataFrame()
         elif not df_income.empty:
@@ -253,7 +273,7 @@ def yfinance_collect(
         summary["income_rows"] = len(df_income)
 
         # Balance sheet (annual)
-        df_balance = ticker.balance_sheet
+        df_balance = _timed_call(tag, "ticker.balance_sheet", lambda: ticker.balance_sheet)
         if df_balance is None:
             df_balance = pd.DataFrame()
         elif not df_balance.empty:
@@ -265,7 +285,7 @@ def yfinance_collect(
         summary["balance_rows"] = len(df_balance)
 
         # Cash flow (annual)
-        df_cashflow = ticker.cashflow
+        df_cashflow = _timed_call(tag, "ticker.cashflow", lambda: ticker.cashflow)
         if df_cashflow is None:
             df_cashflow = pd.DataFrame()
         elif not df_cashflow.empty:
@@ -277,7 +297,7 @@ def yfinance_collect(
         summary["cashflow_rows"] = len(df_cashflow)
 
         # Price history
-        df_hist = ticker.history(period=period)
+        df_hist = _timed_call(tag, "ticker.history", ticker.history, period=period)
         if df_hist is None:
             df_hist = pd.DataFrame()
         elif not df_hist.empty:
@@ -287,8 +307,10 @@ def yfinance_collect(
         paths.append("history.csv")
         summary["history_rows"] = len(df_hist)
 
+        _trace(tag, f"DONE ok total_elapsed={time.monotonic() - t_total:.2f}s summary={summary}")
         return ok(paths=paths, summary=summary)
     except Exception as e:
+        _trace(tag, f"FAIL after {time.monotonic() - t_total:.2f}s: {type(e).__name__}: {e}")
         return fail(error=f"yfinance_collect failed: {e}", retryable=True)
 
 
