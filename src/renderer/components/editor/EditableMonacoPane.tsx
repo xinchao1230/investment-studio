@@ -68,6 +68,14 @@ export interface EditableMonacoPaneProps {
    *  refresh without waiting for a watcher echo (which is suppressed
    *  for our own writes). */
   onSaved?(filePath: string, content: string): void;
+  /** Called whenever a save() goes in-flight / finishes. Useful for a
+   *  "保存中…" status indicator next to the toolbar. */
+  onSavingChange?(saving: boolean): void;
+  /** When true, schedules a debounced save on every buffer change.
+   *  Ctrl+S still works to force an immediate save. Defaults to false. */
+  autoSave?: boolean;
+  /** Debounce window for auto-save, in ms. Defaults to 500. */
+  autoSaveDelay?: number;
   /** Force read-only regardless of file status. */
   readOnly?: boolean;
   className?: string;
@@ -77,15 +85,25 @@ const EditableMonacoPane = forwardRef<
   EditableMonacoPaneHandle,
   EditableMonacoPaneProps
 >(function EditableMonacoPane(
-  { filePath, language = 'plaintext', onDirtyChange, onSaved, readOnly = false, className },
+  { filePath, language = 'plaintext', onDirtyChange, onSaved, onSavingChange, autoSave = false, autoSaveDelay = 500, readOnly = false, className },
   ref,
 ) {
   const file = useEditableTextFile({ filePath });
   const onSavedRef = useRef(onSaved);
   onSavedRef.current = onSaved;
+  const onSavingChangeRef = useRef(onSavingChange);
+  onSavingChangeRef.current = onSavingChange;
   const containerRef = useRef<HTMLDivElement | null>(null);
   const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null);
   const changeDisposableRef = useRef<{ dispose(): void } | null>(null);
+  // Debounce timer for autoSave. Cleared on every keystroke; flushed
+  // on Ctrl+S, blur, and unmount so we never lose a pending edit.
+  const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Captured props mirrored into refs so closures don't depend on them.
+  const autoSaveRef = useRef(autoSave);
+  autoSaveRef.current = autoSave;
+  const autoSaveDelayRef = useRef(autoSaveDelay);
+  autoSaveDelayRef.current = autoSaveDelay;
   // Set true around programmatic editor.setValue() (e.g. reloadFromDisk)
   // so the onDidChangeModelContent listener doesn't re-flag the buffer
   // as dirty against itself.
@@ -155,6 +173,33 @@ const EditableMonacoPane = forwardRef<
   }, [file.isDirty, onDirtyChange]);
 
   // -----------------------------------------------------------------
+  // Propagate saving state up.
+  // -----------------------------------------------------------------
+  useEffect(() => {
+    onSavingChangeRef.current?.(file.isSaving);
+  }, [file.isSaving]);
+
+  // -----------------------------------------------------------------
+  // Internal save helper used by both Ctrl+S and the autoSave timer.
+  // Mirrors what the imperative `save()` does so onSaved fires
+  // identically regardless of trigger.
+  // -----------------------------------------------------------------
+  const performSaveRef = useRef<() => Promise<void>>(async () => undefined);
+  performSaveRef.current = async () => {
+    if (!fileApiRef.current.canSave) return;
+    const path = filePath;
+    const result = await fileApiRef.current.save();
+    if (result.ok && path && onSavedRef.current) {
+      try {
+        onSavedRef.current(path, fileApiRef.current.content ?? '');
+      } catch (e) {
+        // eslint-disable-next-line no-console
+        console.warn('[EditableMonacoPane] onSaved callback threw', e);
+      }
+    }
+  };
+
+  // -----------------------------------------------------------------
   // Mount Monaco when we have content and a container. Re-mount when
   // filePath changes (so undo history doesn't carry across files).
   //
@@ -201,7 +246,11 @@ const EditableMonacoPane = forwardRef<
           lineHeight: 21,
           padding: { top: 12, bottom: 12 },
           scrollBeyondLastLine: false,
-          wordWrap: 'off',
+          // CSV needs strict column alignment; everything else (markdown,
+          // plaintext, …) is more comfortable to edit with soft-wrap so
+          // long lines don't force a horizontal scrollbar.
+          wordWrap: language === 'csv' ? 'off' : 'on',
+          wrappingIndent: 'same',
           tabSize: 2,
           insertSpaces: true,
           renderWhitespace: 'none',
@@ -233,6 +282,17 @@ const EditableMonacoPane = forwardRef<
           // stay in sync. The hook compares against its own baseline
           // (savedContentRef) so this is cheap.
           fileApiRef.current.setContent(editor.getValue());
+
+          // Debounced auto-save.
+          if (autoSaveRef.current) {
+            if (autoSaveTimerRef.current) {
+              clearTimeout(autoSaveTimerRef.current);
+            }
+            autoSaveTimerRef.current = setTimeout(() => {
+              autoSaveTimerRef.current = null;
+              void performSaveRef.current();
+            }, autoSaveDelayRef.current);
+          }
         });
 
         if (fileApiRef.current.canEdit) {
@@ -243,6 +303,16 @@ const EditableMonacoPane = forwardRef<
 
     return () => {
       disposed = true;
+      // Flush any pending auto-save so we don't lose the last
+      // keystroke when the editor unmounts (tab switch, file change,
+      // window close).
+      if (autoSaveTimerRef.current) {
+        clearTimeout(autoSaveTimerRef.current);
+        autoSaveTimerRef.current = null;
+        // Fire-and-forget; the hook's save() is its own promise and
+        // the OS will hold the page alive long enough.
+        void performSaveRef.current();
+      }
       changeDisposableRef.current?.dispose();
       changeDisposableRef.current = null;
       editorRef.current?.dispose();
@@ -269,17 +339,12 @@ const EditableMonacoPane = forwardRef<
       if (!editor || !editor.hasTextFocus()) return;
       if (!fileApiRef.current.canSave) return;
       e.preventDefault();
-      void (async () => {
-        const result = await fileApiRef.current.save();
-        if (result.ok && filePath && onSavedRef.current) {
-          try {
-            onSavedRef.current(filePath, fileApiRef.current.content ?? '');
-          } catch (e2) {
-            // eslint-disable-next-line no-console
-            console.warn('[EditableMonacoPane] onSaved callback threw', e2);
-          }
-        }
-      })();
+      // Cancel any pending debounced save and fire immediately.
+      if (autoSaveTimerRef.current) {
+        clearTimeout(autoSaveTimerRef.current);
+        autoSaveTimerRef.current = null;
+      }
+      void performSaveRef.current();
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);

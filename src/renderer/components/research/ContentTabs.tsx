@@ -5,7 +5,7 @@ import React, {
   useRef,
   useState,
 } from 'react';
-import { X, Search, Download, MoreHorizontal, Edit3, Eye } from 'lucide-react';
+import { X, Search, Download, Edit3, Eye } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { UniverSheet } from './UniverSheet';
@@ -71,6 +71,51 @@ function formatTime(mtime?: number): string {
   }).format(new Date(mtime));
 }
 
+/** HH:MM:SS for the “已保存 12:04:52” toolbar indicator. */
+function formatSavedAt(ts: number): string {
+  return new Intl.DateTimeFormat('zh-CN', {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  }).format(new Date(ts));
+}
+
+/** Small autosave status badge shown in place of the old “保存” button.
+ *  Three states:
+ *    - saving:   “保存中…” (in-flight write)
+ *    - dirty:    “未保存” (debounce window between keystroke and save)
+ *    - savedAt: “已保存 HH:MM:SS”
+ */
+const SaveStatusIndicator: React.FC<{
+  saving: boolean;
+  dirty: boolean;
+  savedAt?: number;
+}> = ({ saving, dirty, savedAt }) => {
+  let label: string;
+  let cls: string;
+  if (saving) {
+    label = '保存中…';
+    cls = 'text-[var(--rw-text-2)]';
+  } else if (dirty) {
+    label = '未保存';
+    cls = 'text-[var(--rw-text-2)]';
+  } else if (savedAt) {
+    label = `已保存 ${formatSavedAt(savedAt)}`;
+    cls = 'text-[var(--rw-text-3)]';
+  } else {
+    return null;
+  }
+  return (
+    <span
+      className={`ml-1.5 text-[11px] ${cls}`}
+      title="自动保存已开启（Ctrl+S 立即保存）"
+    >
+      {label}
+    </span>
+  );
+};
+
 /** Pick a Monaco language id from a tab. */
 function languageForTab(tab: Tab): string {
   if (tab.type === 'markdown') return 'markdown';
@@ -114,6 +159,12 @@ export const ContentTabs: React.FC<ContentTabsProps> = ({
   // is keyed by absPath and tabs can share paths.
   const [dirtyTabs, setDirtyTabs] = useState<Record<string, boolean>>({});
 
+  // Per-tab autosave bookkeeping driven by EditableMonacoPane's
+  // onSavingChange + onSaved. Used to render the “保存中… / 已保存 HH:MM:SS”
+  // toolbar indicator that replaces the explicit Save button.
+  const [savingTabs, setSavingTabs] = useState<Record<string, boolean>>({});
+  const [savedAtTabs, setSavedAtTabs] = useState<Record<string, number>>({});
+
   // Markdown preview find-bar visibility. One bar per ContentTabs
   // instance (only the active tab's preview is on screen so we never
   // need parallel bars). Closes automatically when the active tab
@@ -125,6 +176,16 @@ export const ContentTabs: React.FC<ContentTabsProps> = ({
       setDirtyTabs((prev) => {
         if (Boolean(prev[tabId]) === dirty) return prev;
         return { ...prev, [tabId]: dirty };
+      });
+    },
+    [],
+  );
+
+  const handleSavingChange = useCallback(
+    (tabId: string) => (saving: boolean) => {
+      setSavingTabs((prev) => {
+        if (Boolean(prev[tabId]) === saving) return prev;
+        return { ...prev, [tabId]: saving };
       });
     },
     [],
@@ -144,6 +205,24 @@ export const ContentTabs: React.FC<ContentTabsProps> = ({
     });
     setDirtyTabs((prev) => {
       const next: Record<string, boolean> = {};
+      let changed = false;
+      for (const [id, v] of Object.entries(prev)) {
+        if (ids.has(id)) next[id] = v;
+        else changed = true;
+      }
+      return changed ? next : prev;
+    });
+    setSavingTabs((prev) => {
+      const next: Record<string, boolean> = {};
+      let changed = false;
+      for (const [id, v] of Object.entries(prev)) {
+        if (ids.has(id)) next[id] = v;
+        else changed = true;
+      }
+      return changed ? next : prev;
+    });
+    setSavedAtTabs((prev) => {
+      const next: Record<string, number> = {};
       let changed = false;
       for (const [id, v] of Object.entries(prev)) {
         if (ids.has(id)) next[id] = v;
@@ -188,34 +267,79 @@ export const ContentTabs: React.FC<ContentTabsProps> = ({
     return () => window.removeEventListener('keydown', handler);
   }, [activeTab, activeIsEditing]);
 
+  // Ctrl/Cmd+E shortcut — toggles between preview and edit for the
+  // active markdown/csv tab. We skip the shortcut when Monaco has
+  // text focus so it doesn't fight common in-editor bindings.
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== 'e') return;
+      if (!activeTab || !activeIsEditable) return;
+      e.preventDefault();
+      setEditingTabs((prev) => {
+        const next = new Set(prev);
+        if (next.has(activeTab.id)) next.delete(activeTab.id);
+        else next.add(activeTab.id);
+        return next;
+      });
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [activeTab, activeIsEditable]);
+
+  // Esc shortcut — VS Code-style two-step exit:
+  //   1) If focus is inside Monaco, blur it so Monaco's own Esc
+  //      handling (find widget, suggest popup, etc.) gets a chance
+  //      first and the user can see they've “stepped out” of the
+  //      editor.
+  //   2) Otherwise (focus already outside the editor), exit edit
+  //      mode entirely.
+  // We avoid Esc-in-input/textarea elsewhere on the page to not
+  // hijack form behavior.
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      if (!activeTab || !activeIsEditing) return;
+      const ae = document.activeElement as HTMLElement | null;
+      const insideMonaco = !!ae?.closest('.monaco-editor');
+      if (insideMonaco) {
+        // Step 1: just blur the editor textarea.
+        e.preventDefault();
+        ae?.blur();
+        return;
+      }
+      // Step 2: leave edit mode.
+      const tag = ae?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || ae?.isContentEditable) {
+        // Don't steal Esc from other inputs on the page (e.g. find bar).
+        return;
+      }
+      e.preventDefault();
+      setEditingTabs((prev) => {
+        const next = new Set(prev);
+        next.delete(activeTab.id);
+        return next;
+      });
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [activeTab, activeIsEditing]);
+
   const toggleEdit = useCallback(() => {
     if (!activeTab || !activeIsEditable) return;
     const tabId = activeTab.id;
     setEditingTabs((prev) => {
       const next = new Set(prev);
       if (next.has(tabId)) {
-        // Switching edit → view. Block if there are unsaved changes;
-        // require an explicit discard.
-        if (dirtyTabs[tabId]) {
-          const discard = window.confirm(
-            '有未保存的修改，切换到预览将丢弃修改。确定继续？',
-          );
-          if (!discard) return prev;
-        }
+        // Switching edit → view. With autosave the buffer is already
+        // flushed (or about to be flushed by the pane unmount); no
+        // discard prompt needed.
         next.delete(tabId);
       } else {
         next.add(tabId);
       }
       return next;
     });
-  }, [activeTab, activeIsEditable, dirtyTabs]);
-
-  const handleSaveClick = useCallback(() => {
-    if (!activeTab) return;
-    const handle = paneRefs.current.get(activeTab.id);
-    if (!handle) return;
-    void handle.save();
-  }, [activeTab]);
+  }, [activeTab, activeIsEditable]);
 
   // Search: dispatches to the appropriate mechanism for the active
   // tab. For markdown preview we open a DOM-based find bar (matches
@@ -262,13 +386,19 @@ export const ContentTabs: React.FC<ContentTabsProps> = ({
 
   // Download: copy the current file to a user-chosen location via
   // the existing `workspace:saveAs` IPC (system Save As dialog,
-  // default Downloads). Blocks if there are unsaved edits so we
-  // never silently export a stale on-disk version.
+  // default Downloads). If there's an unsaved buffer we flush it
+  // first so we never silently export a stale on-disk version.
   const handleDownloadClick = useCallback(async () => {
     if (!activeTab) return;
     if (dirtyTabs[activeTab.id]) {
-      showError('请先保存当前更改后再下载');
-      return;
+      const handle = paneRefs.current.get(activeTab.id);
+      if (handle) {
+        const result = await handle.save();
+        if (!result.ok) {
+          showError('保存失败，无法导出');
+          return;
+        }
+      }
     }
     try {
       const suggestedName =
@@ -294,18 +424,14 @@ export const ContentTabs: React.FC<ContentTabsProps> = ({
     }
   }, [activeTab, dirtyTabs, showError, showSuccess]);
 
-  // Guard tab close on unsaved changes.
+  // Guard tab close on unsaved changes. With autosave + pane-unmount
+  // flush, the on-disk file is up to date by the time the user sees
+  // the close animation finish; we don't prompt anymore.
   const handleTabCloseGuarded = useCallback(
     (tabId: string) => {
-      if (dirtyTabs[tabId]) {
-        const discard = window.confirm(
-          '该文件有未保存的修改，确定关闭标签页？修改将丢失。',
-        );
-        if (!discard) return;
-      }
       onTabClose(tabId);
     },
-    [dirtyTabs, onTabClose],
+    [onTabClose],
   );
 
   const basename = activeTab
@@ -415,7 +541,7 @@ export const ContentTabs: React.FC<ContentTabsProps> = ({
             <span className="mx-1.5 text-[var(--rw-text-3)]">·</span>
             最近更新 {formatTime(activeTab.mtime)}
           </span>
-          <div className="flex items-center">
+          <div className="flex items-center gap-0.5">
             <button
               className="p-1 rounded hover:bg-black/5 text-[var(--rw-text-2)]"
               onClick={handleSearchClick}
@@ -424,47 +550,28 @@ export const ContentTabs: React.FC<ContentTabsProps> = ({
               <Search size={14} />
             </button>
             <button
-              className={`p-1 rounded text-[var(--rw-text-2)] ${
-                activeIsDirty
-                  ? 'opacity-40 cursor-not-allowed'
-                  : 'hover:bg-black/5'
-              }`}
+              className="p-1 rounded hover:bg-black/5 text-[var(--rw-text-2)]"
               onClick={handleDownloadClick}
-              disabled={activeIsDirty}
-              title={
-                activeIsDirty
-                  ? '有未保存的修改，请先保存'
-                  : '导出当前文件到…'
-              }
+              title="导出当前文件到…"
             >
               <Download size={14} />
-            </button>
-            <button
-              className="p-1 rounded hover:bg-black/5 text-[var(--rw-text-2)]"
-              disabled
-            >
-              <MoreHorizontal size={14} />
             </button>
             {activeIsEditable && (
               <button
                 onClick={toggleEdit}
-                title={activeIsEditing ? '切换到预览' : '编辑'}
-                className="ml-1 p-1 rounded hover:bg-black/5 text-[var(--rw-text-2)]"
+                title={activeIsEditing ? '切换到预览 (Ctrl+E / Esc)' : '编辑 (Ctrl+E)'}
+                className="p-1 rounded hover:bg-black/5 text-[var(--rw-text-2)]"
               >
                 {activeIsEditing ? <Eye size={14} /> : <Edit3 size={14} />}
               </button>
             )}
-            <button
-              onClick={handleSaveClick}
-              disabled={!activeIsEditing || !activeIsDirty}
-              className={`ml-2 px-3 h-6 rounded bg-[var(--rw-accent)] text-white text-[12px] ${
-                !activeIsEditing || !activeIsDirty
-                  ? 'opacity-50 cursor-not-allowed'
-                  : 'hover:opacity-90'
-              }`}
-            >
-              保存
-            </button>
+            {activeIsEditing && activeTab && (
+              <SaveStatusIndicator
+                saving={Boolean(savingTabs[activeTab.id])}
+                dirty={activeIsDirty}
+                savedAt={savedAtTabs[activeTab.id]}
+              />
+            )}
           </div>
         </div>
       )}
@@ -484,8 +591,13 @@ export const ContentTabs: React.FC<ContentTabsProps> = ({
               ref={setPaneRef(tab.id)}
               filePath={tab.filePath}
               language={languageForTab(tab)}
+              autoSave
               onDirtyChange={handleDirtyChange(tab.id)}
-              onSaved={(fp, content) => onTabSaved?.(tab.id, fp, content)}
+              onSavingChange={handleSavingChange(tab.id)}
+              onSaved={(fp, content) => {
+                setSavedAtTabs((prev) => ({ ...prev, [tab.id]: Date.now() }));
+                onTabSaved?.(tab.id, fp, content);
+              }}
             />
           </div>
         ))}
