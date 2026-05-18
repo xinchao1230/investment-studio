@@ -326,7 +326,7 @@ export const AddTargetSearch: React.FC<AddTargetSearchProps> = ({
         </div>
       )}
 
-      <div className="flex items-center justify-between pt-1">
+      <div className="flex items-center justify-between pt-1 px-0.5">
         <span className="text-[10px] text-[var(--rw-text-3)]">
           ↑↓ 选择 · Enter 确认 · Esc 取消
         </span>
