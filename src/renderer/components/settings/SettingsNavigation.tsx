@@ -115,7 +115,7 @@ const SettingsNavigation: React.FC<SettingsNavigationProps> = ({ onBack }) => {
           flexDirection: 'column',
           alignItems: 'flex-start',
           padding: '0px',
-          gap: '16px',
+          gap: '8px',
           width: '100%',
           height: '100%',
         }}
@@ -125,16 +125,16 @@ const SettingsNavigation: React.FC<SettingsNavigationProps> = ({ onBack }) => {
           style={{
             display: 'flex',
             alignItems: 'center',
-            gap: '12px',
+            gap: '8px',
             width: '100%',
-            height: '52px',
-            paddingBottom: '12px',
+            height: '36px',
+            paddingBottom: '6px',
             borderBottom: '1px solid rgba(0, 0, 0, 0.1)',
           }}
         >
           <h2
             style={{
-              fontSize: '18px',
+              fontSize: '14px',
               fontWeight: '600',
               color: '#111827',
               margin: 0,
@@ -150,13 +150,13 @@ const SettingsNavigation: React.FC<SettingsNavigationProps> = ({ onBack }) => {
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'flex-start',
-            gap: '8px',
+            gap: '2px',
             width: '100%',
             flex: 1,
           }}
         >
           <NavItem
-            icon={<Key size={20} />}
+            icon={<Key size={18} />}
             label="API"
             isActive={activeView === 'research-api'}
             onClick={() => navigate('/settings/research-api')}
@@ -191,7 +191,7 @@ const SettingsNavigation: React.FC<SettingsNavigationProps> = ({ onBack }) => {
           )}
 
           <NavItem
-            icon={<Terminal size={20} />}
+            icon={<Terminal size={18} />}
             label="Runtime"
             isActive={activeView === 'runtime'}
             onClick={() => navigate('/settings/runtime')}
@@ -243,7 +243,7 @@ const SettingsNavigation: React.FC<SettingsNavigationProps> = ({ onBack }) => {
         <div
           style={{
             width: '100%',
-            paddingTop: '16px',
+            paddingTop: '8px',
             borderTop: '1px solid rgba(0, 0, 0, 0.1)',
           }}
         >

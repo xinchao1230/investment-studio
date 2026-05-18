@@ -94,20 +94,20 @@ export const ResearchApiView: React.FC = () => {
   }, [cards, handleSave, updateCard]);
 
   return (
-    <div className="p-6">
-      <h1 className="text-xl font-semibold mb-1">Research API</h1>
-      <p className="text-sm text-gray-500 mb-6">
+    <div className="p-4">
+      <h1 className="text-base font-semibold mb-1">Research API</h1>
+      <p className="text-xs text-gray-500 mb-4">
         投研工作流使用的数据源 API token 配置。
       </p>
 
-      <div className="space-y-4">
+      <div className="space-y-3">
         {PROVIDERS.map((p) => {
           const c = cards[p.id];
           const dirty = c.draft !== c.initial;
           return (
-            <div key={p.id} className="border border-gray-200 rounded-lg p-5 bg-white">
-              <div className="flex items-center justify-between mb-3">
-                <h2 className="text-base font-medium">{p.title}</h2>
+            <div key={p.id} className="border border-gray-200 rounded-md p-3 bg-white">
+              <div className="flex items-center justify-between mb-2">
+                <h2 className="text-sm font-medium">{p.title}</h2>
               </div>
 
               <div className="flex gap-2 items-center">
@@ -146,12 +146,12 @@ export const ResearchApiView: React.FC = () => {
               </div>
 
               {c.status && (
-                <div className={`mt-2 text-xs ${c.status.ok ? 'text-green-600' : 'text-red-600'}`}>
+                <div className={`mt-1.5 text-xs ${c.status.ok ? 'text-green-600' : 'text-red-600'}`}>
                   {c.status.ok ? '✓ 连接成功' : `✗ ${c.status.error ?? '失败'}`}
                 </div>
               )}
 
-              <p className="mt-3 text-xs text-gray-500">{p.helper}</p>
+              <p className="mt-2 text-xs text-gray-500">{p.helper}</p>
             </div>
           );
         })}
