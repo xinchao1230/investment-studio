@@ -200,6 +200,7 @@ const getAdvancedLogger = () => {
 class ElectronApp {
   private mainWindow: BrowserWindow | null = null;
   private debugWindow: BrowserWindow | null = null;
+  private settingsWindow: BrowserWindow | null = null;
   private selectedText: string = ''; // Store captured selected text
   private isDev: boolean = false;
   private currentUserAlias: string | null = null;
@@ -2323,46 +2324,55 @@ class ElectronApp {
     
     
     // Window management
-    ipcMain.handle('window:minimize', () => this.mainWindow?.minimize());
-    ipcMain.handle('window:maximize', () => this.mainWindow?.maximize());
-    ipcMain.handle('window:unmaximize', () => this.mainWindow?.unmaximize());
-    ipcMain.handle('window:close', () => this.mainWindow?.close());
-    ipcMain.handle('window:isMaximized', () => this.mainWindow?.isMaximized() || false);
+    // Resolves the window the IPC call belongs to. Falls back to the main window
+    // when the sender is no longer attached to a BrowserWindow (rare).
+    const senderWindow = (event: Electron.IpcMainInvokeEvent): BrowserWindow | null => {
+      return BrowserWindow.fromWebContents(event.sender) ?? this.mainWindow;
+    };
+
+    ipcMain.handle('window:minimize', (event) => senderWindow(event)?.minimize());
+    ipcMain.handle('window:maximize', (event) => senderWindow(event)?.maximize());
+    ipcMain.handle('window:unmaximize', (event) => senderWindow(event)?.unmaximize());
+    ipcMain.handle('window:close', (event) => senderWindow(event)?.close());
+    ipcMain.handle('window:isMaximized', (event) => senderWindow(event)?.isMaximized() || false);
     
     // 🔥 New: display application menu (Popup)
     ipcMain.handle('window:showAppMenu', (event, x: number, y: number) => {
       const template = this.getMenuTemplate();
       const menu = Menu.buildFromTemplate(template);
-      menu.popup({ window: this.mainWindow || undefined, x: Math.round(x), y: Math.round(y) });
+      menu.popup({ window: senderWindow(event) || undefined, x: Math.round(x), y: Math.round(y) });
       return true;
     });
     
     // Window always on top management for minimal mode
     ipcMain.handle('window:setAlwaysOnTop', (event, flag: boolean) => {
-      if (this.mainWindow) {
-        this.mainWindow.setAlwaysOnTop(flag, 'floating');
+      const w = senderWindow(event);
+      if (w) {
+        w.setAlwaysOnTop(flag, 'floating');
         return true;
       }
       return false;
     });
     
-    ipcMain.handle('window:isAlwaysOnTop', () => {
-      return this.mainWindow?.isAlwaysOnTop() || false;
+    ipcMain.handle('window:isAlwaysOnTop', (event) => {
+      return senderWindow(event)?.isAlwaysOnTop() || false;
     });
     
     // Chat popup window management
     ipcMain.handle('window:setSize', (event, width: number, height: number) => {
-      if (this.mainWindow) {
-        this.mainWindow.setSize(width, height);
-        this.mainWindow.center();
+      const w = senderWindow(event);
+      if (w) {
+        w.setSize(width, height);
+        w.center();
         return true;
       }
       return false;
     });
     
-    ipcMain.handle('window:getSize', () => {
-      if (this.mainWindow) {
-        const [width, height] = this.mainWindow.getSize();
+    ipcMain.handle('window:getSize', (event) => {
+      const w = senderWindow(event);
+      if (w) {
+        const [width, height] = w.getSize();
         return { width, height };
       }
       return { width: 1200, height: 800 };
@@ -2370,32 +2380,36 @@ class ElectronApp {
     
     // Window size constraint management for minimal mode
     ipcMain.handle('window:setMinSize', (event, width: number, height: number) => {
-      if (this.mainWindow) {
-        this.mainWindow.setMinimumSize(width, height);
+      const w = senderWindow(event);
+      if (w) {
+        w.setMinimumSize(width, height);
         return true;
       }
       return false;
     });
     
     ipcMain.handle('window:setMaxSize', (event, width: number, height: number) => {
-      if (this.mainWindow) {
-        this.mainWindow.setMaximumSize(width, height);
+      const w = senderWindow(event);
+      if (w) {
+        w.setMaximumSize(width, height);
         return true;
       }
       return false;
     });
     
-    ipcMain.handle('window:getMinSize', () => {
-      if (this.mainWindow) {
-        const [width, height] = this.mainWindow.getMinimumSize();
+    ipcMain.handle('window:getMinSize', (event) => {
+      const w = senderWindow(event);
+      if (w) {
+        const [width, height] = w.getMinimumSize();
         return { width, height };
       }
       return { width: 800, height: 600 };
     });
     
-    ipcMain.handle('window:getMaxSize', () => {
-      if (this.mainWindow) {
-        const [width, height] = this.mainWindow.getMaximumSize();
+    ipcMain.handle('window:getMaxSize', (event) => {
+      const w = senderWindow(event);
+      if (w) {
+        const [width, height] = w.getMaximumSize();
         return { width, height };
       }
       return { width: 0, height: 0 }; // 0 means no limit
@@ -2429,6 +2443,43 @@ class ElectronApp {
         return { success: true };
       }
       return { success: false, error: 'Main window not available' };
+    });
+
+    // Settings window control - opens settings in a separate BrowserWindow
+    ipcMain.handle('settingsWindow:open', async (_event, view?: string) => {
+      try {
+        await this.createOrFocusSettingsWindow(view);
+        return { success: true };
+      } catch (error) {
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : String(error),
+        };
+      }
+    });
+
+    ipcMain.handle('settingsWindow:navigate', (_event, view: string) => {
+      if (this.settingsWindow && !this.settingsWindow.isDestroyed() && view) {
+        this.settingsWindow.webContents.send('navigate:to', { route: `/settings/${view}` });
+        if (!this.settingsWindow.isFocused()) {
+          this.settingsWindow.focus();
+        }
+        return { success: true };
+      }
+      return { success: false, error: 'Settings window not available' };
+    });
+
+    ipcMain.handle('settingsWindow:close', () => {
+      if (this.settingsWindow && !this.settingsWindow.isDestroyed()) {
+        this.settingsWindow.close();
+        return { success: true };
+      }
+      return { success: false, error: 'Settings window not open' };
+    });
+
+    ipcMain.handle('settingsWindow:isSettingsWindow', (event) => {
+      const w = BrowserWindow.fromWebContents(event.sender);
+      return !!w && this.settingsWindow !== null && w.id === this.settingsWindow.id;
     });
 
 
@@ -5473,6 +5524,130 @@ class ElectronApp {
     return this.mainWindow;
   }
 
+  /**
+   * Create the Settings window, or focus it if it is already open.
+   * Reuses the main renderer bundle and preload; the route is selected via
+   * URL hash (HashRouter), so no extra webpack entry is needed.
+   */
+  private async createOrFocusSettingsWindow(view?: string): Promise<void> {
+    const safeView = (view ?? 'research-api').replace(/^\/+/, '');
+
+    // If a settings window is already open, focus it and navigate to the requested view.
+    if (this.settingsWindow && !this.settingsWindow.isDestroyed()) {
+      if (this.settingsWindow.isMinimized()) {
+        this.settingsWindow.restore();
+      }
+      this.settingsWindow.focus();
+      this.settingsWindow.webContents.send('navigate:to', { route: `/settings/${safeView}` });
+      return;
+    }
+
+    this.settingsWindow = new BrowserWindow({
+      width: 960,
+      height: 680,
+      minWidth: 760,
+      minHeight: 560,
+      show: false,
+      title: 'Settings',
+      titleBarStyle: process.platform === 'win32' ? 'hidden' : 'default',
+      titleBarOverlay: undefined,
+      parent: undefined, // Independent top-level window, not modal
+      icon: app.isPackaged
+        ? path.join(process.resourcesPath, 'brand-assets/win/app.ico')
+        : path.join(__dirname, `../../brands/${process.env.BRAND_NAME}/assets/win/app.ico`),
+      webPreferences: {
+        nodeIntegration: false,
+        contextIsolation: true,
+        preload: path.join(__dirname, 'preload.js'),
+        webSecurity: false,
+        allowRunningInsecureContent: true,
+        sandbox: false,
+        spellcheck: false,
+        webgl: false,
+        plugins: false,
+        // Tag this window so the renderer can detect "this is the settings window"
+        additionalArguments: ['--kosmos-window-type=settings'],
+      },
+    });
+
+    // Window state events for the renderer (titlebar maximize/restore icon)
+    this.settingsWindow.on('maximize', () => {
+      this.settingsWindow?.webContents.send('window:stateChanged', 'maximized');
+    });
+    this.settingsWindow.on('unmaximize', () => {
+      this.settingsWindow?.webContents.send('window:stateChanged', 'normal');
+    });
+
+    this.settingsWindow.once('ready-to-show', () => {
+      this.settingsWindow?.show();
+      this.settingsWindow?.focus();
+    });
+
+    this.settingsWindow.on('closed', () => {
+      // Detach from cache broadcast lists so we stop sending IPC to a dead webContents
+      if (this.settingsWindow) {
+        try {
+          getProfileCacheManager().then((m) => {
+            if (this.settingsWindow) m.removeBroadcastWindow(this.settingsWindow);
+          });
+          getAppCacheManager().then((m) => {
+            if (this.settingsWindow) m.removeBroadcastWindow(this.settingsWindow);
+          });
+        } catch {
+          // ignore — managers may not be initialized yet
+        }
+      }
+      this.settingsWindow = null;
+    });
+
+    // External links open in the system browser
+    this.settingsWindow.webContents.setWindowOpenHandler(({ url }) => {
+      if (url.startsWith('http')) {
+        require('electron').shell.openExternal(url);
+      }
+      return { action: 'deny' };
+    });
+
+    // F12 toggles DevTools (matches main-window behavior)
+    this.settingsWindow.webContents.on('before-input-event', (_e, input) => {
+      if (input.key === 'F12' && input.type === 'keyDown') {
+        this.settingsWindow?.webContents.toggleDevTools();
+      }
+    });
+
+    // Register the window with the cache managers so it receives push updates
+    setImmediate(async () => {
+      try {
+        const pcManager = await getProfileCacheManager();
+        if (this.settingsWindow && !this.settingsWindow.isDestroyed()) {
+          pcManager.addBroadcastWindow(this.settingsWindow);
+        }
+        const acManager = await getAppCacheManager();
+        if (this.settingsWindow && !this.settingsWindow.isDestroyed()) {
+          acManager.addBroadcastWindow(this.settingsWindow);
+        }
+      } catch (error) {
+        console.error('[SettingsWindow] Failed to register with cache managers:', error);
+      }
+    });
+
+    // Load the renderer with the requested settings route in the URL hash.
+    try {
+      if (this.isDev) {
+        await this.settingsWindow.loadURL(`http://localhost:3000/#/settings/${safeView}`);
+      } else {
+        const htmlPath = path.join(__dirname, '../renderer/index.html');
+        await this.settingsWindow.loadFile(htmlPath, { hash: `/settings/${safeView}` });
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error('[SettingsWindow] Failed to load:', message);
+    }
+  }
+
+  public getSettingsWindow(): BrowserWindow | null {
+    return this.settingsWindow;
+  }
 
   private initSelectionHook() {
     const logger = getAdvancedLogger();

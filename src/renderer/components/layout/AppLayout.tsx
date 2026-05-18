@@ -1720,6 +1720,13 @@ const AppLayoutContent: React.FC<AppLayoutContentProps> = ({
     : false;
 
   const handleSettingsClick = () => {
+    // Settings now lives in its own window. Fall back to in-app routing if the
+    // preload bridge is unavailable (e.g. running outside Electron).
+    const settingsApi = (window as any).electronAPI?.settingsWindow;
+    if (settingsApi?.open) {
+      settingsApi.open();
+      return;
+    }
     sessionStorage.setItem('previousPath', location.pathname);
     navigate('/settings');
   };

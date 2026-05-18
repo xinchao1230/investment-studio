@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Menu, Minus, Square, X, Copy } from 'lucide-react';
 import '../../styles/WindowsTitleBar.css';
 import { APP_NAME, BRAND_NAME } from '@shared/constants/branding';
+import { isSettingsWindow } from '../../lib/utilities/windowMode';
 
 let appIcon: string;
 try {
@@ -16,6 +17,7 @@ try {
 const WindowsTitleBar: React.FC = () => {
   const [isWindows, setIsWindows] = useState(false);
   const [isMaximized, setIsMaximized] = useState(false);
+  const settingsMode = isSettingsWindow();
 
   useEffect(() => {
     const checkPlatform = async () => {
@@ -76,17 +78,19 @@ const WindowsTitleBar: React.FC = () => {
     <div className="windows-title-bar">
       <div className="app-title-container">
         <img src={appIcon} alt={APP_NAME} className="app-icon" />
-        <div className="app-title">{APP_NAME}</div>
+        <div className="app-title">{settingsMode ? 'Settings' : APP_NAME}</div>
       </div>
       
       <div className="title-bar-right-section">
-        <button 
-          className="menu-button"
-          onClick={handleMenuClick}
-          title="Menu"
-        >
-          <Menu size={18} />
-        </button>
+        {!settingsMode && (
+          <button 
+            className="menu-button"
+            onClick={handleMenuClick}
+            title="Menu"
+          >
+            <Menu size={18} />
+          </button>
+        )}
 
         <div className="window-controls">
           <button className="window-control-button minimize" onClick={handleMinimize} title="Minimize">

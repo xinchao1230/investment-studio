@@ -900,6 +900,14 @@ export interface ElectronAPI {
     getMaxSize: () => Promise<{ width: number; height: number }>;
   };
 
+  // Settings window control — opens the Settings page in a separate window
+  settingsWindow?: {
+    open: (view?: string) => Promise<{ success: boolean; error?: string }>;
+    navigate: (view: string) => Promise<{ success: boolean; error?: string }>;
+    close: () => Promise<{ success: boolean; error?: string }>;
+    isSettingsWindow: () => Promise<boolean>;
+  };
+
   // Logger management
   logger?: {
     manualFlush: () => Promise<{ success: boolean; error?: string }>;
@@ -2076,6 +2084,12 @@ export const electronAPI: ElectronAPI = {
       ipcRenderer.invoke('window:setMaxSize', width, height),
     getMinSize: () => ipcRenderer.invoke('window:getMinSize'),
     getMaxSize: () => ipcRenderer.invoke('window:getMaxSize'),
+  },
+  settingsWindow: {
+    open: (view?: string) => ipcRenderer.invoke('settingsWindow:open', view),
+    navigate: (view: string) => ipcRenderer.invoke('settingsWindow:navigate', view),
+    close: () => ipcRenderer.invoke('settingsWindow:close'),
+    isSettingsWindow: () => ipcRenderer.invoke('settingsWindow:isSettingsWindow'),
   },
   logger: {
     manualFlush: () => ipcRenderer.invoke('logger:manualFlush'),

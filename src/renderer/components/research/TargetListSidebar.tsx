@@ -717,6 +717,11 @@ export const TargetListSidebar: React.FC<TargetListSidebarProps> = ({
             title="Settings"
             aria-label="Open Settings"
             onClick={() => {
+              const settingsApi = (window as any).electronAPI?.settingsWindow;
+              if (settingsApi?.open) {
+                settingsApi.open();
+                return;
+              }
               sessionStorage.setItem('previousPath', window.location.hash.replace(/^#/, '') || '/research');
               navigate('/settings');
             }}

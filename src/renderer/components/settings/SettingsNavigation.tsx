@@ -5,6 +5,7 @@ import NavItem from '../ui/navigation/NavItem';
 import '../../styles/LeftNavigation.css';
 import { APP_NAME, BRAND_NAME, BRAND_CONFIG } from '@shared/constants/branding';
 import { useFeatureFlag } from '../../lib/featureFlags';
+import { isSettingsWindow } from '../../lib/utilities/windowMode';
 
 // MCP icon - from McpHeaderView
 const McpIcon = () => (
@@ -64,6 +65,7 @@ interface SettingsNavigationProps {
 const SettingsNavigation: React.FC<SettingsNavigationProps> = ({ onBack }) => {
   const location = useLocation();
   const navigate = useNavigate();
+  const settingsMode = isSettingsWindow();
   
   // Memory controlled by feature flag (Dev environment and non-Windows ARM)
   const memoryEnabled = useFeatureFlag('kosmosFeatureMemory');
@@ -79,10 +81,12 @@ const SettingsNavigation: React.FC<SettingsNavigationProps> = ({ onBack }) => {
   const handleBack = () => {
     if (onBack) {
       onBack();
-    } else {
-      // Default: navigate back to agent page
-      navigate('/agent/chat');
+      return;
     }
+    // Default: navigate back to agent page (only reachable when Settings is
+    // hosted inside the main window; in the standalone Settings window the
+    // Back button is hidden — the OS window close button is used instead).
+    navigate('/agent/chat');
   };
 
   const getActiveView = () => {
@@ -239,26 +243,29 @@ const SettingsNavigation: React.FC<SettingsNavigationProps> = ({ onBack }) => {
           />
         </div>
 
-        {/* Bottom Back Button */}
-        <div
-          style={{
-            width: '100%',
-            paddingTop: '8px',
-            borderTop: '1px solid rgba(0, 0, 0, 0.1)',
-          }}
-        >
-          <NavItem
-            icon={
-              <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M12.3544 15.8529C12.1594 16.0485 11.8429 16.0491 11.6472 15.8542L6.16276 10.3892C5.94705 10.1743 5.94705 9.82495 6.16276 9.61L11.6472 4.14502C11.8429 3.95011 12.1594 3.95067 12.3544 4.14628C12.5493 4.34189 12.5487 4.65848 12.3531 4.85339L7.18851 9.99961L12.3531 15.1458C12.5487 15.3407 12.5493 15.6573 12.3544 15.8529Z" fill="currentColor"></path>
-              </svg>
-            }
-            label="Back"
-            isActive={false}
-            onClick={handleBack}
-            ariaLabel="Go Back"
-          />
-        </div>
+        {/* Bottom Back Button — hidden when Settings is hosted in its own window
+            (the OS title-bar close button serves the same purpose). */}
+        {!settingsMode && (
+          <div
+            style={{
+              width: '100%',
+              paddingTop: '8px',
+              borderTop: '1px solid rgba(0, 0, 0, 0.1)',
+            }}
+          >
+            <NavItem
+              icon={
+                <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M12.3544 15.8529C12.1594 16.0485 11.8429 16.0491 11.6472 15.8542L6.16276 10.3892C5.94705 10.1743 5.94705 9.82495 6.16276 9.61L11.6472 4.14502C11.8429 3.95011 12.1594 3.95067 12.3544 4.14628C12.5493 4.34189 12.5487 4.65848 12.3531 4.85339L7.18851 9.99961L12.3531 15.1458C12.5487 15.3407 12.5493 15.6573 12.3544 15.8529Z" fill="currentColor"></path>
+                </svg>
+              }
+              label="Back"
+              isActive={false}
+              onClick={handleBack}
+              ariaLabel="Go Back"
+            />
+          </div>
+        )}
       </div>
     </nav>
   );

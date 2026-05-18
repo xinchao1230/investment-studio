@@ -102,6 +102,32 @@ export class AppCacheManager {
     this.sendConfigToFrontend();
   }
 
+  /**
+   * Extra windows (e.g. the separate Settings window) that should also receive
+   * `app:configUpdated` push events. The primary window is always notified;
+   * these are additional broadcast targets.
+   */
+  private broadcastWindows: Set<BrowserWindow> = new Set();
+
+  public addBroadcastWindow(window: BrowserWindow): void {
+    if (window && !window.isDestroyed()) {
+      this.broadcastWindows.add(window);
+      // Push the current config to the newly registered window
+      try {
+        window.webContents.send('app:configUpdated', {
+          config: { ...this.cache },
+          timestamp: Date.now(),
+        });
+      } catch {
+        // ignore
+      }
+    }
+  }
+
+  public removeBroadcastWindow(window: BrowserWindow): void {
+    this.broadcastWindows.delete(window);
+  }
+
   // ── Paths ──────────────────────────────────────────────────────────────────
 
   private getUserDataPath(): string {
@@ -473,6 +499,20 @@ export class AppCacheManager {
         config: { ...this.cache },
         timestamp: Date.now(),
       });
+
+      // Also push to any additional broadcast windows (e.g. Settings window)
+      for (const extra of this.broadcastWindows) {
+        if (extra !== targetWindow && !extra.isDestroyed() && extra.webContents) {
+          try {
+            extra.webContents.send('app:configUpdated', {
+              config: { ...this.cache },
+              timestamp: Date.now(),
+            });
+          } catch {
+            // ignore — window may have been torn down between checks
+          }
+        }
+      }
     } catch (error) {
       logger.error('[AppCacheManager] Failed to notify frontend', 'AppCacheManager', {
         error: error instanceof Error ? error.message : String(error),

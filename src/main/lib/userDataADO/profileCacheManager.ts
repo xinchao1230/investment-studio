@@ -137,6 +137,27 @@ export class ProfileCacheManager {
   }
 
   /**
+   * Additional windows that should also receive `profile:cacheUpdated` push events
+   * (e.g. the separate Settings window). The main window is always notified;
+   * these are extras.
+   */
+  private broadcastWindows: Set<BrowserWindow> = new Set();
+
+  /**
+   * Register an additional BrowserWindow to receive profile cache push events.
+   * Idempotent. Caller is responsible for calling removeBroadcastWindow on close.
+   */
+  public addBroadcastWindow(window: BrowserWindow): void {
+    if (window && !window.isDestroyed()) {
+      this.broadcastWindows.add(window);
+    }
+  }
+
+  public removeBroadcastWindow(window: BrowserWindow): void {
+    this.broadcastWindows.delete(window);
+  }
+
+  /**
    * Initialize communication with the frontend ProfileDataManager.
    */
   private async initializeProfileDataManager(): Promise<void> {
@@ -1042,6 +1063,17 @@ export class ProfileCacheManager {
         
         // Send profile update notification
         targetWindow.webContents.send('profile:cacheUpdated', messageData);
+
+        // Also push to any additional broadcast windows (e.g. Settings window)
+        for (const extra of this.broadcastWindows) {
+          if (extra !== targetWindow && !extra.isDestroyed() && extra.webContents) {
+            try {
+              extra.webContents.send('profile:cacheUpdated', messageData);
+            } catch {
+              // ignore — window may have been torn down between checks
+            }
+          }
+        }
         
         // 🆕 Refactored: no longer sends mcp:serverStatesUpdated.
         // MCP runtime state is now managed and notified to the frontend directly by mcpClientManager.
