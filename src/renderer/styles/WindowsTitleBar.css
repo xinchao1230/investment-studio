@@ -1,7 +1,7 @@
 .windows-title-bar {
   height: 40px;
   width: 100%;
-  background: linear-gradient(to bottom, #FFE6D3, #fff8f3); /* Warm orange to light gradient - matches system theme */
+  background: linear-gradient(to bottom, #E0D8EF, #F6F2FB); /* Soft lavender gradient - matches reference design */
   display: flex;
   align-items: center;
   justify-content: space-between; /* Space between title and controls */
