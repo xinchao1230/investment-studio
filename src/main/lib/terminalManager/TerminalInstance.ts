@@ -521,16 +521,33 @@ export class TerminalInstance extends EventEmitter implements ITerminalInstance 
     
     // Parse the command to separate executable from inline arguments
     // e.g., "python scripts/download.py url" -> executable: "python", inlineArgs: "scripts/download.py url"
-    const { executable: cmdExecutable, inlineArgs } = this.parseCommandString(commandToExecute);
+    //
+    // Skip parsing when args are provided separately (always true for MCP stdio
+    // transport, where `command` is the full executable path — possibly with
+    // spaces like `/Users/.../Library/Application Support/.../uv` — and `args`
+    // are a separate string[]). Without this, parseCommandString would split
+    // the path at the first space and the shell would fail with exit code 127
+    // "no such file or directory".
+    const callerProvidedArgs = !!(this.config.args && this.config.args.length > 0);
+    const treatCommandAsExecutable = callerProvidedArgs || this.type === 'mcp_transport';
+    const { executable: cmdExecutable, inlineArgs } = treatCommandAsExecutable
+      ? { executable: commandToExecute.trim(), inlineArgs: '' }
+      : this.parseCommandString(commandToExecute);
     
     // Only quote the executable path if it contains spaces and path separators
     let quotedExecutable = cmdExecutable;
     const execHasSpaces = cmdExecutable.includes(' ');
     const execHasPathSep = cmdExecutable.includes('\\') || cmdExecutable.includes('/');
     const execIsQuoted = cmdExecutable.startsWith('"') || cmdExecutable.startsWith("'");
-    
-    if (process.platform === 'win32' && execHasSpaces && execHasPathSep && !execIsQuoted) {
-        // Only quote executable paths with spaces like "C:\Program Files\App\bin.exe"
+
+    // Quote executable paths with spaces on all platforms.
+    // Examples:
+    //   Windows : "C:\Program Files\App\bin.exe"
+    //   macOS   : "/Users/.../Library/Application Support/.../uv"
+    // Without this, parseCommandString splits on the first space and the shell
+    // (zsh/bash/PowerShell) tries to execute the truncated path → exit 127
+    // "no such file or directory". See terminalManager/__tests__/prepareCommand.test.ts.
+    if (execHasSpaces && execHasPathSep && !execIsQuoted) {
         quotedExecutable = `"${cmdExecutable}"`;
     }
     
