@@ -88,3 +88,41 @@
   min-height: 0;
   width: 100%;
 }
+
+/* ---------------------------------------------------------------- */
+/* Monaco find widget — flicker / click-block workaround.            */
+/* ---------------------------------------------------------------- */
+/* Root cause: when the editor pane is narrow, Monaco's hover service
+   places a "Find in Selection / Match Case / …" tooltip on top of
+   the trigger button (no room to the right). The tooltip is wrapped
+   in `div.workbench-hover-container` (pointer-events: auto by
+   default) and that container catches the mouseleave from the
+   underlying button → tooltip hides → mouseenter fires again →
+   tooltip re-shows. Infinite flicker, blocking clicks on the
+   neighbouring Close button.
+
+   Our Monaco config has NO IntelliSense / parameterHints /
+   quickSuggestions / wordBasedSuggestions, so the find-widget
+   button hints are the ONLY tooltips this editor can ever produce.
+   We simply hide them entirely — the icons + keybindings (Esc,
+   F3/Shift+F3) are self-explanatory.
+
+   Two layers of defense:
+   1) Hide the actual tooltip widget at the container level. This
+      reaches the tooltip regardless of where Monaco appends it
+      (body, overflow-widgets-root, context-view, …) and beats
+      Monaco's own CSS (which never sets `display`).
+   2) Hide the "Find in Selection" toggle entirely — we don't use
+      scoped find in the research editor, and removing it frees up
+      horizontal space so the remaining buttons (prev / next /
+      close) never get cramped. */
+.workbench-hover-container,
+.monaco-hover.workbench-hover,
+.workbench-hover-pointer {
+  display: none !important;
+  pointer-events: none !important;
+}
+
+.monaco-editor .find-widget .codicon-find-selection {
+  display: none !important;
+}

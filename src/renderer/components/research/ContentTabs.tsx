@@ -14,6 +14,8 @@ import EditableMonacoPane, {
   type EditableMonacoPaneHandle,
 } from '../editor/EditableMonacoPane';
 import { useDirtyEditors } from '../../contexts/DirtyEditorsContext';
+import { useToast } from '../ui/ToastProvider';
+import { MarkdownFindBar } from './MarkdownFindBar';
 
 export interface Tab {
   id: string;
@@ -86,6 +88,7 @@ export const ContentTabs: React.FC<ContentTabsProps> = ({
 }) => {
   const activeTab = tabs.find((t) => t.id === activeTabId);
   const { isDirty } = useDirtyEditors();
+  const { showError, showSuccess, showInfo } = useToast();
 
   // Edit-mode opt-in per tab. View mode (default) keeps the existing
   // markdown / CSV renderers; Edit mode swaps in the Monaco pane.
@@ -110,6 +113,13 @@ export const ContentTabs: React.FC<ContentTabsProps> = ({
   // We can't read this off the DirtyEditorsContext alone because that
   // is keyed by absPath and tabs can share paths.
   const [dirtyTabs, setDirtyTabs] = useState<Record<string, boolean>>({});
+
+  // Markdown preview find-bar visibility. One bar per ContentTabs
+  // instance (only the active tab's preview is on screen so we never
+  // need parallel bars). Closes automatically when the active tab
+  // changes or the user enters edit mode for it.
+  const [findBarOpen, setFindBarOpen] = useState(false);
+  const previewRef = useRef<HTMLDivElement | null>(null);
   const handleDirtyChange = useCallback(
     (tabId: string) => (dirty: boolean) => {
       setDirtyTabs((prev) => {
@@ -148,6 +158,36 @@ export const ContentTabs: React.FC<ContentTabsProps> = ({
     !!activeTab && (activeTab.type === 'markdown' || activeTab.type === 'csv');
   const activeIsDirty = activeTab ? Boolean(dirtyTabs[activeTab.id]) : false;
 
+  // Auto-close the markdown find bar when the underlying preview goes
+  // away (tab switch, switch into edit mode, or active tab no longer
+  // markdown). The bar's cleanup effect unwraps its <mark> nodes from
+  // whatever container it last knew about.
+  useEffect(() => {
+    if (!findBarOpen) return;
+    if (
+      !activeTab ||
+      activeTab.type !== 'markdown' ||
+      activeIsEditing
+    ) {
+      setFindBarOpen(false);
+    }
+  }, [findBarOpen, activeTab, activeIsEditing]);
+
+  // Ctrl/Cmd+F shortcut. Only handles the markdown-preview case here
+  // — when Monaco has focus it intercepts the key itself before this
+  // window-level listener runs. Other tab types (xlsx, csv view) are
+  // intentionally not bound.
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== 'f') return;
+      if (!activeTab || activeTab.type !== 'markdown' || activeIsEditing) return;
+      e.preventDefault();
+      setFindBarOpen(true);
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [activeTab, activeIsEditing]);
+
   const toggleEdit = useCallback(() => {
     if (!activeTab || !activeIsEditable) return;
     const tabId = activeTab.id;
@@ -176,6 +216,83 @@ export const ContentTabs: React.FC<ContentTabsProps> = ({
     if (!handle) return;
     void handle.save();
   }, [activeTab]);
+
+  // Search: dispatches to the appropriate mechanism for the active
+  // tab. For markdown preview we open a DOM-based find bar (matches
+  // are rendered as <mark> wrappers inside previewRef). For Monaco-
+  // backed views (markdown/csv in edit mode, or csv view forced into
+  // edit mode) we use Monaco's built-in find widget. xlsx (Univer)
+  // has no integration today; surface a toast.
+  const handleSearchClick = useCallback(() => {
+    if (!activeTab) return;
+    if (activeTab.type === 'spreadsheet') {
+      showInfo('电子表格暂不支持页内搜索');
+      return;
+    }
+    // Markdown in preview mode → DOM find bar.
+    if (activeTab.type === 'markdown' && !editingTabs.has(activeTab.id)) {
+      setFindBarOpen((v) => !v);
+      return;
+    }
+    // Otherwise route through Monaco (csv, or markdown in edit mode).
+    const tabId = activeTab.id;
+    const runFind = () => {
+      requestAnimationFrame(() => {
+        const handle = paneRefs.current.get(tabId);
+        if (!handle) {
+          window.setTimeout(() => {
+            paneRefs.current.get(tabId)?.triggerFind();
+          }, 120);
+          return;
+        }
+        handle.triggerFind();
+      });
+    };
+    if (!editingTabs.has(tabId)) {
+      setEditingTabs((prev) => {
+        const next = new Set(prev);
+        next.add(tabId);
+        return next;
+      });
+      runFind();
+    } else {
+      runFind();
+    }
+  }, [activeTab, editingTabs, showInfo]);
+
+  // Download: copy the current file to a user-chosen location via
+  // the existing `workspace:saveAs` IPC (system Save As dialog,
+  // default Downloads). Blocks if there are unsaved edits so we
+  // never silently export a stale on-disk version.
+  const handleDownloadClick = useCallback(async () => {
+    if (!activeTab) return;
+    if (dirtyTabs[activeTab.id]) {
+      showError('请先保存当前更改后再下载');
+      return;
+    }
+    try {
+      const suggestedName =
+        activeTab.filePath.split(/[\\/]/).pop() ?? activeTab.label;
+      const result = await window.electronAPI?.workspace?.saveAs?.(
+        activeTab.filePath,
+        suggestedName,
+      );
+      if (!result) {
+        showError('当前环境不支持下载');
+        return;
+      }
+      if (!result.success) {
+        showError(`下载失败: ${result.error ?? '未知错误'}`);
+        return;
+      }
+      if (result.canceled) return;
+      showSuccess(`已导出到 ${result.savedPath}`);
+    } catch (e) {
+      showError(
+        `下载失败: ${e instanceof Error ? e.message : String(e)}`,
+      );
+    }
+  }, [activeTab, dirtyTabs, showError, showSuccess]);
 
   // Guard tab close on unsaved changes.
   const handleTabCloseGuarded = useCallback(
@@ -301,13 +418,24 @@ export const ContentTabs: React.FC<ContentTabsProps> = ({
           <div className="flex items-center">
             <button
               className="p-1 rounded hover:bg-black/5 text-[var(--rw-text-2)]"
-              disabled
+              onClick={handleSearchClick}
+              title="在当前文档中查找 (Ctrl+F)"
             >
               <Search size={14} />
             </button>
             <button
-              className="p-1 rounded hover:bg-black/5 text-[var(--rw-text-2)]"
-              disabled
+              className={`p-1 rounded text-[var(--rw-text-2)] ${
+                activeIsDirty
+                  ? 'opacity-40 cursor-not-allowed'
+                  : 'hover:bg-black/5'
+              }`}
+              onClick={handleDownloadClick}
+              disabled={activeIsDirty}
+              title={
+                activeIsDirty
+                  ? '有未保存的修改，请先保存'
+                  : '导出当前文件到…'
+              }
             >
               <Download size={14} />
             </button>
@@ -375,7 +503,10 @@ export const ContentTabs: React.FC<ContentTabsProps> = ({
                 />
               </div>
             ) : (
-              <div className="rw-doc-body prose prose-sm max-w-none">
+              <div
+                ref={previewRef}
+                className="rw-doc-body prose prose-sm max-w-none"
+              >
                 <ReactMarkdown
                   remarkPlugins={[remarkGfm]}
                   components={{
@@ -389,6 +520,20 @@ export const ContentTabs: React.FC<ContentTabsProps> = ({
             )}
           </div>
         )}
+
+        {/* Find bar overlay for markdown preview. Re-keyed by tab id
+            so switching tabs unmounts the old bar (which cleans up
+            its <mark> wrappers via its cleanup effect). */}
+        {findBarOpen &&
+          activeTab &&
+          !activeIsEditing &&
+          activeTab.type === 'markdown' && (
+            <MarkdownFindBar
+              key={`find-${activeTab.id}`}
+              containerRef={previewRef}
+              onClose={() => setFindBarOpen(false)}
+            />
+          )}
       </div>
     </div>
   );

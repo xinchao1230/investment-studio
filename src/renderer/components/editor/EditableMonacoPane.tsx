@@ -51,6 +51,9 @@ export interface EditableMonacoPaneHandle {
    *  to call even before the async mount completes — it's a no-op
    *  until the editor exists. */
   focus(): void;
+  /** Open Monaco's built-in find widget. No-op if the editor hasn't
+   *  finished mounting yet. */
+  triggerFind(): void;
 }
 
 export interface EditableMonacoPaneProps {
@@ -126,6 +129,19 @@ const EditableMonacoPane = forwardRef<
       },
       focus: () => {
         editorRef.current?.focus();
+      },
+      triggerFind: () => {
+        const editor = editorRef.current;
+        if (!editor) return;
+        editor.focus();
+        // 'actions.find' is Monaco's standard find action id. Wrapped
+        // in try/catch in case a future Monaco version renames it.
+        try {
+          editor.getAction('actions.find')?.run();
+        } catch (e) {
+          // eslint-disable-next-line no-console
+          console.warn('[EditableMonacoPane] triggerFind failed', e);
+        }
       },
     }),
     [filePath],
