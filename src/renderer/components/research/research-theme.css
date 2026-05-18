@@ -13,6 +13,9 @@
   --rw-accent: #3b5bdb;
   --rw-accent-soft: #eef1f7;
   --rw-suggest-icon: #f08c00;
+  /* Editor tab top stripe — kept distinct from --rw-accent so it doesn't
+     blend into the dark navy titlebar above the tabs. */
+  --rw-tab-active-bar: #f59e0b;
 
   --rw-status-good-bg: #e6f4ea;
   --rw-status-good-fg: #1e8e3e;
@@ -39,7 +42,7 @@
   border-bottom: 1px solid var(--rw-border);
 }
 [data-theme="research"] .rw-tab-active-bar {
-  box-shadow: inset 0 2px 0 0 var(--rw-accent);
+  box-shadow: inset 0 2px 0 0 var(--rw-tab-active-bar);
 }
 [data-theme="research"] .rw-status-pill {
   display: inline-block;
