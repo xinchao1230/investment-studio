@@ -1,7 +1,7 @@
 .windows-title-bar {
   height: 40px;
   width: 100%;
-  background: linear-gradient(to bottom, #E0D8EF, #F6F2FB); /* Soft lavender gradient - matches reference design */
+  background: linear-gradient(to bottom, #020262, #03044F); /* Deep navy gradient - matches reference swatch */
   display: flex;
   align-items: center;
   justify-content: space-between; /* Space between title and controls */
@@ -33,7 +33,7 @@
 
 .app-title {
   font-size: 12px;
-  color: #64748b; /* Slate 500 */
+  color: #E2E8F0; /* Slate 200 - readable on deep navy background */
   font-weight: 500;
   pointer-events: auto;
 }
@@ -56,19 +56,19 @@
   justify-content: center;
   background: transparent;
   border: none;
-  color: #64748b;
+  color: #E2E8F0; /* Slate 200 - readable on deep navy background */
   cursor: pointer;
   transition: background-color 0.2s, color 0.2s;
   border-radius: 0;
 }
 
 .menu-button:hover {
-  background-color: rgba(0, 0, 0, 0.05);
-  color: #1e293b;
+  background-color: rgba(255, 255, 255, 0.08);
+  color: #ffffff;
 }
 
 .menu-button:active {
-  background-color: rgba(0, 0, 0, 0.1);
+  background-color: rgba(255, 255, 255, 0.16);
 }
 
 .window-controls {
@@ -84,15 +84,15 @@
   justify-content: center;
   background: transparent;
   border: none;
-  color: #64748b;
+  color: #E2E8F0; /* Slate 200 - readable on deep navy background */
   transition: background-color 0.2s, color 0.2s;
   cursor: default;
   -webkit-app-region: no-drag;
 }
 
 .window-control-button:hover {
-  background-color: rgba(0, 0, 0, 0.05);
-  color: #1e293b;
+  background-color: rgba(255, 255, 255, 0.08);
+  color: #ffffff;
 }
 
 .window-control-button.close:hover {
