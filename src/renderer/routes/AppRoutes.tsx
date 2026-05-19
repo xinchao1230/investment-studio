@@ -30,6 +30,7 @@ import { createLogger } from '../lib/utilities/logger';
 import { AutoLoginSingleUser } from '../components/auth/AutoLoginSingleUser';
 import { ResearchPage } from '../components/research/ResearchPage';
 import { useAuthContext } from '../components/auth/AuthProvider';
+import { BRAND_NAME } from '../../shared/constants/branding';
 
 const logger = createLogger('[AppRoutes]');
 
@@ -107,8 +108,13 @@ const SignInWrapper: React.FC = () => {
 const DataLoadingWrapper: React.FC = () => {
   const navigate = useNavigate();
   const handleDataReady = () => {
-    // Investment Studio: land directly on the Research workstation
-    navigate('/research');
+    // investment-studio brand lands on the Research workstation by default;
+    // all other brands (incl. openkosmos) keep the original /agent landing.
+    if (BRAND_NAME === 'investment-studio') {
+      navigate('/research');
+    } else {
+      navigate('/agent');
+    }
   };
   return <DataLoadingPage onDataReady={handleDataReady} />;
 };
