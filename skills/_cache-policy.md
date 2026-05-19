@@ -8,7 +8,7 @@
 
 ## Cache root
 
-- **Target-scoped skills** (anything that operates on a single research target — key-drivers, earnings-review, earnings-forecast, marginal-tracking, deep-report, stock-analyze):
+- **Target-scoped skills** (anything that operates on a single research target — key-drivers, earnings-review, earnings-forecast, marginal-tracking, stock-analyze):
   - `cache_root = {target_dir}/data-cache`
 - **Workspace-scoped skills** (industry-comparison, stock-screening — operate on multiple stocks at once):
   - `cache_root = {workspace_dir}/_data-cache`

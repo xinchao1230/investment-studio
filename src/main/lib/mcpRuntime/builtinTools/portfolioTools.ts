@@ -428,7 +428,7 @@ export class PortfolioTools {
   /**
    * Build an empty skeleton key-drivers.md for a **listed** company.
    * Section headers are intentionally preserved so reader skills
-   * (earnings-review, marginal-tracking, deep-report) can still find the
+   * (earnings-review, marginal-tracking) can still find the
    * standard anchors; bodies are left blank for the LLM (or user) to fill.
    */
   private static buildListedKeyDrivers(name: string, stockCode: string): string {
