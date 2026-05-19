@@ -122,13 +122,13 @@ const STELLA_CARDS: QuickStartCard[] = [
   INTRO_CARD,
   {
     kind: 'task',
-    title: '深度分析',
-    description: '对一家上市公司做全面基本面分析',
-    prompt: '请对 600519 贵州茅台 做一份深度基本面分析报告（公司概况、业务结构、财务、估值、风险）。',
+    title: '投资逻辑',
+    description: '建立投资框架（短期/长期 + 跟踪变量）',
+    prompt: '/key-drivers 600036 招商银行',
   },
   {
     kind: 'task',
-    title: '全自动深度研报',
+    title: '深度研报',
     description: '体验 6-phase 自动化流水线',
     prompt: '请用 600036 招商银行 跑一次 /stock-analyze 完整流程，生成一份自动化深度研报。',
   },
