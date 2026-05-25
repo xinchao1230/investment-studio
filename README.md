@@ -180,6 +180,28 @@ npm run dist:mac         # macOS (DMG + ZIP)
 npm run dist:linux       # Linux (AppImage)
 ```
 
+## Team
+
+### Core Team
+
+| Name | Email |
+|------|-------|
+| Yang Huangfu | yanhu@microsoft.com |
+| Dale Xiao | dingxiao@microsoft.com |
+| Menghui Hu | menghuihu@microsoft.com |
+
+### Contributors
+
+| Name | Email |
+|------|-------|
+| Jiashuang Shang | jshang@microsoft.com |
+| Jianli Wei | jianliwei@microsoft.com |
+| Yun Ni | v-yunn@microsoft.com |
+| Luna Chen | yueyingchen@microsoft.com |
+| Jiajun Yan | jiajunyan@microsoft.com |
+| Jiaming Mao | jiamingmao@microsoft.com |
+| Juntong Liu | juntongliu@microsoft.com |
+
 ## License
 
 This project is licensed under the [MIT License](LICENSE).
