@@ -1,0 +1,13 @@
+{
+  "appId": "com.investment-studio.app",
+  "productName": "Investment Studio",
+  "userDataName": "investment-studio-app",
+  "description": "Investment Studio - AI Investment Research Workstation",
+  "copyright": "Copyright 2026",
+  "author": "xinchao1230",
+  "feedbackLink": "https://github.com/xinchao1230/investment-studio/issues",
+  "filenamePrefix": "InvestmentStudio",
+  "shortcutName": "Investment Studio",
+  "windowTitle": "Investment Studio",
+  "systemPromptAddendum": ""
+}
