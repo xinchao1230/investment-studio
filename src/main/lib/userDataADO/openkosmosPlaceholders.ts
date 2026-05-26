@@ -23,6 +23,14 @@ const logger = createLogger();
 export enum OpenKosmosPlaceholder {
   /** Path to the profile's chat_workspaces folder */
   PROFILE_WORKSPACES_FOLDER = '@OPENKOSMOS_PROFILE_WORKSPACES_FOLDER',
+  /** Path to the bundled research MCP resources directory */
+  RESEARCH_RESOURCES_DIR = '@OPENKOSMOS_RESEARCH_RESOURCES_DIR',
+  /** Tushare API token (resolved from user profile) */
+  RESEARCH_TUSHARE_TOKEN = '@OPENKOSMOS_RESEARCH_TUSHARE_TOKEN',
+  /** Runtime directory for research MCP (venv, cache, etc.) */
+  RESEARCH_RUNTIME_DIR = '@OPENKOSMOS_RESEARCH_RUNTIME_DIR',
+  /** User data directory for research MCP outputs */
+  RESEARCH_USER_DATA_DIR = '@OPENKOSMOS_RESEARCH_USER_DATA_DIR',
 }
 
 /**
@@ -40,6 +48,10 @@ export enum PlaceholderType {
  */
 const PLACEHOLDER_METADATA: Record<string, { type: PlaceholderType }> = {
   [OpenKosmosPlaceholder.PROFILE_WORKSPACES_FOLDER]: { type: PlaceholderType.PATH },
+  [OpenKosmosPlaceholder.RESEARCH_RESOURCES_DIR]: { type: PlaceholderType.PATH },
+  [OpenKosmosPlaceholder.RESEARCH_TUSHARE_TOKEN]: { type: PlaceholderType.STRING },
+  [OpenKosmosPlaceholder.RESEARCH_RUNTIME_DIR]: { type: PlaceholderType.PATH },
+  [OpenKosmosPlaceholder.RESEARCH_USER_DATA_DIR]: { type: PlaceholderType.PATH },
 };
 
 /**
