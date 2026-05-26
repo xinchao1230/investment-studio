@@ -1,0 +1,7 @@
+mcp>=1.0.0
+tushare>=1.4.0
+akshare>=1.13.0
+yfinance>=0.2.40
+pandas>=2.0.0
+pdfplumber>=0.11.0
+requests>=2.31.0
