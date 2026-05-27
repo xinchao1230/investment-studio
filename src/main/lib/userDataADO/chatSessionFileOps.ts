@@ -40,6 +40,17 @@ export interface ChatSessionFile {
   context_history: Message[];
   /** Resolved interactive request summaries for timeline rendering and auditability */
   interaction_history?: InteractionHistoryEntry[];
+  /**
+   * Investment-studio brand: stock code (e.g. `00700.HK`) bound to this chat
+   * session. `null`/undefined means the session is not scoped to a target.
+   */
+  targetCode?: string | null;
+  /**
+   * Investment-studio brand: directory holding the target's research artifacts
+   * (profile.yaml, earnings/, research/, ...). May be an absolute path or a
+   * path relative to the user's knowledge-base root.
+   */
+  targetDir?: string | null;
 }
 
 /**

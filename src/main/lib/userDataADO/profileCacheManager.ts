@@ -21,7 +21,9 @@ import {
   BrowserControlSettings,
   DevToolsMcpSettings,
   ConfirmationSettings,
+  getDefaultPrimaryAgentName,
 } from './types/profile';
+import { BRAND_NAME } from '@shared/constants/branding';
 import { ChatSessionFile } from './chatSessionFileOps';
 import { chatSessionManager } from './chatSessionManager';
 import { getDefaultWorkspacePath, isDefaultWorkspacePath } from './pathUtils';
@@ -468,7 +470,7 @@ export class ProfileCacheManager {
         updatedAt: new Date().toISOString(),
         alias: profile.alias || alias,
         freDone: false,
-        primaryAgent: 'Kobi',
+        primaryAgent: getDefaultPrimaryAgentName(BRAND_NAME),
         mcp_servers: profile.mcp_servers || [],
         skills: profile.skills || [],
         'starred-chat-sessions': Array.isArray(profile['starred-chat-sessions']) ? profile['starred-chat-sessions'] : [],
@@ -698,7 +700,7 @@ export class ProfileCacheManager {
       updatedAt: now,
       alias,
       freDone: false,
-      primaryAgent: 'Kobi',
+      primaryAgent: getDefaultPrimaryAgentName(BRAND_NAME),
       mcp_servers: [],
       skills: [],
       'starred-chat-sessions': [],

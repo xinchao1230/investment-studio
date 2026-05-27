@@ -2,6 +2,8 @@
 import type { JudgeRequest, JudgeResultResponse, JudgeChatMessage } from './evalProtocol';
 import { ghcModelApi } from "../llm/ghcModelApi";
 import { profileCacheManager } from "../userDataADO";
+import { getDefaultPrimaryAgentName } from "../userDataADO/types/profile";
+import { BRAND_NAME } from "@shared/constants/branding";
 
 /**
  * Handles 'judge' requests: raw LLM call with caller-provided messages.
@@ -48,7 +50,7 @@ export class EvalJudgeRunner {
     }
 
     const allChats = profileCacheManager.getAllChatConfigs(this.userAlias);
-    const primaryAgentName = (profile as any).primaryAgent || 'Kobi';
+    const primaryAgentName = (profile as any).primaryAgent || getDefaultPrimaryAgentName(BRAND_NAME);
     const defaultChat = allChats.find(
       (c: any) => c.agent?.name === primaryAgentName
     );

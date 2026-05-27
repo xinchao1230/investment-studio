@@ -5,7 +5,7 @@ const webpack = require('webpack');
 const ReactRefreshWebpackPlugin = require('@pmmmwh/react-refresh-webpack-plugin');
 const MonacoWebpackPlugin = require('monaco-editor-webpack-plugin');
 
-const appConfig = require('./brands/openkosmos/config.json');
+const appConfig = require('./brands/investment-studio/config.json');
 
 // Load environment variables from .env.local (or DOTENV_CONFIG_PATH for E2E test builds)
 require('dotenv').config({ path: process.env.DOTENV_CONFIG_PATH || '.env.local' });
@@ -19,7 +19,6 @@ module.exports = (env, argv) => {
     target: 'web', // Explicitly set to web target, not electron-renderer
     entry: {
       main: './src/renderer/index.tsx',
-      toolbar: './src/renderer/toolbar.tsx',
       screenshot: './src/renderer/screenshot.tsx',
     },
     output: {
@@ -127,7 +126,7 @@ module.exports = (env, argv) => {
           process.env.PRODUCTION_BASE_CDN_URL,
         ),
         'process.env.APP_NAME': JSON.stringify(appConfig.productName),
-        'process.env.BRAND_NAME': JSON.stringify('openkosmos'),
+        'process.env.BRAND_NAME': JSON.stringify('investment-studio'),
         // Expose preset model environment variables
         'process.env.PRESET_MODEL_GPT4O_NAME': JSON.stringify(
           process.env.PRESET_MODEL_GPT4O_NAME,
@@ -182,31 +181,6 @@ module.exports = (env, argv) => {
         title: appConfig.windowTitle,
         productName: appConfig.productName,
         chunks: ['main'], // Only include JS files from the main entry
-        templateParameters: (compilation, assets, assetTags, options) => ({
-          htmlWebpackPlugin: { tags: assetTags, files: assets, options },
-          connectSrcExtra: '',
-          entryScript: '',
-        }),
-        minify: !isDevelopment
-          ? {
-              removeComments: true,
-              collapseWhitespace: true,
-              removeRedundantAttributes: true,
-              useShortDoctype: true,
-              removeEmptyAttributes: true,
-              removeStyleLinkTypeAttributes: true,
-              keepClosingSlash: true,
-              minifyJS: true,
-              minifyCSS: true,
-              minifyURLs: true,
-            }
-          : false,
-      }),
-      new HtmlWebpackPlugin({
-        template: './src/renderer/toolbar.html',
-        filename: 'toolbar.html',
-        title: `${appConfig.productName} - ToolBar`,
-        chunks: ['toolbar'], // Only include JS files from the toolbar entry
         templateParameters: (compilation, assets, assetTags, options) => ({
           htmlWebpackPlugin: { tags: assetTags, files: assets, options },
           connectSrcExtra: '',

@@ -9,9 +9,10 @@
  * Only dynamically imported when a tool is actually executed, reducing startup time
  */
 
-import { BuiltinToolDefinition, ToolExecutionResult } from './types';
+import { BuiltinToolDefinition, ToolExecutionResult, FsMutation } from './types';
 import { isFeatureEnabled } from '../../featureFlags';
 import type { ToolExecutionContext } from '../../subAgent/types';
+import { BrowserWindow } from 'electron';
 
 // 🚀 Lightweight tools - imported immediately (no heavy dependencies)
 import { ReadFileTool } from './readFileTool';
@@ -43,6 +44,7 @@ import { UpdateScheduleTool } from './updateScheduleTool';
 import { RunScheduleTool } from './runScheduleTool';
 import { CodingAgentTool } from './codingAgentTool';
 import { ToolSearchTool } from './toolSearchTool';
+import { PortfolioTools } from './portfolioTools';
 import type { McpTool } from '../../chat/toolSearchFilter';
 
 // Facade tools — simplified AI-friendly interfaces wrapping existing tools
@@ -260,6 +262,22 @@ export class BuiltinToolsManager {
       this.internalTools.set('create_mcp_server_from_config', CreateMcpServerFromConfigTool.getDefinition());
       this.internalTools.set('create_agent_from_config', CreateAgentFromConfigTool.getDefinition());
       this.internalTools.set('list_agents', ListAgentsTool.getDefinition());
+
+      // ===== Portfolio tools (Investment Studio brand) =====
+      // Source of truth for research target lifecycle (create / list / inspect /
+      // delete / write key drivers / append notes / move + rename files inside
+      // the portfolio workspace). PortfolioTools.setWorkspaceDir() is invoked
+      // by the investment-studio brand glue at post-login + on first
+      // `portfolio:getWorkspaceDir` IPC call (idempotent).
+      this.tools.set('portfolio_init_target', PortfolioTools.getInitTargetDefinition());
+      this.tools.set('portfolio_list_targets', PortfolioTools.getListTargetsDefinition());
+      this.tools.set('portfolio_get_target_files', PortfolioTools.getGetTargetFilesDefinition());
+      this.tools.set('portfolio_delete_target', PortfolioTools.getDeleteTargetDefinition());
+      this.tools.set('portfolio_get_tracking_status', PortfolioTools.getGetTrackingStatusDefinition());
+      this.tools.set('portfolio_update_key_drivers', PortfolioTools.getUpdateKeyDriversDefinition());
+      this.tools.set('portfolio_append_note', PortfolioTools.getAppendNoteDefinition());
+      this.tools.set('portfolio_move_file', PortfolioTools.getMoveFileDefinition());
+      this.tools.set('portfolio_rename_file', PortfolioTools.getRenameFileDefinition());
 
       // 🔒 Register MoveFileTool (file move tool) - browserControl feature flag protected
       if (isFeatureEnabled('browserControl')) {
@@ -540,6 +558,26 @@ export class BuiltinToolsManager {
           result = await CodingAgentTool.execute(args, { signal });
         }
       }
+      // ===== Portfolio tools (Investment Studio brand) =====
+      else if (name === 'portfolio_init_target') {
+        result = await PortfolioTools.executeInitTarget(args);
+      } else if (name === 'portfolio_list_targets') {
+        result = await PortfolioTools.executeListTargets();
+      } else if (name === 'portfolio_get_target_files') {
+        result = await PortfolioTools.executeGetTargetFiles(args);
+      } else if (name === 'portfolio_delete_target') {
+        result = await PortfolioTools.executeDeleteTarget(args);
+      } else if (name === 'portfolio_get_tracking_status') {
+        result = await PortfolioTools.executeGetTrackingStatus();
+      } else if (name === 'portfolio_update_key_drivers') {
+        result = await PortfolioTools.executeUpdateKeyDrivers(args);
+      } else if (name === 'portfolio_append_note') {
+        result = await PortfolioTools.executeAppendNote(args);
+      } else if (name === 'portfolio_move_file') {
+        result = await PortfolioTools.executeMoveFile(args);
+      } else if (name === 'portfolio_rename_file') {
+        result = await PortfolioTools.executeRenameFile(args);
+      }
       // ===== Heavy tools (lazy loaded) =====
       else if (name === 'bing_web_search') {
         const { BingWebSearchTool } = await import('./bingWebSearchTool');
@@ -612,6 +650,30 @@ export class BuiltinToolsManager {
       }
 
       console.timeEnd(`[BuiltinToolsManager] executeTool:${name}`);
+
+      // Extract filesystem mutations declared by the tool, strip them from
+      // the LLM-visible payload, then broadcast `kosmos:fs-changed` to all
+      // renderer windows so they can invalidate caches / refresh views.
+      // Using destructure (not `delete`) to stay safe with frozen objects.
+      let mutations: FsMutation[] | undefined;
+      if (result && typeof result === 'object' && Array.isArray((result as any).mutations)) {
+        const { mutations: pulled, ...rest } = result as any;
+        mutations = pulled as FsMutation[];
+        result = rest;
+      }
+      if (mutations && mutations.length > 0) {
+        try {
+          const payload = { tool: name, mutations, timestamp: Date.now() };
+          for (const win of BrowserWindow.getAllWindows()) {
+            if (!win.isDestroyed()) {
+              win.webContents.send('kosmos:fs-changed', payload);
+            }
+          }
+        } catch (broadcastErr) {
+          console.warn('[BuiltinToolsManager] fs-changed broadcast failed:', broadcastErr);
+        }
+      }
+
       return {
         success: true,
         data: JSON.stringify(result)

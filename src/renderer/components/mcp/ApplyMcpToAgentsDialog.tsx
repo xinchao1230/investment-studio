@@ -26,7 +26,7 @@ import { useProfileData } from '../userData/userDataProvider'
 import { useMCPServers } from '../userData/userDataProvider'
 import { useToast } from '../ui/ToastProvider'
 import { BRAND_NAME } from '../../../shared/constants/branding'
-import { isBuiltinAgent } from '../../../main/lib/userDataADO/types/profile'
+import { isBuiltinAgent, getDefaultPrimaryAgentName } from '../../../main/lib/userDataADO/types/profile'
 
 interface ApplyMcpToAgentsDialogProps {
   open: boolean
@@ -99,7 +99,7 @@ const ApplyMcpToAgentsDialog: React.FC<ApplyMcpToAgentsDialogProps> = ({
   const agentItems: AgentItem[] = useMemo(() => {
     const items: AgentItem[] = []
     const shouldInclude = (agent: { name: string; source?: string }) => {
-      if (isBuiltinAgent(agent.name, BRAND_NAME) && agent.name === 'Kobi') return false
+      if (isBuiltinAgent(agent.name, BRAND_NAME) && agent.name === getDefaultPrimaryAgentName(BRAND_NAME)) return false
       return true
     }
     for (const chat of chats) {

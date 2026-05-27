@@ -36,6 +36,7 @@ import handleChatSessionIPC from './chat-session';
 import { registerRendererLogIPC } from './renderer-log';
 
 import { registerExternalAgentIPC } from '../../lib/externalAgent/externalAgentIPC';
+import { registerInvestmentStudioIpc } from '../../investmentStudio';
 import { openkosmosPlaceholderManager } from "../../lib/userDataADO/openkosmosPlaceholders";
 import { userInputPlaceholderParser } from "../../lib/userDataADO/userInputPlaceholderParser";
 import { getBuiltinToolsManager } from "../../lib/mcpRuntime/builtinTools/builtinToolsManager";
@@ -87,6 +88,15 @@ export function setUpIPC(ctx: Context) {
   handleChatSessionIPC(ctx);
   // This will register runtime ipc hanles
   RuntimeManager.getInstance();
+
+  // Brand-specific IPC handlers (investment-studio): researchApi:*, builtinSkills:seed,
+  // researchChat:*, portfolio:*
+  if (process.env.BRAND_NAME === 'investment-studio') {
+    registerInvestmentStudioIpc({
+      getCurrentUserAlias: () => ctx.currentUserAlias,
+      getProfileCacheManager,
+    });
+  }
 
   // OpenKosmos Placeholder Operations - handle @OPENKOSMOS_ placeholder variable substitution
   ipcMain.handle('openkosmos:replacePlaceholders', async (event, envObj: Record<string, string>) => {

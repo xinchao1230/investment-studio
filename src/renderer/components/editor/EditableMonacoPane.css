@@ -1,0 +1,99 @@
+/* EditableMonacoPane styles
+ * Selectors match the class names produced by EditableMonacoPane.tsx:
+ *   .editable-pane                      — root wrapper
+ *   .editable-pane-monaco-container     — element Monaco mounts into
+ *   .editable-pane-status-banner        — non-fatal status (too-large, unsupported)
+ *   .editable-pane-save-error           — save error banner
+ *   .editable-pane-save-error-action    — reload-from-disk button
+ *   .editable-pane-empty                — no file selected state
+ *   .editable-pane-loading              — initial load state
+ *   .editable-pane-error                — fatal load error state
+ *   .editable-pane-retry                — retry button (load error)
+ */
+
+.editable-pane {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  width: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.editable-pane-monaco-container {
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
+}
+
+.editable-pane-status-banner,
+.editable-pane-save-error {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  font-size: 12.5px;
+  flex: 0 0 auto;
+}
+
+.editable-pane-status-banner {
+  background: var(--rw-bg-soft, #f3f4f6);
+  color: var(--rw-text-2, #374151);
+  border-bottom: 1px solid var(--rw-border, #e5e7eb);
+}
+
+.editable-pane-save-error {
+  background: #fef2f2;
+  color: #b91c1c;
+  border-bottom: 1px solid #fecaca;
+}
+
+.editable-pane-save-error-action {
+  margin-left: auto;
+  padding: 2px 8px;
+  border-radius: 3px;
+  border: 1px solid currentColor;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.editable-pane-save-error-action:hover {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.editable-pane-empty,
+.editable-pane-loading,
+.editable-pane-error {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 100%;
+  width: 100%;
+  color: var(--rw-text-3, #6b7280);
+  font-size: 13px;
+}
+
+.editable-pane-error {
+  color: #b91c1c;
+  flex-direction: column;
+}
+
+.editable-pane-retry {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 4px;
+  border: 1px solid currentColor;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.editable-pane-retry:hover {
+  background: rgba(0, 0, 0, 0.04);
+}

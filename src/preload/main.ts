@@ -733,6 +733,26 @@ export interface ElectronAPI {
     isBuiltinTool: (
       toolName: string,
     ) => Promise<{ success: boolean; data?: boolean; error?: string }>;
+    /**
+     * Subscribe to `kosmos:fs-changed` broadcasts emitted whenever any
+     * builtin tool reports filesystem mutations. Returns an unsubscribe
+     * function. Payload mutations are absolute paths; consumers filter via
+     * the shared `useFsChanged` hook.
+     */
+    onFsChanged: (
+      cb: (event: {
+        tool: string;
+        mutations: { path: string; kind: 'create' | 'modify' | 'delete' }[];
+        timestamp: number;
+      }) => void,
+    ) => () => void;
+  };
+
+  // Portfolio (investment-studio research workspace) APIs
+  portfolio: {
+    getWorkspaceDir: () => Promise<{ success: boolean; data?: string; error?: string }>;
+    trashFile: (absPath: string) => Promise<{ success: boolean; error?: string }>;
+    trashPath: (absPath: string) => Promise<{ success: boolean; error?: string }>;
   };
 
   // Skills APIs
@@ -1225,6 +1245,50 @@ export interface ElectronAPI {
     // 🔥 New: get full path of dragged file (resolve path issue under contextIsolation)
     // Use Electron webUtils.getPathForFile() API (Electron 26+)
     getPathForFile: (file: File) => string;
+  };
+
+  // Research API token management (investment-studio brand)
+  researchApi: {
+    getToken: (provider: 'tushare' | 'eastmoney') => Promise<string | undefined>;
+    setToken: (provider: 'tushare' | 'eastmoney', token: string | null) => Promise<{ ok: boolean; error?: string }>;
+    testConnection: (provider: 'tushare' | 'eastmoney') => Promise<{ ok: boolean; error?: string }>;
+  };
+
+  // Research workspace: Target ↔ Chat binding (see docs/research-target-chat-binding.md)
+  researchChat?: {
+    listByTarget: (targetCode: string | null) => Promise<{
+      success: boolean;
+      data?: {
+        chatId: string | null;
+        sessions: Array<{ chatSession_id: string; last_updated: string; title: string; targetCode?: string | null; targetDir?: string }>;
+      };
+      error?: string;
+    }>;
+    /** Return every chat session for the active chat (ignores targetCode filter). */
+    listAll: () => Promise<{
+      success: boolean;
+      data?: {
+        chatId: string | null;
+        sessions: Array<{ chatSession_id: string; last_updated: string; title: string; targetCode?: string | null; targetDir?: string }>;
+      };
+      error?: string;
+    }>;
+    create: (
+      targetCode: string | null,
+      opts?: { title?: string; targetDir?: string },
+    ) => Promise<{ success: boolean; data?: { chatId: string; chatSessionId: string }; error?: string }>;
+    delete: (chatSessionId: string) => Promise<{ success: boolean; error?: string }>;
+    rename: (chatSessionId: string, title: string) => Promise<{ success: boolean; error?: string }>;
+    /** Release every chat bound to this target back to the Stella pool (targetCode -> null). */
+    unbindTarget: (targetCode: string) => Promise<{ success: boolean; data?: { unboundCount: number }; error?: string }>;
+    setLastActive: (targetCode: string | null, chatSessionId: string) => Promise<{ success: boolean; error?: string }>;
+    getLastActive: (targetCode: string | null) => Promise<{ success: boolean; data?: string | null; error?: string }>;
+  };
+
+  // Research workspace: persistent last-active target selection.
+  researchTarget?: {
+    getLastActive: () => Promise<{ success: boolean; data?: string | null; error?: string }>;
+    setLastActive: (targetCode: string | null) => Promise<{ success: boolean; error?: string }>;
   };
 
   // Debug tools
@@ -2024,6 +2088,27 @@ export const electronAPI: ElectronAPI = {
     getAllTools: () => ipcRenderer.invoke('builtinTools:getAllTools'),
     isBuiltinTool: (toolName: string) =>
       ipcRenderer.invoke('builtinTools:isBuiltinTool', toolName),
+    onFsChanged: (
+      cb: (event: {
+        tool: string;
+        mutations: { path: string; kind: 'create' | 'modify' | 'delete' }[];
+        timestamp: number;
+      }) => void,
+    ) => {
+      const listener = (_event: unknown, payload: any) => {
+        try { cb(payload); } catch { /* ignore listener errors */ }
+      };
+      ipcRenderer.on('kosmos:fs-changed', listener);
+      return () => {
+        try { ipcRenderer.removeListener('kosmos:fs-changed', listener); }
+        catch { /* ignore */ }
+      };
+    },
+  },
+  portfolio: {
+    getWorkspaceDir: () => ipcRenderer.invoke('portfolio:getWorkspaceDir'),
+    trashFile: (absPath: string) => ipcRenderer.invoke('portfolio:trashFile', absPath),
+    trashPath: (absPath: string) => ipcRenderer.invoke('portfolio:trashPath', absPath),
   },
   skills: {
     getSkillMarkdown: (skillName: string) =>
@@ -2362,6 +2447,37 @@ export const electronAPI: ElectronAPI = {
     // Use Electron webUtils.getPathForFile() API (Electron 26+)
     // This is the official solution for the missing path property on dragged files under contextIsolation: true
     getPathForFile: (file: File) => webUtils.getPathForFile(file),
+  },
+  researchApi: {
+    getToken: (provider: 'tushare' | 'eastmoney') =>
+      ipcRenderer.invoke('researchApi:getToken', provider) as Promise<string | undefined>,
+    setToken: (provider: 'tushare' | 'eastmoney', token: string | null) =>
+      ipcRenderer.invoke('researchApi:setToken', provider, token) as Promise<{ ok: boolean; error?: string }>,
+    testConnection: (provider: 'tushare' | 'eastmoney') =>
+      ipcRenderer.invoke('researchApi:testConnection', provider) as Promise<{ ok: boolean; error?: string }>,
+  },
+  // Research workspace: Target ↔ Chat binding
+  researchChat: {
+    listByTarget: (targetCode: string | null) =>
+      ipcRenderer.invoke('researchChat:listByTarget', targetCode),
+    listAll: () => ipcRenderer.invoke('researchChat:listAll'),
+    create: (targetCode: string | null, opts?: { title?: string; targetDir?: string }) =>
+      ipcRenderer.invoke('researchChat:create', targetCode, opts),
+    delete: (chatSessionId: string) =>
+      ipcRenderer.invoke('researchChat:delete', chatSessionId),
+    rename: (chatSessionId: string, title: string) =>
+      ipcRenderer.invoke('researchChat:rename', chatSessionId, title),
+    unbindTarget: (targetCode: string) =>
+      ipcRenderer.invoke('researchChat:unbindTarget', targetCode),
+    setLastActive: (targetCode: string | null, chatSessionId: string) =>
+      ipcRenderer.invoke('researchChat:setLastActive', targetCode, chatSessionId),
+    getLastActive: (targetCode: string | null) =>
+      ipcRenderer.invoke('researchChat:getLastActive', targetCode),
+  },
+  researchTarget: {
+    getLastActive: () => ipcRenderer.invoke('researchTarget:getLastActive'),
+    setLastActive: (targetCode: string | null) =>
+      ipcRenderer.invoke('researchTarget:setLastActive', targetCode),
   },
   debug: {
     openWindow: () => ipcRenderer.invoke('debug:openWindow'),
