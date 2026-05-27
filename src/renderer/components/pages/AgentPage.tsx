@@ -15,6 +15,8 @@ import {
 import { getPmAgentSayHiMessageConfig } from '../../lib/chat/pmAgentSayHi';
 import { startNewChatFor } from '../../lib/chat/startNewChatFor';
 import { createLogger } from '../../lib/utilities/logger';
+import { getDefaultPrimaryAgentName } from '../../../main/lib/userDataADO/types/profile';
+import { BRAND_NAME } from '../../../shared/constants/branding';
 const logger = createLogger('[AgentPage]');
 
 /**
@@ -142,7 +144,7 @@ export const AgentPage: React.FC = () => {
         return;
       }
 
-      const primaryAgentName = profile.primaryAgent || 'Kobi';
+      const primaryAgentName = profile.primaryAgent || getDefaultPrimaryAgentName(BRAND_NAME);
       const chats = profileDataManager.getChatConfigs();
       logger.debug('[AgentPage] Primary agent name:', primaryAgentName, 'Chats count:', chats.length);
 

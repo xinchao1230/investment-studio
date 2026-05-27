@@ -93,11 +93,6 @@ export default function(ctx: Context) {
           });
       });
 
-      // Fire-and-forget: run investment-studio post-login seeders
-      import('../../investmentStudio').then(({ runPostLoginSeeders }) => {
-        runPostLoginSeeders(userLogin, 'auth:setCurrentSession').catch(() => {});
-      }).catch(() => {});
-
       return { success: true };
     } catch (error) {
       return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
@@ -275,12 +270,6 @@ export default function(ctx: Context) {
 
             // 🔥 Important: only notify frontend after all initialization is complete
             safeSend('auth:deviceFlowSuccess', { authInfo });
-
-            // Fire-and-forget: run investment-studio post-login seeders
-            import('../../investmentStudio').then(({ runPostLoginSeeders }) => {
-              const login = authInfo?.ghcAuth?.user?.login;
-              if (login) runPostLoginSeeders(login, 'device-flow').catch(() => {});
-            }).catch(() => {});
 
           } catch (sessionError: any) {
             safeSend('auth:deviceFlowError', { error: sessionError.message });

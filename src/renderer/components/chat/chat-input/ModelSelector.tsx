@@ -4,6 +4,8 @@ import { useAgentConfig } from '../../userData/userDataProvider';
 import { getModelById, getModelCapabilities } from '@/lib/models/ghcModels';
 import { useAvailableModels } from '@/lib/models/useAvailableModels';
 import { useScrollSelectedIntoView } from '@/lib/hooks/useScrollSelectedIntoView';
+import { chatOps } from '@/lib/chat/chatOps';
+import { agentChatSessionCacheManager } from '@/lib/chat/agentChatSessionCacheManager';
 
 interface Props {
   currentChatId: string | null;
@@ -115,11 +117,20 @@ function Selector(props: Props) {
     // FIX: Set pending state immediately to update the UI
     setPendingModel(modelId);
 
-    try {
-      const result = await updateModel(modelId);
+    // Resolve the target chat id robustly. The `useAgentConfig` hook keeps
+    // its own subscribed copy of `currentChatId` which can lag the prop in
+    // compact mode (the research workspace bootstraps a session after the
+    // selector first mounts). Prefer the prop, then fall back to the cache
+    // manager's live value, then to the hook.
+    const targetChatId =
+      currentChatId ?? agentChatSessionCacheManager.getCurrentChatId();
 
-      if (result.success) {
-      } else {
+    try {
+      const result = targetChatId
+        ? await chatOps.updateChatAgent(targetChatId, { model: modelId })
+        : await updateModel(modelId);
+
+      if (!result.success) {
         // FIX: If the update fails, clear the pending state
         setPendingModel(null);
       }
