@@ -112,6 +112,35 @@ export class OpenKosmosPlaceholderManager {
       case OpenKosmosPlaceholder.PROFILE_WORKSPACES_FOLDER:
         value = this.getProfileWorkspacesFolderPath(context.alias);
         break;
+      case OpenKosmosPlaceholder.RESEARCH_RESOURCES_DIR: {
+        const { app } = require('electron');
+        value = app.isPackaged
+          ? path.join((process as any).resourcesPath, 'mcp', 'research')
+          : path.join(app.getAppPath(), 'resources', 'mcp', 'research');
+        break;
+      }
+      case OpenKosmosPlaceholder.RESEARCH_TUSHARE_TOKEN: {
+        const { app } = require('electron');
+        const tokenFile = path.join(app.getPath('userData'), 'research-api-tokens.json');
+        try {
+          const fs = require('fs');
+          const tokens = JSON.parse(fs.readFileSync(tokenFile, 'utf-8'));
+          value = tokens['tushare'] || '';
+        } catch {
+          value = '';
+        }
+        break;
+      }
+      case OpenKosmosPlaceholder.RESEARCH_RUNTIME_DIR: {
+        const { app } = require('electron');
+        value = path.join(app.getPath('userData'), 'runtimes', 'research-mcp');
+        break;
+      }
+      case OpenKosmosPlaceholder.RESEARCH_USER_DATA_DIR: {
+        const { app } = require('electron');
+        value = path.join(app.getPath('userData'));
+        break;
+      }
       default:
         logger.warn(`[OpenKosmosPlaceholderManager] Unknown placeholder: ${placeholder}`);
         return null;

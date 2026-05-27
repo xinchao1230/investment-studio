@@ -32,8 +32,11 @@ export { DEFAULT_RUNTIME_ENVIRONMENT, DEFAULT_APP_CONFIG, isAppConfig, isRuntime
 // Re-export builtin agent constants and utilities
 export {
   BUILTIN_AGENT_NAMES_OpenKosmos,
+  BUILTIN_AGENT_NAMES_INVESTMENT_STUDIO,
   getBuiltinAgentNames,
-  isBuiltinAgent
+  isBuiltinAgent,
+  getDefaultPrimaryAgentName,
+  getDefaultChatAgent
 } from '../../../../main/lib/userDataADO/types/profile'
 
 // Import and re-export GhcModel from existing location

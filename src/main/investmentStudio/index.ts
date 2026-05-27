@@ -5,9 +5,10 @@
  * Also exports `runPostLoginSeeders()` for post-auth initialization.
  */
 
-import { app, ipcMain } from 'electron';
+import { app, ipcMain, BrowserWindow, shell } from 'electron';
 import * as fs from 'fs';
 import * as path from 'path';
+import { PortfolioTools } from '../lib/mcpRuntime/builtinTools/portfolioTools';
 
 export interface InvestmentStudioDeps {
   getCurrentUserAlias: () => string | null;
@@ -89,6 +90,17 @@ export async function runPostLoginSeeders(
     } catch (e) {
       seedLog(`[portfolio/_shared] EXCEPTION: ${e instanceof Error ? e.message : String(e)}`);
     }
+    // Initialize PortfolioTools workspace dir so the LLM-callable
+    // portfolio_* builtin tools have somewhere to write. Idempotent — also
+    // initialized lazily by the `portfolio:getWorkspaceDir` IPC handler.
+    try {
+      const portfolioDir = path.join(app.getPath('userData'), 'portfolio');
+      fs.mkdirSync(portfolioDir, { recursive: true });
+      PortfolioTools.setWorkspaceDir(portfolioDir);
+      seedLog(`[portfolio] workspaceDir=${portfolioDir}`);
+    } catch (e) {
+      seedLog(`[portfolio] setWorkspaceDir EXCEPTION: ${e instanceof Error ? e.message : String(e)}`);
+    }
   }
 
   // 4) Auto-install research-mcp Python venv in background
@@ -148,6 +160,7 @@ export function registerInvestmentStudioIpc(deps: InvestmentStudioDeps): void {
   registerResearchApiIpc(deps);
   registerBuiltinSkillsIpc(deps);
   registerResearchChatIpc(deps);
+  registerPortfolioIpc(deps);
 }
 
 function registerResearchApiIpc(_deps: InvestmentStudioDeps): void {
@@ -218,6 +231,118 @@ function registerBuiltinSkillsIpc(deps: InvestmentStudioDeps): void {
       return { ok: true, result };
     } catch (err: any) {
       return { ok: false, error: err?.message ?? String(err) };
+    }
+  });
+}
+
+function registerPortfolioIpc(_deps: InvestmentStudioDeps): void {
+  // Portfolio workspace dir lookup (used by renderer-side fs-changed
+  // path-prefix filtering). Idempotently initializes the workspace dir
+  // so callers don't have to invoke a portfolio_* tool first.
+  ipcMain.handle('portfolio:getWorkspaceDir', async () => {
+    try {
+      if (!PortfolioTools.getWorkspaceDir()) {
+        const portfolioDir = path.join(app.getPath('userData'), 'portfolio');
+        if (!fs.existsSync(portfolioDir)) {
+          fs.mkdirSync(portfolioDir, { recursive: true });
+        }
+        PortfolioTools.setWorkspaceDir(portfolioDir);
+      }
+      return { success: true, data: PortfolioTools.getWorkspaceDir() };
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+    }
+  });
+
+  // Move a portfolio workspace file to the OS trash. Refuses anything
+  // outside the active workspace dir or named `profile.yaml`. Also
+  // broadcasts a synthetic `kosmos:fs-changed` event so renderer caches
+  // refresh (the broadcast normally only fires for builtin tool calls,
+  // and this op goes through a plain IPC, not a tool).
+  ipcMain.handle('portfolio:trashFile', async (_event, absPath: string) => {
+    try {
+      if (typeof absPath !== 'string' || !absPath) {
+        return { success: false, error: 'absPath is required' };
+      }
+      const workspaceDir = PortfolioTools.getWorkspaceDir();
+      if (!workspaceDir) {
+        return { success: false, error: 'Workspace not initialized' };
+      }
+      const resolved = path.resolve(absPath);
+      const rel = path.relative(workspaceDir, resolved);
+      if (!rel || rel.startsWith('..') || path.isAbsolute(rel)) {
+        return { success: false, error: 'Path is outside the workspace' };
+      }
+      if (path.basename(resolved).toLowerCase() === 'profile.yaml') {
+        return { success: false, error: 'profile.yaml is protected and cannot be deleted' };
+      }
+      if (!fs.existsSync(resolved)) {
+        return { success: false, error: 'File does not exist' };
+      }
+      const stat = fs.statSync(resolved);
+      if (!stat.isFile()) {
+        return { success: false, error: 'Not a regular file' };
+      }
+      await shell.trashItem(resolved);
+      const payload = {
+        tool: 'portfolio:trashFile',
+        mutations: [{ path: resolved, kind: 'delete' as const }],
+        timestamp: Date.now(),
+      };
+      for (const win of BrowserWindow.getAllWindows()) {
+        try { win.webContents.send('kosmos:fs-changed', payload); }
+        catch { /* ignore */ }
+      }
+      return { success: true };
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+    }
+  });
+
+  // Move a portfolio workspace file OR directory to the OS trash. Used
+  // by the right-click "delete" action on user-created subfolders in the
+  // research sidebar. Refuses anything outside the active workspace,
+  // any target root (those go through the dedicated deleteTarget flow),
+  // and any path named `profile.yaml`.
+  ipcMain.handle('portfolio:trashPath', async (_event, absPath: string) => {
+    try {
+      if (typeof absPath !== 'string' || !absPath) {
+        return { success: false, error: 'absPath is required' };
+      }
+      const workspaceDir = PortfolioTools.getWorkspaceDir();
+      if (!workspaceDir) {
+        return { success: false, error: 'Workspace not initialized' };
+      }
+      const resolved = path.resolve(absPath);
+      const rel = path.relative(workspaceDir, resolved);
+      if (!rel || rel.startsWith('..') || path.isAbsolute(rel)) {
+        return { success: false, error: 'Path is outside the workspace' };
+      }
+      // Refuse target roots — the first path segment under workspaceDir.
+      // Those have their own deleteTarget flow.
+      const firstSep = rel.indexOf(path.sep);
+      if (firstSep === -1) {
+        return { success: false, error: 'Cannot delete a target root directory; use the delete-target action.' };
+      }
+      if (path.basename(resolved).toLowerCase() === 'profile.yaml') {
+        return { success: false, error: 'profile.yaml is protected and cannot be deleted' };
+      }
+      if (!fs.existsSync(resolved)) {
+        return { success: false, error: 'File or directory does not exist' };
+      }
+      await shell.trashItem(resolved);
+      const payload = {
+        tool: 'portfolio:trashPath',
+        mutations: [{ path: resolved, kind: 'delete' as const }],
+        timestamp: Date.now(),
+      };
+      for (const win of BrowserWindow.getAllWindows()) {
+        try { win.webContents.send('kosmos:fs-changed', payload); }
+        catch { /* ignore */ }
+      }
+      return { success: true };
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
     }
   });
 }

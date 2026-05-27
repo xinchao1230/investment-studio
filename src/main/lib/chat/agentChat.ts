@@ -310,6 +310,7 @@ export class AgentChat {
       getLatestAgentConfig: () => this.getLatestAgentConfig(),
       isRemoteSession: () => this.isRemoteSession,
       getInteractionPolicy: () => this.interactionPolicy,
+      getCurrentChatSession: () => this.currentChatSession,
     });
   }
 
@@ -443,6 +444,8 @@ export class AgentChat {
       buildInteractionId: (prefix) => this.buildInteractionId(prefix),
       requestUserInteraction: (request, fallbackResponse) => this.requestUserInteraction(request, fallbackResponse),
       requestUserInfoInput: (request) => this.requestUserInfoInput(request),
+      getCurrentChatSession: () => this.currentChatSession,
+      saveChatSession: () => this.saveChatSession(),
     });
   }
 

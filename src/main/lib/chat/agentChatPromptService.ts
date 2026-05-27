@@ -25,6 +25,13 @@ export interface AgentChatPromptServiceDeps {
   getLatestAgentConfig(): AgentConfig | null;
   isRemoteSession(): boolean;
   getInteractionPolicy(): AgentChatInteractionPolicy;
+  /**
+   * Investment-studio brand: returns the currently-active chat session file,
+   * used to inject the bound research target's directory/profile into the
+   * agent system prompt so the LLM knows what stock the user is researching.
+   * Returns `null` when no session is bound to a target.
+   */
+  getCurrentChatSession?(): { targetCode?: string | null; targetDir?: string | null } | null;
 }
 
 export class AgentChatPromptService {
@@ -161,7 +168,91 @@ export class AgentChatPromptService {
           sections.push(`- Path schema: \`@chat-session:{relative_path}\` → \`${chatSessionFilesPath}/{relative_path}\``);
         }
 
-        const primaryCwd = hasChatSessionFiles ? chatSessionFilesPath : (hasKnowledgeBase ? knowledgeBasePath : '');
+        // === Research Target Scope (investment-studio brand) ===
+        // When the chat session is bound to a research target, inject the
+        // target's directory + profile.yaml metadata so the LLM knows which
+        // company the user is currently researching and can skip the "which
+        // stock do you want to analyze?" question.
+        const currentChatSession = this.deps.getCurrentChatSession?.() ?? null;
+        const targetCode = currentChatSession?.targetCode ?? null;
+        const targetDir = currentChatSession?.targetDir ?? null;
+        const hasTargetScope = !!(targetCode && targetDir);
+        let targetAbsDir = '';
+        if (hasTargetScope) {
+          const tdStr = targetDir as string;
+          const isAbsolute = /^[A-Za-z]:[\\/]|^\//.test(tdStr);
+          if (isAbsolute) {
+            targetAbsDir = tdStr;
+          } else if (hasKnowledgeBase) {
+            const sep = (knowledgeBasePath as string).includes('\\') ? '\\' : '/';
+            targetAbsDir = `${knowledgeBasePath}${sep}${tdStr}`;
+          } else {
+            targetAbsDir = tdStr;
+          }
+
+          // Source of truth: profile.yaml inside the target directory. The
+          // directory base name is informational only (new scheme = `${name}`,
+          // legacy = `${name}_${stockCode}`). When profile.yaml is unreadable
+          // we fall back to parsing the directory name with `lastIndexOf('_')`.
+          let targetListed = !!targetCode;
+          let profileName = '';
+          try {
+            const profilePath = `${targetAbsDir}${targetAbsDir.includes('\\') ? '\\' : '/'}profile.yaml`;
+            if (fs.existsSync(profilePath)) {
+              const raw = fs.readFileSync(profilePath, 'utf-8');
+              for (const line of raw.split(/\r?\n/)) {
+                const m = /^([a-zA-Z_]+):\s*(.*)$/.exec(line.trim());
+                if (!m) continue;
+                const [, k, vRaw] = m;
+                const v = vRaw.replace(/^['"]|['"]$/g, '').trim();
+                if (k === 'name' && v) profileName = v;
+                else if (k === 'listed') targetListed = v === 'true';
+              }
+            }
+          } catch { /* fall through to dir-name parse */ }
+
+          const sepIdx = Math.max(targetAbsDir.lastIndexOf('/'), targetAbsDir.lastIndexOf('\\'));
+          const dirBaseName = sepIdx >= 0 ? targetAbsDir.slice(sepIdx + 1) : targetAbsDir;
+          let targetName = profileName;
+          if (!targetName) {
+            const lastUnderscore = dirBaseName.lastIndexOf('_');
+            targetName = lastUnderscore > 0 ? dirBaseName.slice(0, lastUnderscore) : dirBaseName;
+          }
+
+          const headerSuffix = targetListed
+            ? (targetCode ? ` (${targetCode})` : '')
+            : ' (未上市)';
+          sections.push(`\n**Research Target:** ${targetName}${headerSuffix}`);
+          sections.push(`- Target Directory: \`${targetAbsDir}\``);
+          sections.push(`- All file/command operations for this conversation should default to this directory.`);
+          sections.push(`- DO NOT call \`portfolio_init_target\` for this target — it already exists. Write any new files (财报/分析/笔记等) directly under the Target Directory above. Creating a new target folder for the same company will produce a duplicate in the workspace sidebar.`);
+          sections.push(`- When the user asks for "深度研究 / 深度分析 / 深度报告 / 个股分析 / Initiation Report" without naming a company, treat **this** target as the subject — do NOT ask the user to specify the company, market or stock code again. Proceed by routing to the appropriate Skill (e.g. \`stock-analyze\`) with the target's name + code.`);
+
+          sections.push(`\n**Target Directory Conventions (推荐结构，可创建其他目录但请尽量复用):**`);
+          sections.push(`- \`inputs/\` — User-attached files (PDFs, research reports, notes). Auto-populated when user attaches files in chat.`);
+          if (targetListed) {
+            sections.push(`- \`earnings/\` — Financial CSV data from \`tushare_collect\` / \`yfinance_collect\`.`);
+          } else {
+            sections.push(`- \`earnings/\` — Comparable-company financial CSV data (二级市场可比公司). Use \`tushare_collect\` / \`yfinance_collect\` to fetch comparables, NOT the target itself — this is an unlisted/private company.`);
+          }
+          sections.push(`- \`research/\` — AI-generated analysis reports.`);
+          sections.push(`- \`models/\` — Valuation models and scripts.`);
+          sections.push(`- \`profile.yaml\`, \`key-drivers.md\`, \`notes.md\`, \`tracking.md\` — pre-created templates; update in place.`);
+          sections.push(`- Naming: reports use \`{date}-{topic}.md\` (e.g. \`2026Q1-earnings-review.md\`); scripts use \`fetch_*.py\` (download) / \`analyze_*.py\` (process).`);
+          sections.push(`- Prefer reusing existing subdirectories. Only create new top-level directories when none of the above fit.`);
+
+          if (!targetListed) {
+            sections.push(`\n**Unlisted Company Research Guidance:**`);
+            sections.push(`- 该标的为**未上市公司**（私募 / 创业公司 / 拟 IPO），不要尝试用股票代码抓取其本身的财务数据。`);
+            sections.push(`- 重点研究维度：商业模式 / PMF / 单位经济（LTV、CAC、毛利率）/ 融资历史 / 现金跑道 / 客户集中度 / 团队 / 退出路径（IPO / 战略并购 / 老股转让）。`);
+            sections.push(`- 估值锚：选 3-5 家二级市场可比公司，使用 \`tushare_collect\` / \`yfinance_collect\` 抓其财务，整理为 \`earnings/comparables_*.csv\`，在 \`research/\` 下输出估值参考报告。`);
+            sections.push(`- 信息来源：公司官网、招股书 / 路演稿 / 创始人公开演讲、行业研报、IT 桔子 / 36 氪等创投数据库。`);
+          }
+        }
+
+        const primaryCwd = hasTargetScope
+          ? targetAbsDir
+          : (hasChatSessionFiles ? chatSessionFilesPath : (hasKnowledgeBase ? knowledgeBasePath : ''));
         sections.push('\n**Command Execution:**');
         sections.push(`- Your working directory is \`${primaryCwd}\`. Pass the correct 'cwd' parameter when using execute_command.`);
         sections.push('- To run commands outside this directory, prepend `cd {target_dir} &&` before the command.');
