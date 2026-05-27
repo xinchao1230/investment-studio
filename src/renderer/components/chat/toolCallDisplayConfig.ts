@@ -327,8 +327,134 @@ export const getToolCallDisplayText = (toolName: string, toolArgs?: string, tool
 
     // ===== Default =====
     default:
+      // Investment-studio brand: known research-mcp + portfolio tools use a
+      // localized "Called: {tool}" format paired with a category pill rendered
+      // by ToolCallItem.tsx (see getToolCallCategory below).
+      if (getToolCallCategory(toolName)) {
+        return `调用工具: ${toolName}`;
+      }
       return `Used ${toolName}`;
   }
+};
+
+/**
+ * Category pill metadata for a tool call (investment-studio brand).
+ *
+ * Tool calls are bucketed into coarse categories so the user can visually
+ * skim what kind of work the agent just did without reading every tool
+ * name. Ported from the original investment-studio repo's
+ * `getToolCallCategoryLabel`. Returns `null` for tools without a category
+ * (no pill rendered).
+ */
+export interface ToolCallCategory {
+  /** Localized pill label rendered before the tool-call text. */
+  label: string;
+  /** Visual tone — drives the pill background/foreground colors in CSS. */
+  tone:
+    | 'blue'
+    | 'sky'
+    | 'cyan'
+    | 'green'
+    | 'amber'
+    | 'rose'
+    | 'purple'
+    | 'indigo'
+    | 'slate'
+    | 'gray';
+}
+
+const TOOL_CATEGORY_MAP: Record<string, ToolCallCategory> = {
+  // 互联网搜索 — web search / fetch / html.
+  bing_web_search: { label: '互联网搜索', tone: 'blue' },
+  google_web_search: { label: '互联网搜索', tone: 'blue' },
+  fetch_web_content: { label: '互联网搜索', tone: 'blue' },
+  read_html: { label: '互联网搜索', tone: 'blue' },
+
+  // 图片搜索
+  bing_image_search: { label: '图片搜索', tone: 'blue' },
+  google_image_search: { label: '图片搜索', tone: 'blue' },
+
+  // 执行命令
+  execute_command: { label: '执行命令', tone: 'slate' },
+
+  // 快速资料检索 — local file / content search.
+  search_files: { label: '快速资料检索', tone: 'amber' },
+  search_text_in_files: { label: '快速资料检索', tone: 'amber' },
+  search_file_contents: { label: '快速资料检索', tone: 'amber' },
+
+  // 文档读取
+  read_file: { label: '文档读取', tone: 'purple' },
+  read_office_file: { label: '文档读取', tone: 'purple' },
+
+  // 编辑文件
+  write_file: { label: '编辑文件', tone: 'green' },
+  create_file: { label: '编辑文件', tone: 'green' },
+  append_to_file: { label: '编辑文件', tone: 'green' },
+  move_file: { label: '编辑文件', tone: 'green' },
+
+  // 下载文件
+  download_and_save_as: { label: '下载文件', tone: 'cyan' },
+  download_file: { label: '下载文件', tone: 'cyan' },
+
+  // 技能读取
+  add_skill_from_lib_by_name: { label: '技能读取', tone: 'rose' },
+  check_skill_status: { label: '技能读取', tone: 'rose' },
+
+  // 服务管理 — MCP + Agent management tools.
+  get_mcp_config_from_lib: { label: '服务管理', tone: 'gray' },
+  add_mcp_by_config: { label: '服务管理', tone: 'gray' },
+  update_mcp_by_config: { label: '服务管理', tone: 'gray' },
+  check_mcp_status: { label: '服务管理', tone: 'gray' },
+  toggle_mcp_by_name: { label: '服务管理', tone: 'gray' },
+  create_mcp_server_from_config: { label: '服务管理', tone: 'gray' },
+  get_agent_config_from_lib: { label: '服务管理', tone: 'gray' },
+  add_agent_by_config: { label: '服务管理', tone: 'gray' },
+  update_agent_by_config: { label: '服务管理', tone: 'gray' },
+  check_agent_status: { label: '服务管理', tone: 'gray' },
+  get_all_agents: { label: '服务管理', tone: 'gray' },
+  set_primary_agent: { label: '服务管理', tone: 'gray' },
+  create_agent_from_config: { label: '服务管理', tone: 'gray' },
+
+  // 时间查询
+  get_current_datetime: { label: '时间查询', tone: 'sky' },
+
+  // 成果展示
+  present_deliverables: { label: '成果展示', tone: 'green' },
+
+  // 投研管理 — portfolio builtin tools (`PortfolioTools`).
+  portfolio_init_target: { label: '投研管理', tone: 'indigo' },
+  portfolio_list_targets: { label: '投研管理', tone: 'indigo' },
+  portfolio_get_target_files: { label: '投研管理', tone: 'indigo' },
+  portfolio_delete_target: { label: '投研管理', tone: 'indigo' },
+  portfolio_get_tracking_status: { label: '投研管理', tone: 'indigo' },
+  portfolio_update_key_drivers: { label: '投研管理', tone: 'indigo' },
+  portfolio_append_note: { label: '投研管理', tone: 'indigo' },
+  portfolio_move_file: { label: '投研管理', tone: 'indigo' },
+  portfolio_rename_file: { label: '投研管理', tone: 'indigo' },
+
+  // 快速财务查询 — research-mcp data collection.
+  tushare_collect: { label: '快速财务查询', tone: 'amber' },
+  yfinance_collect: { label: '快速财务查询', tone: 'amber' },
+  peer_collect: { label: '快速财务查询', tone: 'amber' },
+  capital_flow: { label: '快速财务查询', tone: 'amber' },
+  pdf_download_extract: { label: '快速财务查询', tone: 'amber' },
+  data_snapshot: { label: '快速财务查询', tone: 'amber' },
+
+  // 财务计算 — research-mcp computation.
+  derived_metrics: { label: '财务计算', tone: 'amber' },
+  financial_audit_11: { label: '财务计算', tone: 'amber' },
+  technical_analysis: { label: '财务计算', tone: 'amber' },
+  monitor_compare: { label: '财务计算', tone: 'amber' },
+
+  // 研报生成
+  assemble_report: { label: '研报生成', tone: 'rose' },
+
+  // 环境检查
+  check_env: { label: '环境检查', tone: 'gray' },
+};
+
+export const getToolCallCategory = (toolName: string): ToolCallCategory | null => {
+  return TOOL_CATEGORY_MAP[toolName] || null;
 };
 
 /**

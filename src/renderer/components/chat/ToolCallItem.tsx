@@ -4,7 +4,7 @@
 import React, { useState, useRef, useCallback } from 'react';
 import { Loader2, ChevronRight, AlertCircle } from 'lucide-react';
 import { ToolCall, Message as MessageType } from '@shared/types/chatTypes';
-import { getToolCallDisplayText, getToolCallIcon } from './toolCallDisplayConfig';
+import { getToolCallDisplayText, getToolCallIcon, getToolCallCategory } from './toolCallDisplayConfig';
 import { getToolCallView, hasCustomView } from './toolCallViews';
 import { ToolCallExecutionStatus } from './toolCallViews/types';
 import { adjustScrollForExpandedContent } from './toolCallExpansionScroll';
@@ -70,6 +70,10 @@ export const ToolCallItem: React.FC<ToolCallItemProps> = ({
   const resultText = (toolResult?.content?.find((c) => c.type === 'text') as any)?.text as string | undefined;
   const displayText = getToolCallDisplayText(toolCall.function.name, toolCall.function.arguments, resultText);
 
+  // Investment-studio brand: optional category pill rendered inline before the
+  // text (e.g. "投研管理" / "财务计算"). Returns null for tools without a category.
+  const category = getToolCallCategory(toolCall.function.name);
+
   // Check whether there is a custom view
   const toolName = toolCall.function.name;
   const hasCustom = hasCustomView(toolName);
@@ -124,6 +128,11 @@ export const ToolCallItem: React.FC<ToolCallItemProps> = ({
           <ToolIcon toolName={toolName} status={executionStatus} />
         </div>
         <div className="tool-calls-text-col">
+          {category && (
+            <span className={`tool-call-category-pill tone-${category.tone}`}>
+              {category.label}
+            </span>
+          )}
           <span className="tool-call-item-text">{displayText}</span>
           {isExpandable && (
             <ChevronRight
