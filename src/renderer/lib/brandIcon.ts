@@ -1,20 +1,14 @@
 import { BRAND_NAME } from '@shared/constants/branding';
 
-// Resolve the brand-specific app icon at runtime using the active BRAND_NAME
-// (injected via webpack DefinePlugin from the active brand config).
-// Falls back to openkosmos if the brand asset is missing.
-let resolvedAppIcon: string;
-try {
-  const iconModule = require(`../assets/${BRAND_NAME}/app.svg`);
-  resolvedAppIcon = iconModule.default || iconModule;
-} catch (error) {
-  console.error(`[brandIcon] Failed to load app icon for brand "${BRAND_NAME}"; falling back to openkosmos.`, error);
-  try {
-    const fallback = require('../assets/openkosmos/app.svg');
-    resolvedAppIcon = fallback.default || fallback;
-  } catch {
-    resolvedAppIcon = '';
-  }
-}
+// Static brand icon imports — both webpack (`require`) and vite (ESM) resolve these
+// at build time to a hashed URL string. Listing each brand explicitly keeps the
+// bundler graph static and avoids `import.meta.glob` / runtime `require` differences.
+import openkosmosIcon from '../assets/openkosmos/app.svg';
+import investmentStudioIcon from '../assets/investment-studio/app.svg';
 
-export const appIcon: string = resolvedAppIcon;
+const brandIcons: Record<string, string> = {
+  'openkosmos': openkosmosIcon,
+  'investment-studio': investmentStudioIcon,
+};
+
+export const appIcon: string = brandIcons[BRAND_NAME] || brandIcons['openkosmos'] || '';
