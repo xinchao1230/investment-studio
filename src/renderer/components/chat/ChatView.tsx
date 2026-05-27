@@ -17,9 +17,61 @@ import { getPmAgentSayHiMessageConfig } from '../../lib/chat/pmAgentSayHi';
 import { startNewChatFor } from '../../lib/chat/startNewChatFor';
 import { createLogger } from '../../lib/utilities/logger';
 import { ScheduleSidepaneAtom } from './chat-side.atom';
+import { getDefaultPrimaryAgentName } from '../../../main/lib/userDataADO/types/profile';
+import { BRAND_NAME } from '../../../shared/constants/branding';
 const logger = createLogger('[ChatView]');
 
-const ChatView: React.FC = memo(() => {
+// Compact (embedded) mode: ensure the backend has an active chat session.
+// If not, pick the primary agent (or first chat) from the profile and start
+// a new chat session for it. Mirrors AgentPage's primary-agent selection so
+// that the embedded Research ChatView has a model selector populated and
+// sendMessage has a target session.
+async function ensureCompactChatSession(): Promise<void> {
+  if (agentChatSessionCacheManager.getCurrentChatSessionId()) return;
+  try {
+    if (window.electronAPI?.agentChat?.getCurrentChatSession) {
+      const cur = await window.electronAPI.agentChat.getCurrentChatSession();
+      if (cur?.success && cur.data?.chatId && cur.data?.chatSessionId) {
+        agentChatSessionCacheManager.setCurrentChatSessionId(
+          cur.data.chatId,
+          cur.data.chatSessionId,
+        );
+        return;
+      }
+    }
+    const profile = profileDataManager.getProfile() as any;
+    if (!profile) return;
+    const primaryAgentName: string = profile.primaryAgent || getDefaultPrimaryAgentName(BRAND_NAME);
+    const chats: any[] = profile.chats || [];
+    if (chats.length === 0) return;
+    const primaryChat = chats.find((c: any) => c.agent?.name === primaryAgentName);
+    const targetChatId = primaryChat?.chat_id || chats[0]?.chat_id;
+    if (!targetChatId) return;
+    const result = await startNewChatFor(targetChatId);
+    if (result?.success && result.chatSessionId) {
+      agentChatSessionCacheManager.setCurrentChatSessionId(
+        targetChatId,
+        result.chatSessionId,
+      );
+    }
+  } catch (err) {
+    logger.error('[ChatView compact] ensureCompactChatSession failed:', err);
+  }
+}
+
+export interface ChatViewProps {
+  /**
+   * Layout mode.
+   * - 'full' (default): standard /agent route; renders ChatViewHeader and
+   *   participates in URL-driven session navigation.
+   * - 'compact': embedded in the Research workspace (no /agent URL params).
+   *   Skips ChatViewHeader and route-sync auto-navigation; bootstraps a
+   *   session via the primary agent so the model selector works.
+   */
+  mode?: 'full' | 'compact';
+}
+
+const ChatView: React.FC<ChatViewProps> = memo(({ mode = 'full' }) => {
   // 🔥 Route Synchronization
   const { chatId: routeChatId, sessionId: routeSessionId } = useParams();
   const navigate = useNavigate();
@@ -68,7 +120,15 @@ const ChatView: React.FC = memo(() => {
           const result = await window.electronAPI.agentChat.getCurrentChatSession();
           if (result.success && result.data?.chatId && result.data?.chatSessionId) {
             agentChatSessionCacheManager.setCurrentChatSessionId(result.data.chatId, result.data.chatSessionId);
+            return;
           }
+        }
+        // Compact mode (embedded Research workspace) has no URL route to
+        // drive session creation. If after the backend probe we still have
+        // no current session, bootstrap one via the primary agent so the
+        // model selector and sendMessage have a target.
+        if (mode === 'compact') {
+          await ensureCompactChatSession();
         }
       } catch (error) {
         logger.error('[ChatView] Failed to fetch current session:', error);
@@ -76,12 +136,16 @@ const ChatView: React.FC = memo(() => {
     };
 
     setTimeout(fetchCurrentSession, 100);
-  }, []);
+  }, [mode]);
 
   // We need to track the last processed route to avoid redundant updates
   const lastProcessedRouteRef = useRef<string>('');
 
   useEffect(() => {
+    // Compact mode is embedded outside the /agent route (e.g. Research
+    // workspace). The route sync below would call `navigate('/agent/chat/...')`
+    // in its Case 3 branch, yanking the user out of /research. Skip it.
+    if (mode === 'compact') return;
     const syncRoute = async () => {
       const currentRouteKey = `${routeChatId}-${routeSessionId}`;
       const routeIntent = navigationState?.intent;
@@ -176,7 +240,7 @@ const ChatView: React.FC = memo(() => {
     };
 
     syncRoute();
-  }, [routeChatId, routeSessionId, chatSessionId, navigate, navigationState]);
+  }, [routeChatId, routeSessionId, chatSessionId, navigate, navigationState, mode]);
 
   // Minimal mode state for chat popup - now obtained from LayoutProvider
   const { isMinimalMode } = useLayout();
@@ -385,15 +449,22 @@ const ChatView: React.FC = memo(() => {
     };
   }, [handleForkChatSession]);
 
+  const isCompact = mode === 'compact';
   return (
-    <div className={`chat-view ${isMinimalMode ? 'minimal-mode' : ''}`}>
+    <div
+      className={`chat-view${isMinimalMode ? ' minimal-mode' : ''}${
+        isCompact ? ' chat-view--compact' : ''
+      }`}
+    >
       <div className="chat-view-layout">
         {/* Chat Area */}
         <div className="chat-area">
-          <ChatViewHeader
-            onOpenMcpTools={handleOpenMcpTools}
-            onOpenSkills={handleOpenSkills}
-          />
+          {!isCompact && (
+            <ChatViewHeader
+              onOpenMcpTools={handleOpenMcpTools}
+              onOpenSkills={handleOpenSkills}
+            />
+          )}
           <ChatViewContent
             isSessionSwitching={isSessionSwitching}
             chatId={chatId}

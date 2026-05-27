@@ -308,13 +308,6 @@ class ElectronApp {
       checkAssetsLibrariesAsync = host.checkAssetsLibrariesAsync.bind(host);
     }
     setUpIPC(new Injection());
-
-    // Register investment-studio brand-specific IPC handlers
-    const { registerInvestmentStudioIpc } = require('./investmentStudio');
-    registerInvestmentStudioIpc({
-      getCurrentUserAlias: () => host.currentUserAlias,
-      getProfileCacheManager,
-    });
   }
 
   /**

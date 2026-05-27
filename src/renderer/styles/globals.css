@@ -1,5 +1,10 @@
 @import "tailwindcss";
 @config "../../../tailwind.config.js";
+/* Restore the `prose` utility classes used by ContentTabs markdown preview
+   (and any other ReactMarkdown surface). Original investment-studio (v3)
+   wired this via `plugins: [require('@tailwindcss/typography')]` in
+   tailwind.config.js; v4 prefers loading plugins from CSS. */
+@plugin "@tailwindcss/typography";
 
 /* ===========================
    OpenKosmos App Global Styles
