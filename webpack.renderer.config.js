@@ -5,8 +5,7 @@ const webpack = require('webpack');
 const ReactRefreshWebpackPlugin = require('@pmmmwh/react-refresh-webpack-plugin');
 const MonacoWebpackPlugin = require('monaco-editor-webpack-plugin');
 
-const brandConfig = require('./scripts/brand-config');
-const { config: appConfig } = brandConfig;
+const appConfig = require('./brands/investment-studio/config.json');
 
 // Load environment variables from .env.local (or DOTENV_CONFIG_PATH for E2E test builds)
 require('dotenv').config({ path: process.env.DOTENV_CONFIG_PATH || '.env.local' });
@@ -127,7 +126,7 @@ module.exports = (env, argv) => {
           process.env.PRODUCTION_BASE_CDN_URL,
         ),
         'process.env.APP_NAME': JSON.stringify(appConfig.productName),
-        'process.env.BRAND_NAME': JSON.stringify(brandConfig.name),
+        'process.env.BRAND_NAME': JSON.stringify('investment-studio'),
         // Expose preset model environment variables
         'process.env.PRESET_MODEL_GPT4O_NAME': JSON.stringify(
           process.env.PRESET_MODEL_GPT4O_NAME,

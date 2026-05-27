@@ -1,15 +1,25 @@
 /**
  * Global Branding Constants
- * Values injected at build time via webpack DefinePlugin (process.env.BRAND_NAME / BRAND_CONFIG).
+ * Hardcoded to investment-studio — single-brand build.
+ * Values mirror brands/investment-studio/config.json.
  */
 
-export const BRAND_NAME: string = process.env.BRAND_NAME || 'openkosmos';
-export const APP_NAME: string = process.env.APP_NAME || 'OpenKosmos';
+// Widen to `string` (not literal types) so brand-conditional comparisons
+// elsewhere — e.g. `BRAND_NAME === 'investment-studio'` — still typecheck.
+export const APP_NAME: string = 'Investment Studio';
+export const BRAND_NAME: string = 'investment-studio';
+export const BRAND_CONFIG: Record<string, string> = {
+  appId: 'com.investment-studio.app',
+  productName: 'Investment Studio',
+  userDataName: 'investment-studio-app',
+  description: 'Investment Studio - AI Investment Research Workstation',
+  copyright: 'Copyright 2026',
+  author: 'xinchao1230',
+  feedbackLink: 'https://github.com/xinchao1230/investment-studio/issues',
+  filenamePrefix: 'InvestmentStudio',
+  shortcutName: 'Investment Studio',
+  windowTitle: 'Investment Studio',
+  systemPromptAddendum: '',
+};
 
-// BRAND_CONFIG is JSON-stringified by DefinePlugin; parse it at runtime.
-const _rawConfig = process.env.BRAND_CONFIG;
-export const BRAND_CONFIG: Record<string, string> = typeof _rawConfig === 'string'
-  ? JSON.parse(_rawConfig)
-  : (_rawConfig as any) || {};
-
-export const getWindowTitle = () => BRAND_CONFIG.windowTitle || 'OpenKosmos AI Studio';
+export const getWindowTitle = () => BRAND_CONFIG.windowTitle;

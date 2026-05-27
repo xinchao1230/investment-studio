@@ -1,8 +1,7 @@
 const path = require('path');
 const webpack = require('webpack');
 
-const brandConfig = require('./scripts/brand-config');
-const { config: appConfig } = brandConfig;
+const appConfig = require('./brands/investment-studio/config.json');
 
 // Load environment variables from .env.local (or DOTENV_CONFIG_PATH for E2E test builds)
 require('dotenv').config({ path: process.env.DOTENV_CONFIG_PATH || '.env.local' });
@@ -79,7 +78,7 @@ module.exports = (env, argv) => {
       'process.env.PRODUCTION_BASE_CDN_URL': JSON.stringify(process.env.PRODUCTION_BASE_CDN_URL),
       'process.env.RELEASE_CDN_URL': JSON.stringify(process.env.RELEASE_CDN_URL),
       'process.env.BRAND_CONFIG': JSON.stringify(appConfig),
-      'process.env.BRAND_NAME': JSON.stringify(brandConfig.name),
+      'process.env.BRAND_NAME': JSON.stringify('investment-studio'),
       'process.env.APP_NAME': JSON.stringify(appConfig.productName),
       'process.env.APP_ID': JSON.stringify(appConfig.appId),
       'process.env.DEVELOPMENT_RELAY_SERVICE_URL': JSON.stringify(process.env.DEVELOPMENT_RELAY_SERVICE_URL || ''),
