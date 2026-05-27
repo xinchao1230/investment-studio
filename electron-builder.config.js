@@ -1,7 +1,7 @@
-const config = require('./brands/openkosmos/config.json');
+const config = require('./brands/investment-studio/config.json');
 const path = require('path');
 
-const brandAssetsDir = path.join(__dirname, 'brands/openkosmos/assets');
+const brandAssetsDir = path.join(__dirname, 'brands/investment-studio/assets');
 const iconMac = path.join(brandAssetsDir, 'mac/app.icns');
 const iconWin = path.join(brandAssetsDir, 'win/app.ico');
 const iconLinux = path.join(brandAssetsDir, 'win/icon_round_512x512.png');
@@ -18,7 +18,7 @@ module.exports = {
   // extraMetadata.name determines Windows NSIS install directory
   // → %LOCALAPPDATA%\Programs\<name>
   extraMetadata: {
-    name: 'openkosmos',
+    name: 'investment-studio',
   },
 
   // productName is the app display name and macOS .app bundle name
