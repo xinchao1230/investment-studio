@@ -76,3 +76,27 @@ export const BUILTIN_DEFAULTS_VERSION = 1;
 export function isBuiltinSkill(skillName: string): boolean {
   return BUILTIN_SKILL_NAMES.includes(skillName);
 }
+
+/**
+ * Investment-studio brand builtin skills (stock research related).
+ */
+const INVESTMENT_STUDIO_SKILL_NAMES: string[] = [
+  'stock-analyze',
+  'key-drivers',
+  'xlsx',
+  'earnings-forecast',
+  'earnings-review',
+  'industry-comparison',
+  'marginal-tracking',
+  'stock-screening',
+];
+
+/**
+ * Get builtin skill names for a specific brand.
+ */
+export function getBuiltinSkillNamesForBrand(brandName: string): string[] {
+  if (brandName === 'investment-studio') {
+    return [...BUILTIN_SKILL_NAMES, ...INVESTMENT_STUDIO_SKILL_NAMES];
+  }
+  return [...BUILTIN_SKILL_NAMES];
+}

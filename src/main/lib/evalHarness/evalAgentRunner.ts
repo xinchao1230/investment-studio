@@ -6,6 +6,8 @@ import { MessageHelper } from '@shared/types/chatTypes';
 import { agentChatManager } from "../chat/agentChatManager";
 import { AgentChat } from "../chat/agentChat";
 import { profileCacheManager } from "../userDataADO/profileCacheManager";
+import { getDefaultPrimaryAgentName } from "../userDataADO/types/profile";
+import { BRAND_NAME } from "@shared/constants/branding";
 import { createLogger } from '../unifiedLogger';
 
 const logger = createLogger();
@@ -262,7 +264,7 @@ export class EvalAgentRunner {
     }
 
     const allChats = profileCacheManager.getAllChatConfigs(this.userAlias);
-    const primaryAgentName = profile.primaryAgent || 'Kobi';
+    const primaryAgentName = profile.primaryAgent || getDefaultPrimaryAgentName(BRAND_NAME);
     const defaultChat = allChats.find(
       (c) => c.agent?.name === primaryAgentName
     );

@@ -28,8 +28,11 @@ import {
   getAgentKnowledge,
   isBuiltinAgent,
   withNormalizedAgentKnowledge,
+  getDefaultPrimaryAgentName,
+  getDefaultChatAgent,
 } from './types/profile';
 import { BUILTIN_SKILL_NAMES } from '../../../shared/constants/builtinSkills';
+import { BRAND_NAME } from '@shared/constants/branding';
 
 const logger = createConsoleLogger();
 
@@ -305,7 +308,7 @@ export function createDefaultChat(): ChatConfig {
   return {
     chat_id: generateChatId(),
     chat_type: 'single_agent',
-    agent: { ...DEFAULT_CHAT_AGENT, workspace: '' }
+    agent: { ...getDefaultChatAgent(BRAND_NAME), workspace: '' }
   };
 }
 
@@ -409,7 +412,7 @@ export function sanitizeProfileV2(profile: ProfileV2): ProfileV2 {
       updatedAt: profile.updatedAt || new Date().toISOString(),
       alias: profile.alias || '',
       freDone: typeof profile.freDone === 'boolean' ? profile.freDone : false,
-      primaryAgent: profile.primaryAgent || 'Kobi',
+      primaryAgent: profile.primaryAgent || getDefaultPrimaryAgentName(BRAND_NAME),
       mcp_servers: cleanMcpServers,
       skills: Array.isArray(profile.skills) ? profile.skills.map(skill => ({
         name: skill.name || '',
@@ -442,7 +445,7 @@ export function sanitizeProfileV2(profile: ProfileV2): ProfileV2 {
       updatedAt: new Date().toISOString(),
       alias: profile.alias || '',
       freDone: false,
-      primaryAgent: 'Kobi',
+      primaryAgent: getDefaultPrimaryAgentName(BRAND_NAME),
       mcp_servers: [],
       skills: [],
       sub_agents: [],

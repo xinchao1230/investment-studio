@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { APP_NAME, BRAND_CONFIG } from '@shared/constants/branding';
+import { APP_NAME, BRAND_CONFIG, BRAND_NAME } from '@shared/constants/branding';
 import { profileDataManager } from '@renderer/lib/userData';
+import { getDefaultPrimaryAgentName } from '@renderer/lib/userData/types';
 import { getPmAgentSayHiMessageConfig } from '@renderer/lib/chat/pmAgentSayHi';
 import { startNewChatFor } from '@renderer/lib/chat/startNewChatFor';
 import { FrePromotedAgent } from './FreWelcomeView';
@@ -545,7 +546,7 @@ const FreSettingUpView: React.FC<FreSettingUpViewProps> = ({
         return {};
       }
 
-      const primaryAgentName = (profile as any).primaryAgent || 'Kobi';
+      const primaryAgentName = (profile as any).primaryAgent || getDefaultPrimaryAgentName(BRAND_NAME);
       const chats = (profile as any).chats || [];
 
       if (chats.length === 0) {

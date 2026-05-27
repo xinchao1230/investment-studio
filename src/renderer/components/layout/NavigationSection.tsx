@@ -6,7 +6,7 @@ import NavItem from '../ui/navigation/NavItem';
 import Divider from '../ui/Divider';
 import { useToast } from '../ui/ToastProvider';
 import { agentChatSessionCacheManager } from '../../lib/chat/agentChatSessionCacheManager';
-import { isBuiltinAgent } from '../../lib/userData/types';
+import { isBuiltinAgent, getDefaultPrimaryAgentName } from '../../lib/userData/types';
 import { BRAND_NAME } from '@shared/constants/branding'; // used in isBuiltinAgent calls
 
 const PlusIcon = () => (
@@ -134,7 +134,7 @@ const NavigationSection: React.FC = () => {
   };
 
   // 🔥 Get primaryAgent config
-  const primaryAgent = data?.profile?.primaryAgent || 'Kobi';
+  const primaryAgent = data?.profile?.primaryAgent || getDefaultPrimaryAgentName(BRAND_NAME);
 
   // 🔥 Extract chatId from URL (supports /agent/chat/:chatId and /agent/chat/:chatId/settings routes)
   const urlChatId = useMemo(() => {

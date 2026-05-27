@@ -736,19 +736,20 @@
 }
 
 .reasoning-effort-button {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 8px 12px;
+  gap: 4px;
+  padding: 4px 10px;
   background: rgba(255, 255, 255, 0.95);
   border: 1px solid rgba(203, 213, 225, 0.8);
-  border-radius: 12px;
+  border-radius: 8px;
   cursor: pointer;
   transition: all 0.2s ease;
-  font-size: 13px;
+  font-size: 12px;
+  line-height: 1;
   color: #374151;
-  height: 40px;
-  max-width: 160px;
+  height: 28px;
+  max-width: 140px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -858,8 +859,8 @@
 
   /* Compact reasoning effort button on very narrow widths */
   .reasoning-effort-button {
-    max-width: 96px;
-    padding: 8px 8px;
+    max-width: 88px;
+    padding: 4px 8px;
   }
 }
 

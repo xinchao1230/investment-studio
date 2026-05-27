@@ -14,8 +14,10 @@ import {
   ChatConfig,
   isBuiltinAgent,
   withNormalizedAgentKnowledge,
+  getDefaultPrimaryAgentName,
 } from './types/profile';
 import { BUILTIN_SKILL_CHANGELOG, BUILTIN_DEFAULTS_VERSION } from '../../../shared/constants/builtinSkills';
+import { BRAND_NAME } from '@shared/constants/branding';
 import { createConsoleLogger } from '../unifiedLogger';
 
 const logger = createConsoleLogger();
@@ -26,7 +28,8 @@ const logger = createConsoleLogger();
 export function isDefaultChatConfig(chat: ChatConfig): boolean {
   if (!chat.agent) return true;
 
-  const isDefaultAgent = chat.agent.role === 'Default Assistant' && chat.agent.name === 'Kobi';
+  const defaultPrimaryAgentName = getDefaultPrimaryAgentName(BRAND_NAME);
+  const isDefaultAgent = chat.agent.role === 'Default Assistant' && chat.agent.name === defaultPrimaryAgentName;
   const hasNoCustomMcpServers = !chat.agent.mcp_servers ||
     chat.agent.mcp_servers.length === 0 ||
     (chat.agent.mcp_servers.length === 1 && chat.agent.mcp_servers[0].name === 'builtin-tools');

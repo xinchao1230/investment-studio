@@ -6,6 +6,8 @@ import { getPmAgentSayHiMessageConfig } from '@renderer/lib/chat/pmAgentSayHi';
 import { startNewChatFor } from '@renderer/lib/chat/startNewChatFor';
 import { profileDataManager } from '@renderer/lib/userData/profileDataManager';
 import { createLogger } from '@renderer/lib/utilities/logger';
+import { getDefaultPrimaryAgentName } from '../../../main/lib/userDataADO/types/profile';
+import { BRAND_NAME } from '../../../shared/constants/branding';
 
 const logger = createLogger('[DeleteOverlay]');
 import { useToast, type ToastContextType } from '../ui/ToastProvider';
@@ -87,7 +89,7 @@ export const DeleteConfirmAtom = atom(zeroState, (get, set) => {
             // Fix: refresh profile data to get the latest chats list
             await profileDataManager.refresh();
             const profileCache = profileDataManager.getCache();
-            const primaryAgentName = profileCache?.profile?.primaryAgent || 'Kobi';
+            const primaryAgentName = profileCache?.profile?.primaryAgent || getDefaultPrimaryAgentName(BRAND_NAME);
 
             // Fix: get chats from the latest profileCache, not from stale closure chats
             const latestChats = profileCache?.chats || [];
