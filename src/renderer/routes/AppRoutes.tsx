@@ -21,6 +21,7 @@ import AboutAppView from '../components/settings/AboutAppView';
 import BrowserControlView from '../components/settings/BrowserControlView';
 import MemexView from '../components/settings/MemexView';
 import ArchivedAgentsView from '../components/settings/ArchivedAgentsView';
+import ResearchApiView from '../components/settings/ResearchApiView';
 import AgentChatEditingView from '../components/chat/agent-area/AgentChatEditingView';
 import AgentChatCreationView from '../components/chat/agent-area/AgentChatCreationView';
 import CreateCustomAgentView from '../components/chat/agent-area/CreateCustomAgentView';
@@ -34,6 +35,8 @@ import {
 import { createLogger } from '../lib/utilities/logger';
 import { AutoLoginSingleUser } from '../components/auth/AutoLoginSingleUser';
 import { useAuthContext } from '../components/auth/AuthProvider';
+import { ResearchPage } from '../components/research/ResearchPage';
+import { BRAND_NAME } from '../../shared/constants/branding';
 
 const logger = createLogger('[AppRoutes]');
 
@@ -111,7 +114,11 @@ const SignInWrapper: React.FC = () => {
 const DataLoadingWrapper: React.FC = () => {
   const navigate = useNavigate();
   const handleDataReady = () => {
-    navigate('/agent');
+    if (BRAND_NAME === 'investment-studio') {
+      navigate('/research');
+    } else {
+      navigate('/agent');
+    }
   };
   return <DataLoadingPage onDataReady={handleDataReady} />;
 };
@@ -164,6 +171,7 @@ export const AppRoutes: React.FC = () => {
 
       {/* Protected Routes */}
       <Route element={<RequireAuth />}>
+        <Route path="/research" element={<ResearchPage />} />
         <Route path="/agent" element={<AgentPage />}>
           <Route index element={<Navigate to="/agent/chat" replace />} />
           <Route path="chat" element={<ChatView />} />
@@ -178,7 +186,18 @@ export const AppRoutes: React.FC = () => {
 
         {/* Settings Routes - separate from agent */}
         <Route path="/settings" element={<SettingsPage />}>
-          <Route index element={<Navigate to="mcp" replace />} />
+          {/* Investment-studio lands on the Research API tab (users come here
+              to set up tushare/yfinance keys). Other brands keep the legacy
+              MCP landing. */}
+          <Route
+            index
+            element={
+              <Navigate
+                to={BRAND_NAME === 'investment-studio' ? 'research-api' : 'mcp'}
+                replace
+              />
+            }
+          />
           <Route path="voice-input" element={<VoiceInputSettingsView />} />
           <Route path="screenshot" element={<ScreenshotSettingsView />} />
           <Route path="mcp" element={<McpView />} />
@@ -205,6 +224,9 @@ export const AppRoutes: React.FC = () => {
           )}
           {memexMemoryEnabled && (
             <Route path="memex" element={<MemexView />} />
+          )}
+          {BRAND_NAME === 'investment-studio' && (
+            <Route path="research-api" element={<ResearchApiView />} />
           )}
           {/* Remote Channel route controlled by feature flag */}
         </Route>

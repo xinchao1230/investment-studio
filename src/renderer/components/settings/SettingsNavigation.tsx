@@ -1,9 +1,9 @@
 import React from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Camera, Terminal, Archive } from 'lucide-react';
+import { Camera, Terminal, Archive, Key } from 'lucide-react';
 import NavItem from '../ui/navigation/NavItem';
 import '../../styles/LeftNavigation.css';
-import { APP_NAME, BRAND_CONFIG } from '@shared/constants/branding';
+import { APP_NAME, BRAND_NAME, BRAND_CONFIG } from '@shared/constants/branding';
 import { useFeatureFlag } from '../../lib/featureFlags';
 import { LeftNavSizeAtom } from '@renderer/states/left-nav.atom';
 
@@ -118,10 +118,32 @@ const SettingsNavigation: React.FC<SettingsNavigationProps> = ({ onBack }) => {
     if (path.includes('/settings/browser-control')) return 'browser-control';
     if (path.includes('/settings/memex')) return 'memex';
     if (path.includes('/settings/archived-agents')) return 'archived-agents';
+    if (path.includes('/settings/research-api')) return 'research-api';
     return 'mcp'; // Default: show mcp
   };
 
   const activeView = getActiveView();
+
+  // Investment Studio brand uses a tighter, more compact navigation layout
+  // (matches the original design before the openkosmos visual refresh).
+  const isInvestmentStudio = BRAND_NAME === 'investment-studio';
+  const layout = isInvestmentStudio
+    ? {
+        outerGap: '8px',
+        headerGap: '8px',
+        headerHeight: '36px',
+        headerPaddingBottom: '6px',
+        titleFontSize: '14px',
+        itemGap: '2px',
+      }
+    : {
+        outerGap: '16px',
+        headerGap: '12px',
+        headerHeight: '52px',
+        headerPaddingBottom: '12px',
+        titleFontSize: '18px',
+        itemGap: '8px',
+      };
 
   const dividerStyle = (position: 'top' | 'bottom'): React.CSSProperties => ({
     backgroundImage: 'linear-gradient(to right, rgba(0, 0, 0, 0.1) 0%, rgba(0, 0, 0, 0.1) 75%, rgba(0, 0, 0, 0) 100%)',
@@ -144,7 +166,7 @@ const SettingsNavigation: React.FC<SettingsNavigationProps> = ({ onBack }) => {
           flexDirection: 'column',
           alignItems: 'flex-start',
           padding: '0px',
-          gap: '16px',
+          gap: layout.outerGap,
           width: '100%',
           height: '100%',
         }}
@@ -154,16 +176,16 @@ const SettingsNavigation: React.FC<SettingsNavigationProps> = ({ onBack }) => {
           style={{
             display: 'flex',
             alignItems: 'center',
-            gap: '12px',
+            gap: layout.headerGap,
             width: '100%',
-            height: '52px',
-            paddingBottom: '12px',
+            height: layout.headerHeight,
+            paddingBottom: layout.headerPaddingBottom,
             ...dividerStyle('bottom'),
           }}
         >
           <h2
             style={{
-              fontSize: '18px',
+              fontSize: layout.titleFontSize,
               fontWeight: '600',
               color: '#111827',
               margin: 0,
@@ -179,7 +201,7 @@ const SettingsNavigation: React.FC<SettingsNavigationProps> = ({ onBack }) => {
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'flex-start',
-            gap: '8px',
+            gap: layout.itemGap,
             width: '100%',
             flex: 1,
             minHeight: 0,
@@ -188,6 +210,16 @@ const SettingsNavigation: React.FC<SettingsNavigationProps> = ({ onBack }) => {
             scrollbarWidth: 'none',
           }}
         >
+          {isInvestmentStudio && (
+            <NavItem
+              icon={<Key size={18} />}
+              label="API"
+              isActive={activeView === 'research-api'}
+              onClick={() => navigate('/settings/research-api')}
+              ariaLabel="Research API tokens"
+            />
+          )}
+
           <NavItem
             icon={<McpIcon />}
             label="MCP"

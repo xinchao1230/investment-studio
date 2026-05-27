@@ -15,6 +15,13 @@ function ChatSide(props: {
     (window as any).__inlineFilePreviewEnabled = true;
 
     const handleFileViewerOpen = (event: Event) => {
+      // Investment-studio Research mode: when the file lives under a target
+      // directory, ResearchPage opens it as a workspace tab instead of an
+      // inline preview. ResearchPage sets this flag while it's mounted in
+      // workspace mode and installs its own capture-phase listener that
+      // marks the event as `_inlineHandled` if it claimed it.
+      if ((window as any).__researchTabOpenEnabled) return;
+
       const customEvent = event as CustomEvent;
       const { file } = customEvent.detail || {};
       if (file && file.name && file.url) {
