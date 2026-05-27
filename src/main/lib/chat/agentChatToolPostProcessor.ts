@@ -8,6 +8,7 @@ import {
   isNonInteractiveRuntimeInteractionError,
   type AgentChatInteractionPolicy,
 } from './agentChatInteractionPolicy';
+import { PortfolioTools } from '../mcpRuntime/builtinTools/portfolioTools';
 
 const logger = createLogger();
 
@@ -32,6 +33,13 @@ export interface AgentChatToolPostProcessorDeps {
     header: { title: string };
     body: { description: string };
   }): Promise<Record<string, any> | null>;
+  /**
+   * Investment-studio brand only — used by `postProcessForPortfolioInitTarget`
+   * to auto-bind the current chat session to a newly created target.
+   * Optional so other brands don't have to wire it.
+   */
+  getCurrentChatSession?(): any;
+  saveChatSession?(): Promise<unknown>;
 }
 
 export class AgentChatToolPostProcessor {
@@ -98,7 +106,86 @@ export class AgentChatToolPostProcessor {
       return this.postProcessForRequestInteractiveInputTool(toolResult);
     }
 
+    // Investment-studio brand: when a chat creates a new portfolio target
+    // (via portfolio_init_target), auto-bind the current chat session to it
+    // so the conversation moves from "Ask Stella" (global) into that target's
+    // chat list. Pure UX glue — no failure mode aborts the chat.
+    if (toolName === 'portfolio_init_target') {
+      try {
+        await this.postProcessForPortfolioInitTarget(toolCall, toolResult);
+      } catch (e) {
+        logger.warn('[AgentChatToolPostProcessor] portfolio_init_target post-process failed (ignored): ' + (e instanceof Error ? e.message : String(e)));
+      }
+    }
+
     return toolResult;
+  }
+
+  /**
+   * 🏷️ Investment-studio brand: bind the current chat session to a newly
+   * created portfolio target. Skips when:
+   *  - brand != investment-studio
+   *  - deps did not wire chat-session accessors (other brands)
+   *  - tool returned explicit failure
+   *  - chat session already bound to a target (don't clobber explicit binding)
+   *  - args missing required fields
+   */
+  async postProcessForPortfolioInitTarget(toolCall: any, toolResult: any): Promise<void> {
+    if ((process.env.BRAND_NAME || 'openkosmos') !== 'investment-studio') return;
+    const getSession = this.deps.getCurrentChatSession;
+    const saveSession = this.deps.saveChatSession;
+    if (!getSession || !saveSession) return;
+    const session = getSession();
+    if (!session) return;
+    // Don't overwrite an existing binding (user may have intentionally
+    // chosen a target before calling init for a different/related ticker).
+    if ((session as any).targetCode) return;
+
+    // Treat the tool result as "ok" unless it's an explicit failure object.
+    const isExplicitFailure =
+      typeof toolResult === 'object' &&
+      toolResult !== null &&
+      (toolResult as any).success === false;
+    if (isExplicitFailure) return;
+
+    // Parse arguments — they were already validated by executeToolCall.
+    let args: any = {};
+    try {
+      const raw = toolCall?.function?.arguments;
+      args = typeof raw === 'string' ? JSON.parse(raw) : (raw || {});
+    } catch {
+      return;
+    }
+    const stockCodeRaw: string | undefined = args.stock_code;
+    const name: string | undefined = args.name;
+    if (!name) return;
+    // Unlisted targets are saved with `stock_code === name` (see
+    // portfolioTools.executeInitTarget). Apply the same convention here so
+    // the bound chat carries a non-empty targetCode (renderer keys by it).
+    const stockCode = (stockCodeRaw && stockCodeRaw.trim()) ? stockCodeRaw.trim() : name;
+
+    // Resolve the freshly-created directory via PortfolioTools (single source
+    // of truth for naming + legacy compat).
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const fs = require('fs');
+    const targetDir: string | null = PortfolioTools.findTargetDir(stockCode, name);
+    if (!targetDir || !fs.existsSync(targetDir)) return;
+
+    (session as any).targetCode = stockCode;
+    (session as any).targetDir = targetDir;
+
+    logger.info('[AgentChatToolPostProcessor] Auto-bound chat session to newly created target', 'postProcessForPortfolioInitTarget', {
+      chatSessionId: this.deps.getChatSessionId(),
+      targetCode: stockCode,
+      targetDir,
+    });
+
+    // Persist + notify renderer so the chat moves to the target's list immediately.
+    try {
+      await saveSession();
+    } catch (e) {
+      logger.warn('[AgentChatToolPostProcessor] saveChatSession after target bind failed: ' + (e instanceof Error ? e.message : String(e)));
+    }
   }
 
   async postProcessForRequestInteractiveInputTool(toolResult: any): Promise<any> {
