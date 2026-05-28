@@ -73,8 +73,6 @@
 [data-theme="research"] .rw-doc-body {
   font-size: 14px;
   color: var(--rw-text);
-  max-width: 800px;
-  margin: 0 auto;
   padding: 24px 40px 64px;
 }
 [data-theme="research"] .rw-tree-row {
