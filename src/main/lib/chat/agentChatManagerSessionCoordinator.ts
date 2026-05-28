@@ -166,18 +166,16 @@ export class AgentChatManagerSessionCoordinator {
       return false;
     }
 
+    // The currently active session is always protected from idle cleanup,
+    // regardless of whether the main window is foregrounded. Previously we
+    // gated this on `isMainWindowForeground()`, which meant that minimizing
+    // (or backgrounding) the window for 5 minutes would destroy the active
+    // instance; on return, the renderer's `currentChatSessionId` became null
+    // and the user was stuck on a welcome-card overlay until they manually
+    // re-clicked their chat. The active session is what the user expects to
+    // see when they come back — never throw it away.
     if (this.currentChatSessionId === chatSessionId) {
-      const isForeground = this.deps.isMainWindowForeground();
-      if (!isForeground) {
-        logger.info('[AgentChatManagerSessionCoordinator] Current session is not protected because main window is not foreground', 'isProtectedSession', {
-          chatSessionId,
-          currentChatSessionId: this.currentChatSessionId,
-          windowState: this.deps.getMainWindowState(),
-        });
-      }
-      if (isForeground) {
-        return true;
-      }
+      return true;
     }
 
     for (const [, newChatSessionId] of this.newChatSessionIdForChatId.entries()) {

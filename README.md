@@ -33,7 +33,7 @@ npm run electron         # Launch — or `npm run dev:full` for HMR
 | Pane | What it holds |
 |------|---------------|
 | **Left — Portfolio** | Tracked companies (e.g. `600519.SS Kweichow Moutai`, `00700.HK Tencent`, or `Pre-IPO`). |
-| **Center — Read & Write** | Multi-tab preview/editor (Markdown, CSV, Excel). Tabs and layout persist across launches. |
+| **Center — Workbench** | Multi-tab preview/editor for Markdown, CSV, and Excel. |
 | **Right — Stella** | Target-bound chat. Switch to **Ask Stella** for global / screening questions. |
 
 Each target ships with a standard folder layout for fundamental research (Notes / Expert Calls / Company Calls / Research Reports / Models / Disclosures / Other — `纪要 · 专家交流 · 公司交流 · 研报 · 模型 · 公告 · 其它` by default for China-market workflows). Drag-and-drop files in, watch external edits via chokidar, and your portfolio root is just:
