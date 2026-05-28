@@ -856,7 +856,7 @@ export const TargetListSidebar: React.FC<TargetListSidebarProps> = ({
                       {pill}
                     </span>
                   )}
-                  <span className="truncate flex-1">{chat.title || 'Untitled'}</span>
+                  <span className="truncate flex-1">{chat.title === 'New Chat' ? '新对话' : chat.title || 'Untitled'}</span>
                   {(useUnified ? onRenameAnyChat : onRenameStellaChat) && (
                     <button
                       type="button"
@@ -1033,7 +1033,7 @@ export const TargetListSidebar: React.FC<TargetListSidebarProps> = ({
                         >
                           <span style={{ width: 13 }} className="flex-shrink-0" />
                           <MessageSquare size={12} className="flex-shrink-0 mr-1 text-[var(--rw-text-3)]" />
-                          <span className="truncate flex-1">{chat.title || 'Untitled'}</span>
+                          <span className="truncate flex-1">{chat.title === 'New Chat' ? '新对话' : chat.title || 'Untitled'}</span>
                           {onRenameChat && (
                             <button
                               type="button"

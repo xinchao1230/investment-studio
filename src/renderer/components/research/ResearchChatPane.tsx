@@ -342,8 +342,8 @@ export const ResearchChatPane: React.FC<ResearchChatPaneProps> = ({
                 )
               )}
               {chatTitle && (
-                <span className="text-[11px] text-[var(--rw-text-3)] truncate" title={chatTitle}>
-                  · {chatTitle}
+                <span className="text-[11px] text-[var(--rw-text-3)] truncate" title={chatTitle === 'New Chat' ? '新对话' : chatTitle}>
+                  · {chatTitle === 'New Chat' ? '新对话' : chatTitle}
                 </span>
               )}
             </>
