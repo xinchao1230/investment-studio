@@ -80,6 +80,7 @@ export const ProviderSettingsView: React.FC = () => {
   const [activeProvider, setActiveProvider] = useState<string>('copilot');
   /** True when the user is signed in with a real GitHub account (not skip-login) */
   const [isCopilotAvailable, setIsCopilotAvailable] = useState(false);
+  const [copilotUser, setCopilotUser] = useState<{ login: string; name?: string; email?: string; avatarUrl?: string; copilotPlan?: string } | null>(null);
 
   // Load current config from main process
   useEffect(() => {
@@ -105,6 +106,10 @@ export const ProviderSettingsView: React.FC = () => {
         if (sessionResult?.success && sessionResult.data) {
           const login = sessionResult.data?.ghcAuth?.user?.login;
           setIsCopilotAvailable(!!login && login !== '_local');
+          if (login && login !== '_local') {
+            const u = sessionResult.data.ghcAuth.user;
+            setCopilotUser({ login: u.login, name: u.name, email: u.email, avatarUrl: u.avatarUrl, copilotPlan: u.copilotPlan });
+          }
         }
       } catch {
         // Ignore — defaults to false
@@ -261,6 +266,27 @@ export const ProviderSettingsView: React.FC = () => {
             <p className="text-xs text-gray-500 mb-2">
               Use models from your GitHub Copilot subscription
             </p>
+            {copilotUser && (
+              <div className="flex items-center gap-1.5 mb-2">
+                {copilotUser.avatarUrl && (
+                  <img
+                    src={copilotUser.avatarUrl}
+                    alt={copilotUser.login}
+                    style={{ width: 16, height: 16 }}
+                    className="rounded-full"
+                  />
+                )}
+                <span className="text-xs text-gray-500">
+                  Signed in as <span className="font-medium text-gray-700">{copilotUser.login}</span>
+                  {copilotUser.name ? ` (${copilotUser.name})` : ''}
+                </span>
+                {copilotUser.copilotPlan && copilotUser.copilotPlan !== 'none' && (
+                  <span className="px-1.5 py-0.5 text-[10px] font-medium bg-gray-100 text-gray-600 rounded">
+                    {copilotUser.copilotPlan}
+                  </span>
+                )}
+              </div>
+            )}
             {activeProvider !== 'copilot' && (
               <button
                 onClick={async () => {

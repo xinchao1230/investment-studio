@@ -189,6 +189,7 @@ const SettingsNavigation: React.FC<SettingsNavigationProps> = ({ onBack }) => {
       >
         {/* Header with Settings title */}
         <div
+          onClick={handleBack}
           style={{
             display: 'flex',
             alignItems: 'center',
@@ -196,11 +197,11 @@ const SettingsNavigation: React.FC<SettingsNavigationProps> = ({ onBack }) => {
             width: '100%',
             height: layout.headerHeight,
             paddingBottom: layout.headerPaddingBottom,
+            cursor: 'pointer',
             ...dividerStyle('bottom'),
           }}
         >
-          <button
-            onClick={handleBack}
+          <span
             aria-label="Go Back"
             style={{
               display: 'flex',
@@ -208,17 +209,14 @@ const SettingsNavigation: React.FC<SettingsNavigationProps> = ({ onBack }) => {
               justifyContent: 'center',
               background: 'none',
               border: 'none',
-              cursor: 'pointer',
               padding: '4px',
               borderRadius: '6px',
               color: '#111827',
               flexShrink: 0,
             }}
-            onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'rgba(0,0,0,0.06)')}
-            onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
           >
             <ChevronLeft size={20} />
-          </button>
+          </span>
           <h2
             style={{
               fontSize: layout.titleFontSize,
@@ -227,7 +225,7 @@ const SettingsNavigation: React.FC<SettingsNavigationProps> = ({ onBack }) => {
               margin: 0,
             }}
           >
-            Settings
+            Investment Studio Panel
           </h2>
         </div>
 
@@ -249,7 +247,7 @@ const SettingsNavigation: React.FC<SettingsNavigationProps> = ({ onBack }) => {
           {isInvestmentStudio && (
             <NavItem
               icon={<Key size={18} />}
-              label="API"
+              label="Financial Data API"
               isActive={activeView === 'research-api'}
               onClick={() => navigate('/settings/research-api')}
               ariaLabel="Research API tokens"
