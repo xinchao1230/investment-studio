@@ -10,7 +10,6 @@ import {
   FileCode,
   Trash2,
   Search,
-  MoreHorizontal,
   MessageSquare,
   Pencil,
   Settings,
@@ -708,10 +707,45 @@ export const TargetListSidebar: React.FC<TargetListSidebarProps> = ({
 
   return (
     <div className="rw-pane-left flex flex-col h-full" style={{ width }}>
-      {/* Header — Workspace title (extra top padding for macOS traffic lights) */}
-      <div className="flex items-center justify-between px-3 pb-2" style={{ paddingTop: 40 }}>
-        <span className="rw-side-title">Workspace</span>
+      {/* Tab row with mode tabs + action buttons */}
+      <div className="flex items-center px-3 pt-3 pb-2 rw-divider gap-3">
+        <button
+          type="button"
+          className={`rw-side-tab ${activeMode === 'workspace' ? 'is-active' : ''}`}
+          onClick={() => onModeChange('workspace')}
+        >
+          Workspace
+        </button>
+        <button
+          type="button"
+          className={`rw-side-tab ${activeMode === 'stella' ? 'is-active' : ''}`}
+          onClick={() => onModeChange('stella')}
+        >
+          Ask
+        </button>
+        <div className="flex-1" />
         <div className="flex items-center gap-1">
+          {activeMode === 'workspace' && (
+            <button
+              type="button"
+              className={`rw-side-icon-btn ${addFormOpen ? 'is-active' : ''}`}
+              onClick={onAddTarget}
+              title="Find or add target"
+              aria-pressed={addFormOpen}
+            >
+              <Search size={14} />
+            </button>
+          )}
+          {activeMode === 'stella' && onNewStellaChat && (
+            <button
+              type="button"
+              className="rw-side-icon-btn"
+              onClick={onNewStellaChat}
+              title="New chat"
+            >
+              <Plus size={14} />
+            </button>
+          )}
           <button
             type="button"
             className="rw-side-icon-btn"
@@ -761,57 +795,6 @@ export const TargetListSidebar: React.FC<TargetListSidebarProps> = ({
             </button>
           )}
         </div>
-      </div>
-
-      {/* Secondary tab row */}
-      <div className="flex items-center px-3 pb-2 rw-divider gap-3">
-        <button
-          type="button"
-          className={`rw-side-tab ${activeMode === 'workspace' ? 'is-active' : ''}`}
-          onClick={() => onModeChange('workspace')}
-        >
-          Workspace
-        </button>
-        <button
-          type="button"
-          className={`rw-side-tab ${activeMode === 'stella' ? 'is-active' : ''}`}
-          onClick={() => onModeChange('stella')}
-        >
-          Ask
-        </button>
-        <div className="flex-1" />
-        {activeMode === 'workspace' ? (
-          <div className="flex items-center gap-1">
-            <button
-              type="button"
-              className={`rw-side-icon-btn ${addFormOpen ? 'is-active' : ''}`}
-              onClick={onAddTarget}
-              title="Find or add target"
-              aria-pressed={addFormOpen}
-            >
-              <Search size={14} />
-            </button>
-            <button
-              type="button"
-              className="rw-side-icon-btn"
-              title="More (coming soon)"
-              onClick={() => console.log('[Research] more menu clicked (placeholder)')}
-            >
-              <MoreHorizontal size={14} />
-            </button>
-          </div>
-        ) : (
-          onNewStellaChat && (
-            <button
-              type="button"
-              className="rw-side-icon-btn"
-              onClick={onNewStellaChat}
-              title="New chat"
-            >
-              <Plus size={14} />
-            </button>
-          )
-        )}
       </div>
 
       {topSlot}
