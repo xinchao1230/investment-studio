@@ -139,6 +139,13 @@
   line-height: 1;
 }
 
+.provider-badge--icon {
+  padding: 3px;
+  color: #24292f;
+  background: transparent;
+  border: none;
+}
+
 .chat-input-container .model-button {
   display: flex;
   align-items: center;

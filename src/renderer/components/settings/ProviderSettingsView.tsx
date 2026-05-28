@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { Eye, EyeOff, Check, AlertCircle, Loader2 } from 'lucide-react';
+import { PROVIDER_ICONS } from '../ui/icons/ProviderIcons';
 
 type ProviderId = 'openai' | 'deepseek' | 'ollama' | 'custom-openai';
 
@@ -248,6 +249,7 @@ export const ProviderSettingsView: React.FC = () => {
           >
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-2">
+                {PROVIDER_ICONS.copilot && React.createElement(PROVIDER_ICONS.copilot, { size: 18 })}
                 <h2 className="text-sm font-medium">GitHub Copilot</h2>
                 {activeProvider === 'copilot' && (
                   <span className="px-1.5 py-0.5 text-[10px] font-medium bg-blue-100 text-blue-700 rounded">
@@ -287,6 +289,7 @@ export const ProviderSettingsView: React.FC = () => {
               {/* Header */}
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-2">
+                  {PROVIDER_ICONS[spec.id] && React.createElement(PROVIDER_ICONS[spec.id], { size: 18 })}
                   <h2 className="text-sm font-medium">{spec.title}</h2>
                   {isActive && (
                     <span className="px-1.5 py-0.5 text-[10px] font-medium bg-blue-100 text-blue-700 rounded">

@@ -1,4 +1,5 @@
-import { useState, useRef, useEffect, memo } from 'react';
+import React, { useState, useRef, useEffect, memo } from 'react';
+import { PROVIDER_ICONS } from '../../ui/icons/ProviderIcons';
 import { profileDataManager } from '@/lib/userData/profileDataManager';
 import { useAgentConfig } from '../../userData/userDataProvider';
 import { getModelById, getModelCapabilities } from '@/lib/models/ghcModels';
@@ -229,9 +230,13 @@ function Selector(props: Props) {
         disabled={isLoading || shouldLockComposeUi}
         title="Select AI Model"
       >
-        {providerLabel && (
+        {activeProvider && PROVIDER_ICONS[activeProvider] ? (
+          <span className="provider-badge provider-badge--icon" title={providerLabel || activeProvider}>
+            {React.createElement(PROVIDER_ICONS[activeProvider])}
+          </span>
+        ) : providerLabel ? (
           <span className="provider-badge">{providerLabel}</span>
-        )}
+        ) : null}
         <span className="model-name">
           {currentModelInfo?.name || displayModel || 'Select Model'}
         </span>
