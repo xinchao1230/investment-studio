@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { GhcCopilotModel } from '@shared/types/ghcChatTypes'
 import { getAllOpenKosmosUsedModels } from './ghcModels'
+import { modelCacheManager } from './modelCacheManager'
 
 export interface UseAvailableModelsOptions {
   /**
@@ -84,6 +85,9 @@ export function useAvailableModels(
       if (result.success) {
         setModels(result.data || [])
         setError(null)
+        // Sync to modelCacheManager so getModelById() and other downstream
+        // consumers see the same data (fixes button not showing model name).
+        modelCacheManager.syncFromBackend().catch(() => {/* best-effort */})
       } else {
         setError(result.error || 'Failed to load models')
       }

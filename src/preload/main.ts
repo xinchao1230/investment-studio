@@ -1081,6 +1081,7 @@ export interface ElectronAPI {
     onZoomChanged: (callback: (level: number) => void) => () => void;
     isFullScreen: () => Promise<boolean>;
     onFullScreenChanged: (callback: (isFullScreen: boolean) => void) => () => void;
+    notifyRendererReady: () => void;
   };
 
   // Logger management
@@ -2428,6 +2429,11 @@ export const electronAPI: ElectronAPI = {
       ipcRenderer.on('window:fullScreenChanged', listener);
       return () => ipcRenderer.removeListener('window:fullScreenChanged', listener);
     },
+    // Fire-and-forget signal from the renderer once React has mounted and
+    // rendered its first frame. The main process holds `show()` until this
+    // arrives (or a fallback timeout fires) so the user never sees the raw
+    // HTML boot splash flash before the React tree paints.
+    notifyRendererReady: () => ipcRenderer.send('window:rendererReady'),
   },
   logger: {
     manualFlush: () => ipcRenderer.invoke('logger:manualFlush'),

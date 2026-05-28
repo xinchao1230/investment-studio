@@ -131,7 +131,7 @@ function Selector(props: Props) {
 
   // Available OpenKosmos models — loaded from the renderer-side cache and kept
   // in sync with `modelCacheUpdated` events via the shared hook.
-  const { models: availableModels } = useAvailableModels();
+  const { models: availableModels, refresh: refreshModels } = useAvailableModels({ fetchOnEmpty: true });
 
   // Track active provider for the badge
   const activeProvider = useActiveProvider();
@@ -162,8 +162,20 @@ function Selector(props: Props) {
       currentChatId ?? agentChatSessionCacheManager.getCurrentChatId();
 
     try {
-      const result = targetChatId
-        ? await chatOps.updateChatAgent(targetChatId, { model: modelId })
+      let resolvedChatId = targetChatId;
+
+      // If no chat session exists yet, create one so the model selection
+      // can be persisted. This happens when the user picks a model right
+      // after login before sending the first message.
+      if (!resolvedChatId) {
+        const createResult = await chatOps.addChatConfig({});
+        if (createResult.success && createResult.data?.chat_id) {
+          resolvedChatId = createResult.data.chat_id;
+        }
+      }
+
+      const result = resolvedChatId
+        ? await chatOps.updateChatAgent(resolvedChatId, { model: modelId })
         : await updateModel(modelId);
 
       if (!result.success) {
@@ -178,14 +190,24 @@ function Selector(props: Props) {
     setShowModelDropdown(false);
   };
 
-  // Get current model info and capabilities - uses displayModel
-  const currentModelInfo = displayModel ? getModelById(displayModel) : null;
+  // Get current model info — try getModelById first (reads from the central
+  // modelCacheManager), fall back to availableModels for the window between
+  // IPC fetch and syncFromBackend completion.
+  const currentModelInfo = displayModel
+    ? getModelById(displayModel) ?? availableModels.find(m => m.id === displayModel) ?? null
+    : null;
 
   return (
     <div className="model-selector" ref={modelDropdownRef}>
       <button
         className="model-button"
-        onClick={() => setShowModelDropdown(!showModelDropdown)}
+        onClick={() => {
+          const next = !showModelDropdown;
+          if (next && availableModels.length === 0) {
+            void refreshModels(true);
+          }
+          setShowModelDropdown(next);
+        }}
         disabled={isLoading || shouldLockComposeUi}
         title="Select AI Model"
       >

@@ -20,7 +20,7 @@ process.stderr?.on?.('error', (err: NodeJS.ErrnoException) => {
   }
 });
 
-import { app, BrowserWindow, Menu, shell, protocol, powerMonitor, globalShortcut } from 'electron';
+import { app, BrowserWindow, Menu, shell, protocol, powerMonitor, globalShortcut, ipcMain } from 'electron';
 import * as path from 'path';
 import * as fs from 'fs';
 import { execFile, execSync } from 'child_process';
@@ -735,13 +735,20 @@ class ElectronApp {
       minWidth: 1008,
       minHeight: 702,
       show: false, // Start hidden and show when ready
+      // Match the StartupPage gradient base color (#FFFBF8 from
+      // src/renderer/styles/StartupPage.css). This is the color Electron
+      // paints behind the renderer before the first frame composites, so
+      // when window.show() finally fires after `window:rendererReady`,
+      // the framebuffer already matches the React startup screen and
+      // users don't see a dark `#1c1c1c` flash.
+      backgroundColor: '#FFFBF8',
       titleBarStyle: process.platform === 'win32' ? 'hidden' : process.platform === 'darwin' ? 'hiddenInset' : 'default',
       trafficLightPosition: process.platform === 'darwin' ? { x: 12, y: 12 } : undefined,
       titleBarOverlay: undefined,
       // frame: defaults to true, no need to set explicitly
       icon: app.isPackaged
         ? path.join(process.resourcesPath, 'brand-assets/win/app.ico')
-        : path.join(__dirname, `../../brands/openkosmos/assets/win/app.ico`),
+        : path.join(__dirname, `../../brands/${process.env.BRAND_NAME || 'openkosmos'}/assets/win/app.ico`),
       webPreferences: {
         nodeIntegration: false,
         contextIsolation: true,
@@ -882,6 +889,22 @@ class ElectronApp {
     // Restore persisted zoom level for the initial blank page before the first navigation.
     await applyPersistedZoomLevel();
 
+    // Restore the persisted maximized state BEFORE loadURL so the renderer's
+    // first paint already uses the maximized viewport size. Doing this in
+    // `ready-to-show` (after first paint) caused a visible flash where the
+    // content was laid out at the BrowserWindow creation size (1200x800),
+    // then re-flowed once the window was resized — the user saw a brief
+    // "small content inside a maximized window" frame at startup.
+    try {
+      const acm = await getAppCacheManager();
+      const config = acm.getConfig();
+      if (config.mainWindowMaximized) {
+        this.mainWindow.maximize();
+      }
+    } catch (error) {
+      safeConsole.error('[WindowState] Failed to restore maximized state:', error);
+    }
+
     // Set up window event handlers first
     this.mainWindow.once('ready-to-show', async () => {
       safeConsole.timeEnd('[Startup] Total main.ts load');
@@ -891,19 +914,46 @@ class ElectronApp {
       });
 
       if (this.mainWindow) {
-        try {
-          const acm = await getAppCacheManager();
-          const config = acm.getConfig();
-          if (config.mainWindowMaximized) {
-            this.mainWindow.maximize();
-          }
-        } catch (error) {
-          safeConsole.error('[WindowState] Failed to restore maximized state:', error);
-        }
+        // Defer show() until the renderer signals it has mounted React and
+        // painted its first real frame. This avoids the user seeing the raw
+        // HTML boot splash for the few hundred ms (dev: a few seconds) the
+        // JS bundle takes to load — `ready-to-show` fires on the HTML's
+        // first paint, but the React tree is what we want them to see.
+        //
+        // The renderer signals via `window:rendererReady` (see
+        // `src/preload/main.ts` notifyRendererReady → src/renderer/index.tsx
+        // right after root.render). A fallback timeout (8s) guarantees the
+        // window is eventually shown even if the renderer crashes or never
+        // sends the signal — so users are never stuck staring at a missing
+        // window.
+        let shown = false;
+        const showMainWindow = (reason: 'renderer-ready' | 'fallback-timeout') => {
+          if (shown) return;
+          shown = true;
+          if (!this.mainWindow || this.mainWindow.isDestroyed()) return;
+          this.mainWindow.show();
+          safeConsole.log(`[Startup] 🎉 Window shown! (${reason})`);
+          crashCaptureManager.recordBreadcrumb('window', 'main-window-shown', {
+            windowId: this.mainWindow.id,
+            reason,
+          });
+        };
 
-        // 🚀 Optimization: show window immediately, move heavy initialization to background
-        this.mainWindow.show();
-        safeConsole.log('[Startup] 🎉 Window shown!');
+        ipcMain.once('window:rendererReady', () => {
+          showMainWindow('renderer-ready');
+        });
+
+        // Safety net: if the renderer never signals (crash, hang, missing
+        // notifyRendererReady call), still show the window after 8s so the
+        // app never appears completely missing to the user.
+        const fallbackTimer = setTimeout(() => {
+          if (!shown) {
+            safeConsole.warn('[Startup] Renderer did not signal ready within 8s — showing window via fallback timeout');
+          }
+          showMainWindow('fallback-timeout');
+        }, 8000);
+        // Don't keep the process alive just for this timer.
+        if (typeof fallbackTimer.unref === 'function') fallbackTimer.unref();
 
         // 🚀 Optimization: deferred setting of auth module main window reference
         setImmediate(async () => {
@@ -1194,7 +1244,7 @@ class ElectronApp {
         ? path.join(process.resourcesPath, 'brand-assets/win/app.ico')
         : path.join(
             __dirname,
-            `../../brands/openkosmos/assets/win/app.ico`,
+            `../../brands/${process.env.BRAND_NAME || 'openkosmos'}/assets/win/app.ico`,
           ),
       webPreferences: {
         nodeIntegration: false,
