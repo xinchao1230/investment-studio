@@ -1170,13 +1170,14 @@ export const ResearchPage: React.FC = () => {
   // experience while Research workspace mode is active.
   //
   // Flow: GeneratedFileCards / Message dispatch a `fileViewer:open` custom
-  // event with `{ file: { name, url } }`. We listen in capture phase, set
-  // `__researchTabOpenEnabled` so ChatSide bails, resolve the URL to an
-  // absolute path, then bucket the tab under either:
+  // event with `{ file: { name, url } }`. We set `__researchTabOpenEnabled`
+  // so ChatSide unconditionally bails for the lifetime of workspace mode,
+  // resolve the URL to an absolute path, then bucket the tab under either:
   //   1. The target that owns the path (target-internal file), or
   //   2. The currently-selected target (chat-attached artifact).
-  // If neither is available (no target selected), we leave the event
-  // unclaimed so ChatSide's InlineFilePreviewPanel can take over.
+  // Fallback when neither is available (rare — workspace mode with no
+  // target selected): open with the system default app. Either way we
+  // claim the event so it never surfaces in InlineFilePreviewPanel.
   useEffect(() => {
     if (activeMode !== 'workspace') return;
     (window as any).__researchTabOpenEnabled = true;
@@ -1184,7 +1185,7 @@ export const ResearchPage: React.FC = () => {
       const ce = event as CustomEvent<{ file?: { name?: string; url?: string } }>;
       const file = ce.detail?.file;
       if (!file?.url) return;
-      // Only intercept local files — remote URLs fall through.
+      // Only intercept local files — remote URLs fall through to overlay.
       const url = file.url;
       const isLocal =
         url.startsWith('file://') ||
@@ -1194,16 +1195,27 @@ export const ResearchPage: React.FC = () => {
       const absPath = url.startsWith('file://')
         ? decodeURIComponent(url.replace(/^file:\/\/\/?/, '/').replace(/^\/([a-zA-Z]:)/, '$1'))
         : url;
-      const owningCode = findOwningCode(absPath);
-      const bucketCode = owningCode ?? selectedCodeRef.current;
-      if (!bucketCode) return; // no target context — let inline preview handle
+      // Claim the event regardless of whether we can resolve a bucket —
+      // the inline right-column preview must never fire while workspace
+      // mode owns the surface.
       (ce as any)._inlineHandled = true;
       ce.preventDefault?.();
       ce.stopImmediatePropagation?.();
-      handleOpenFile(
-        { relPath: absPath, absPath, mtime: 0 },
-        { bucketCode },
-      );
+      const owningCode = findOwningCode(absPath);
+      const bucketCode = owningCode ?? selectedCodeRef.current;
+      if (bucketCode) {
+        handleOpenFile(
+          { relPath: absPath, absPath, mtime: 0 },
+          { bucketCode },
+        );
+        return;
+      }
+      // No target context — open with system default app as fallback.
+      try {
+        void window.electronAPI.workspace?.openPath?.(absPath);
+      } catch {
+        // best-effort
+      }
     };
     window.addEventListener('fileViewer:open', handle, true);
     return () => {
