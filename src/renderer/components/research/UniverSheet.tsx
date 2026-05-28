@@ -42,6 +42,8 @@ export const UniverSheet: React.FC<UniverSheetProps> = ({ data }) => {
       try {
         const core: any = await import('@univerjs/core');
         const { Univer, LocaleType, Tools, UniverInstanceType } = core;
+        const { UniverDocsPlugin } = await import('@univerjs/docs');
+        const { UniverDocsUIPlugin } = await import('@univerjs/docs-ui');
         const { UniverSheetsPlugin } = await import('@univerjs/sheets');
         const { UniverSheetsUIPlugin } = await import('@univerjs/sheets-ui');
         const { UniverUIPlugin } = await import('@univerjs/ui');
@@ -50,10 +52,13 @@ export const UniverSheet: React.FC<UniverSheetProps> = ({ data }) => {
         const { UniverSheetsFormulaPlugin } = await import('@univerjs/sheets-formula');
 
         // Locale bundles — load every plugin's zh-CN dictionary.
-        const [designZh, uiZh, sheetsZh, sheetsUIZh, sheetsFormulaZh] =
+        // docs-ui must be merged too: sheets-ui's FormulaBar / EditorContainer
+        // rely on the docs editor service for cell editing.
+        const [designZh, uiZh, docsUIZh, sheetsZh, sheetsUIZh, sheetsFormulaZh] =
           await Promise.all([
             import('@univerjs/design/lib/locale/zh-CN'),
             import('@univerjs/ui/lib/locale/zh-CN'),
+            import('@univerjs/docs-ui/lib/locale/zh-CN'),
             import('@univerjs/sheets/lib/locale/zh-CN'),
             import('@univerjs/sheets-ui/lib/locale/zh-CN'),
             import('@univerjs/sheets-formula/lib/locale/zh-CN'),
@@ -70,6 +75,7 @@ export const UniverSheet: React.FC<UniverSheetProps> = ({ data }) => {
               {},
               pick(designZh),
               pick(uiZh),
+              pick(docsUIZh),
               pick(sheetsZh),
               pick(sheetsUIZh),
               pick(sheetsFormulaZh),
@@ -78,10 +84,15 @@ export const UniverSheet: React.FC<UniverSheetProps> = ({ data }) => {
         });
 
         // Order matters: render + formula engines, then UI shell, then
+        // docs + docs-ui (provides the editor service used by sheets-ui's
+        // FormulaBar / EditorContainer — without these the Redi injector
+        // throws "Cannot find univer.editor.service"), then
         // sheets + sheets-ui + sheets-formula on top.
         univer.registerPlugin(UniverRenderEnginePlugin);
         univer.registerPlugin(UniverFormulaEnginePlugin);
         univer.registerPlugin(UniverUIPlugin, { container: containerRef.current });
+        univer.registerPlugin(UniverDocsPlugin);
+        univer.registerPlugin(UniverDocsUIPlugin);
         univer.registerPlugin(UniverSheetsPlugin);
         univer.registerPlugin(UniverSheetsUIPlugin);
         univer.registerPlugin(UniverSheetsFormulaPlugin);
