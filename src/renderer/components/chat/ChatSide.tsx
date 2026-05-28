@@ -15,15 +15,14 @@ function ChatSide(props: {
     (window as any).__inlineFilePreviewEnabled = true;
 
     const handleFileViewerOpen = (event: Event) => {
-      // ResearchPage installs a capture-phase listener that calls
-      // `stopImmediatePropagation()` when it claims the event (file lives
-      // under a research target, or under the currently-selected target).
-      // We listen in the bubble phase so that:
-      //   - When ResearchPage claims, this handler is never reached.
-      //   - When ResearchPage declines (no target context), the event
-      //     bubbles up here and we open the inline preview as fallback.
-      // The defensive `_inlineHandled` check protects against listener-
-      // registration-order surprises in tests.
+      // When Research Assistant workspace mode is mounted, the middle
+      // ContentTabs pane is the single source of truth for previewing
+      // files clicked from the embedded chat. Defer unconditionally so
+      // the user never sees a stray right-column inline preview while
+      // workspace mode is the active surface — this is more robust than
+      // relying on capture-vs-bubble event ordering, which can race when
+      // listeners register in unexpected order.
+      if ((window as any).__researchTabOpenEnabled) return;
       if ((event as any)._inlineHandled) return;
 
       const customEvent = event as CustomEvent;
