@@ -324,6 +324,21 @@ export default function(ctx: Context) {
         await browserControlHttpServer.stop();
       }
 
+      // If the active provider is Copilot, switch to the first available
+      // API-key provider before signing out. Copilot requires a valid GitHub
+      // session, so it becomes unusable after sign-out.
+      if (providerManager.getActiveProviderId() === 'copilot') {
+        const allInfos = providerManager.getAllProviderInfos();
+        for (const info of allInfos) {
+          if (info.id === 'copilot') continue;
+          const cfg = providerManager.getProviderConfig(info.id);
+          if (cfg?.enabled && (!info.requiresApiKey || cfg.apiKey)) {
+            await providerManager.switchProvider(info.id);
+            break;
+          }
+        }
+      }
+
       const authManager = await getMainAuthManager();
       await authManager.signOut();
       return { success: true };

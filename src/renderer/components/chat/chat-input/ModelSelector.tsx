@@ -140,6 +140,23 @@ function Selector(props: Props) {
     ? PROVIDER_LABELS[activeProvider] || activeProvider
     : null;
 
+  // When the provider switches, the current model may not exist in the new
+  // provider's model list. Auto-select the first available model so the user
+  // isn't stuck with an invalid model ID in the text box.
+  useEffect(() => {
+    if (!activeProvider || availableModels.length === 0) return;
+    // If the current model is already in the new list, nothing to do
+    if (displayModel && availableModels.some(m => m.id === displayModel)) return;
+    // Pick the first model from the new provider
+    const fallback = availableModels[0];
+    if (fallback) {
+      setPendingModel(fallback.id);
+      if (currentChatId) {
+        updateModel(fallback.id);
+      }
+    }
+  }, [activeProvider, availableModels]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Scroll the currently selected option into view when the dropdown opens.
   const selectedOptionRef = useScrollSelectedIntoView<HTMLButtonElement>(
     showModelDropdown,

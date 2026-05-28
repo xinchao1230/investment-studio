@@ -15,7 +15,6 @@ import {
   Pencil,
   Settings,
   PanelLeftClose,
-  LogOut,
 } from 'lucide-react';
 import type { TargetFile, MoveResult } from './usePortfolio';
 import type { ResearchChatSessionMeta } from './researchChatIpc';
@@ -728,26 +727,6 @@ export const TargetListSidebar: React.FC<TargetListSidebarProps> = ({
             }}
           >
             <Settings size={14} />
-          </button>
-          <button
-            type="button"
-            className="rw-side-icon-btn"
-            title="Logout"
-            aria-label="Logout"
-            onClick={async () => {
-              const confirmed = window.confirm(
-                'Are you sure you want to sign out? Any unsaved work in this workspace will be lost.'
-              );
-              if (!confirmed) return;
-              try {
-                await window.electronAPI.auth.signOut();
-              } catch (err) {
-                console.error('[Logout] Sign-out failed:', err);
-                window.alert('Sign out failed. Please try again.');
-              }
-            }}
-          >
-            <LogOut size={14} />
           </button>
           {onCollapse && (
             <button

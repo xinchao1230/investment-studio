@@ -103,7 +103,7 @@ export const ProviderSettingsView: React.FC = () => {
         const sessionResult = await window.electronAPI.auth.getCurrentSession();
         if (sessionResult?.success && sessionResult.data) {
           const login = sessionResult.data?.ghcAuth?.user?.login;
-          setIsCopilotAvailable(!!login && login !== '__local__');
+          setIsCopilotAvailable(!!login && login !== '_local');
         }
       } catch {
         // Ignore — defaults to false
@@ -127,6 +127,15 @@ export const ProviderSettingsView: React.FC = () => {
     // Listen for provider switch events
     const unsub = api.onProviderSwitched?.((data: { activeProvider: string }) => {
       setActiveProvider(data.activeProvider);
+      // Re-check auth status — Copilot may no longer be available after sign-out
+      window.electronAPI.auth.getCurrentSession().then((res: any) => {
+        if (res?.success && res.data) {
+          const login = res.data?.ghcAuth?.user?.login;
+          setIsCopilotAvailable(!!login && login !== '_local');
+        } else {
+          setIsCopilotAvailable(false);
+        }
+      }).catch(() => setIsCopilotAvailable(false));
     });
 
     return () => {
