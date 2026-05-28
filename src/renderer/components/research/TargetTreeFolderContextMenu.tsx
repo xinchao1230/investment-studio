@@ -5,7 +5,7 @@ export interface TargetTreeFolderContextMenuProps {
   position: { top: number; left: number };
   folderAbsPath: string;
   folderName: string;
-  /** When true, the 删除 item is hidden (e.g. for target roots / standard subcategories). */
+  /** When true, the Delete item is hidden (e.g. for target roots / standard subcategories). */
   canDelete?: boolean;
   onClose: () => void;
   onNewFile: () => void;
@@ -94,7 +94,7 @@ export const TargetTreeFolderContextMenu: React.FC<TargetTreeFolderContextMenuPr
         onClick={(e) => { e.stopPropagation(); onNewFile(); onClose(); }}
       >
         <FilePlus size={13} className="text-gray-500" />
-        <span>新建文件</span>
+        <span>New File</span>
       </button>
       <button
         type="button"
@@ -102,7 +102,7 @@ export const TargetTreeFolderContextMenu: React.FC<TargetTreeFolderContextMenuPr
         onClick={(e) => { e.stopPropagation(); onNewFolder(); onClose(); }}
       >
         <FolderPlus size={13} className="text-gray-500" />
-        <span>新建文件夹</span>
+        <span>New Folder</span>
       </button>
       <div className="my-1 border-t border-gray-100" />
       <button
@@ -111,7 +111,7 @@ export const TargetTreeFolderContextMenu: React.FC<TargetTreeFolderContextMenuPr
         onClick={handleReveal}
       >
         <FolderOpen size={13} className="text-gray-500" />
-        <span>在文件资源管理器中显示</span>
+        <span>Reveal in File Explorer</span>
       </button>
       <button
         type="button"
@@ -119,7 +119,7 @@ export const TargetTreeFolderContextMenu: React.FC<TargetTreeFolderContextMenuPr
         onClick={handleCopyPath}
       >
         <Copy size={13} className="text-gray-500" />
-        <span>复制路径</span>
+        <span>Copy Path</span>
       </button>
       {canDelete && onDelete && (
         <>
@@ -130,7 +130,7 @@ export const TargetTreeFolderContextMenu: React.FC<TargetTreeFolderContextMenuPr
             onClick={(e) => { e.stopPropagation(); onDelete(); onClose(); }}
           >
             <Trash2 size={13} />
-            <span>删除</span>
+            <span>Delete</span>
           </button>
         </>
       )}
