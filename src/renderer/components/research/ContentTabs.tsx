@@ -16,6 +16,7 @@ import {
   ExternalLink,
   LogOut,
   Code as CodeIcon,
+  File as FileIcon,
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -91,6 +92,9 @@ export interface Tab {
    * Editable categories: markdown, csv
    * Read-only categories: spreadsheet (xlsx via UniverSheet), pdf, html,
    *   json, code, text — these route through native viewers / Monaco.
+   * Binary category: xlsx / docx / pptx / archives etc. — surfaced as a
+   *   tab but renders an "Open with Default App" placeholder. Never has
+   *   `content` loaded (the producer must skip the utf-8 read).
    */
   type:
     | 'markdown'
@@ -100,7 +104,8 @@ export interface Tab {
     | 'html'
     | 'json'
     | 'code'
-    | 'text';
+    | 'text'
+    | 'binary';
   sheetData?: any;
   mtime?: number;
   /** Optional breadcrumb prefix shown before the filename (e.g. "携程集团.HK"). */
@@ -169,6 +174,47 @@ const ReadonlyMonacoViewer: React.FC<{ content: string; language: string }> = ({
         </div>
       )}
       <div ref={containerRef} style={{ width: '100%', height: '100%' }} />
+    </div>
+  );
+};
+
+/** Open-externally placeholder for tab types we can't render inline
+ *  (xlsx, docx, archives, etc.). Surfaces the file as a tab in the
+ *  middle pane while pointing the user at their default OS app. */
+const BinaryFallback: React.FC<{
+  filePath: string;
+  onOpenExternal: () => void;
+  onShowInFolder: () => void;
+}> = ({ filePath, onOpenExternal, onShowInFolder }) => {
+  const name = filePath.split(/[\\/]/).pop() ?? filePath;
+  const ext = (filePath.split('.').pop() ?? '').toUpperCase();
+  return (
+    <div className="h-full w-full flex flex-col items-center justify-center gap-4 px-6 text-center text-[var(--rw-text-2)]">
+      <FileIcon size={56} className="text-[var(--rw-text-3)]" />
+      <div>
+        <div className="text-sm font-medium text-[var(--rw-text)]">{name}</div>
+        <div className="mt-1 text-xs text-[var(--rw-text-3)]">{ext || 'FILE'}</div>
+      </div>
+      <div className="text-sm max-w-md">
+        This file type cannot be previewed inline. Open it with your default
+        application to view the contents.
+      </div>
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={onOpenExternal}
+          className="px-3 py-1.5 text-xs rounded border border-[var(--rw-border)] bg-[var(--rw-bg-soft)] hover:bg-black/5 text-[var(--rw-text)]"
+        >
+          Open with Default App
+        </button>
+        <button
+          type="button"
+          onClick={onShowInFolder}
+          className="px-3 py-1.5 text-xs rounded border border-[var(--rw-border)] hover:bg-black/5 text-[var(--rw-text-2)]"
+        >
+          Show in Folder
+        </button>
+      </div>
     </div>
   );
 };
@@ -927,6 +973,12 @@ export const ContentTabs: React.FC<ContentTabsProps> = ({
               <ReadonlyMonacoViewer
                 content={activeTab.content}
                 language={languageForTab(activeTab)}
+              />
+            ) : activeTab.type === 'binary' ? (
+              <BinaryFallback
+                filePath={activeTab.filePath}
+                onOpenExternal={handleOpenExternal}
+                onShowInFolder={handleDownloadClick}
               />
             ) : (
               // markdown (default)
