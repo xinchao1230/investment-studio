@@ -287,7 +287,16 @@ export default function(ctx: Context) {
             await authManager.setCurrentAuth(authInfo);
 
             // Set current user alias
-            ctx.currentUserAlias = authInfo.ghcAuth.user.login;
+            const userLogin = authInfo.ghcAuth.user.login;
+            ctx.currentUserAlias = userLogin;
+
+            // Initialize ProviderManager in background — must not block sign-in
+            if (userLogin !== SKIP_LOGIN_ALIAS) {
+              providerManager.initialize(userLogin).catch((err) => {
+                const logger = getAdvancedLogger();
+                logger.warn(`[Startup] ProviderManager initialization failed (device flow): ${err instanceof Error ? err.message : String(err)}`, 'auth:deviceFlow');
+              });
+            }
 
             await ctx.registerGlobalShortcuts(); // Register global shortcuts
 

@@ -77,6 +77,8 @@ export const ProviderSettingsView: React.FC = () => {
     'custom-openai': emptyCard(),
   });
   const [activeProvider, setActiveProvider] = useState<string>('copilot');
+  /** True when the user is signed in with a real GitHub account (not skip-login) */
+  const [isCopilotAvailable, setIsCopilotAvailable] = useState(false);
 
   // Load current config from main process
   useEffect(() => {
@@ -94,6 +96,17 @@ export const ProviderSettingsView: React.FC = () => {
 
       if (activeResult.success && activeResult.data) {
         setActiveProvider(activeResult.data);
+      }
+
+      // Check if the user is signed in with a real GitHub/Copilot account
+      try {
+        const sessionResult = await window.electronAPI.auth.getCurrentSession();
+        if (sessionResult?.success && sessionResult.data) {
+          const login = sessionResult.data?.ghcAuth?.user?.login;
+          setIsCopilotAvailable(!!login && login !== '__local__');
+        }
+      } catch {
+        // Ignore — defaults to false
       }
 
       const newCards = { ...cards };
@@ -219,6 +232,40 @@ export const ProviderSettingsView: React.FC = () => {
       </div>
 
       <div className="space-y-3">
+        {/* GitHub Copilot card — shown when user is signed in with a real GitHub account */}
+        {isCopilotAvailable && (
+          <div
+            className={`border rounded-md p-3 bg-white ${activeProvider === 'copilot' ? 'border-blue-400 ring-1 ring-blue-200' : 'border-gray-200'}`}
+          >
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <h2 className="text-sm font-medium">GitHub Copilot</h2>
+                {activeProvider === 'copilot' && (
+                  <span className="px-1.5 py-0.5 text-[10px] font-medium bg-blue-100 text-blue-700 rounded">
+                    ACTIVE
+                  </span>
+                )}
+              </div>
+            </div>
+            <p className="text-xs text-gray-500 mb-2">
+              Use models from your GitHub Copilot subscription
+            </p>
+            {activeProvider !== 'copilot' && (
+              <button
+                onClick={async () => {
+                  const api = window.electronAPI.provider;
+                  if (!api) return;
+                  const result = await api.switch('copilot' as any);
+                  if (result.success) setActiveProvider('copilot');
+                }}
+                className="px-3 py-1.5 text-sm rounded border border-blue-300 text-blue-600 hover:bg-blue-50"
+              >
+                Set as Active
+              </button>
+            )}
+          </div>
+        )}
+
         {PROVIDERS.map((spec) => {
           const c = cards[spec.id];
           const isActive = activeProvider === spec.id;

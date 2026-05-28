@@ -9,6 +9,7 @@ import { agentChatSessionCacheManager } from '@/lib/chat/agentChatSessionCacheMa
 
 /** Provider display names for the badge */
 const PROVIDER_LABELS: Record<string, string> = {
+  copilot: 'GitHub Copilot',
   openai: 'OpenAI',
   deepseek: 'DeepSeek',
   ollama: 'Ollama',
@@ -135,7 +136,7 @@ function Selector(props: Props) {
 
   // Track active provider for the badge
   const activeProvider = useActiveProvider();
-  const providerLabel = activeProvider && activeProvider !== 'copilot'
+  const providerLabel = activeProvider
     ? PROVIDER_LABELS[activeProvider] || activeProvider
     : null;
 
