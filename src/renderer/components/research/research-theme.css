@@ -73,8 +73,6 @@
 [data-theme="research"] .rw-doc-body {
   font-size: 14px;
   color: var(--rw-text);
-  max-width: 800px;
-  margin: 0 auto;
   padding: 24px 40px 64px;
 }
 [data-theme="research"] .rw-tree-row {
@@ -508,6 +506,11 @@
   padding: 0 12px;
   margin-top: 10px;
 }
+[data-theme="research"] .chat-view--compact .mention-highlight-layer {
+  font-size: 13px;
+  padding: 0 12px;
+  margin-top: 10px;
+}
 
 [data-theme="research"] .chat-view--compact .button-area {
   padding: 8px 10px 10px 10px;
@@ -639,6 +642,13 @@
 }
 [data-theme="research"] .chat-view--compact .chat-textarea {
   height: 52px;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 0 8px;
+  margin-top: 8px;
+}
+/* Must match .chat-textarea overrides above so the highlight layer aligns */
+[data-theme="research"] .chat-view--compact .mention-highlight-layer {
   font-size: 13px;
   line-height: 1.5;
   padding: 0 8px;

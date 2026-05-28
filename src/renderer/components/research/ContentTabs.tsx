@@ -923,6 +923,7 @@ export const ContentTabs: React.FC<ContentTabsProps> = ({
             <EditableMonacoPane
               ref={setPaneRef(tab.id)}
               filePath={tab.filePath}
+              initialContent={tab.content}
               language={languageForTab(tab)}
               autoSave
               onDirtyChange={handleDirtyChange(tab.id)}

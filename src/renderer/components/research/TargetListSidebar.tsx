@@ -10,7 +10,6 @@ import {
   FileCode,
   Trash2,
   Search,
-  MoreHorizontal,
   MessageSquare,
   Pencil,
   Settings,
@@ -41,7 +40,7 @@ export interface Target {
    * stock ticker). False when it tracks an unlisted/private company.
    * For unlisted targets, `stock_code` is a synthetic placeholder equal
    * to `name` (chosen so the renderer's stock_code-keyed maps keep
-   * non-empty unique keys). UI should render "未上市" instead of the
+   * non-empty unique keys). UI should render "Unlisted" instead of the
    * code in those cases.
    */
   listed?: boolean;
@@ -203,7 +202,7 @@ export const TargetListSidebar: React.FC<TargetListSidebarProps> = ({
   const [pendingRenameFile, setPendingRenameFile] = useState<FileRef | null>(null);
   const [pendingDeleteFile, setPendingDeleteFile] = useState<FileRef | null>(null);
   // User-created subfolder pending trash confirmation. Triggered by the
-  // 删除 item in the folder context menu.
+  // Delete item in the folder context menu.
   const [pendingDeleteFolder, setPendingDeleteFolder] = useState<{
     folderAbsPath: string;
     folderName: string;
@@ -385,7 +384,7 @@ export const TargetListSidebar: React.FC<TargetListSidebarProps> = ({
     if (!ctx) return;
     const api: any = (window as any).electronAPI;
     const trash = api?.portfolio?.trashPath;
-    if (!trash) { showError('文件系统接口不可用'); return; }
+    if (!trash) { showError('File system API unavailable'); return; }
     try {
       const r = await trash(ctx.folderAbsPath);
       if (r?.success) {
@@ -409,10 +408,10 @@ export const TargetListSidebar: React.FC<TargetListSidebarProps> = ({
             });
           }
         }
-        showSuccess(`已删除 ${ctx.folderName}`);
+        showSuccess(`Deleted ${ctx.folderName}`);
         onRefreshTarget?.(ctx.ownerCode);
       } else {
-        showError(r?.error || '删除失败');
+        showError(r?.error || 'Delete failed');
       }
     } catch (err) {
       showError(err instanceof Error ? err.message : String(err));
@@ -589,18 +588,18 @@ export const TargetListSidebar: React.FC<TargetListSidebarProps> = ({
     try {
       if (ctx.kind === 'file') {
         const writer = api?.fs?.writeTextFileSafe ?? api?.fs?.writeFile;
-        if (!writer) { showError('文件系统接口不可用'); return; }
+        if (!writer) { showError('File system API unavailable'); return; }
         // Check for existing file via stat to avoid silently overwriting.
         try {
           const s = await api?.fs?.stat?.(target);
           if (s?.success && s.stats?.isFile) {
-            showError(`文件已存在：${name}`);
+            showError(`File already exists: ${name}`);
             return;
           }
         } catch { /* stat is best-effort */ }
         const r = await writer(target, '');
         if (r?.success) {
-          showSuccess(`已创建文件 ${name}`);
+          showSuccess(`Created file ${name}`);
           // fs:writeTextFileSafe / fs:writeFile both call
           // PortfolioWatcher.suppressOnce() to silence editor-save echoes,
           // which unfortunately also silences fresh creates. Force-reload
@@ -643,14 +642,14 @@ export const TargetListSidebar: React.FC<TargetListSidebarProps> = ({
             onOpenFile({ relPath, absPath: target, mtime: Date.now() });
           }
         } else {
-          showError(r?.error || '创建文件失败');
+          showError(r?.error || 'Failed to create file');
         }
       } else {
-        if (!api?.fs?.mkdir) { showError('文件系统接口不可用'); return; }
+        if (!api?.fs?.mkdir) { showError('File system API unavailable'); return; }
         const r = await api.fs.mkdir(target);
         if (r?.success) {
           if (r.exists) {
-            showError(`文件夹已存在：${name}`);
+            showError(`Folder already exists: ${name}`);
           } else {
             // Record the new folder optimistically. Empty dirs are not
             // returned by the file listing tool, so without this they
@@ -690,13 +689,13 @@ export const TargetListSidebar: React.FC<TargetListSidebarProps> = ({
                 }
               }
             }
-            showSuccess(`已创建文件夹 ${name}`);
+            showSuccess(`Created folder ${name}`);
             // Still ping a refresh so any race with concurrent writes
             // (e.g. an LLM tool placing a file inside the new dir) shows up.
             onRefreshTarget?.(ctx.ownerCode);
           }
         } else {
-          showError(r?.error || '创建文件夹失败');
+          showError(r?.error || 'Failed to create folder');
         }
       }
     } catch (err) {
@@ -708,10 +707,45 @@ export const TargetListSidebar: React.FC<TargetListSidebarProps> = ({
 
   return (
     <div className="rw-pane-left flex flex-col h-full" style={{ width }}>
-      {/* Header — Workspace title (extra top padding for macOS traffic lights) */}
-      <div className="flex items-center justify-between px-3 pb-2" style={{ paddingTop: 40 }}>
-        <span className="rw-side-title">Workspace</span>
+      {/* Tab row with mode tabs + action buttons */}
+      <div className="flex items-center px-3 pt-3 pb-2 rw-divider gap-3">
+        <button
+          type="button"
+          className={`rw-side-tab ${activeMode === 'workspace' ? 'is-active' : ''}`}
+          onClick={() => onModeChange('workspace')}
+        >
+          Workspace
+        </button>
+        <button
+          type="button"
+          className={`rw-side-tab ${activeMode === 'stella' ? 'is-active' : ''}`}
+          onClick={() => onModeChange('stella')}
+        >
+          Ask
+        </button>
+        <div className="flex-1" />
         <div className="flex items-center gap-1">
+          {activeMode === 'workspace' && (
+            <button
+              type="button"
+              className={`rw-side-icon-btn ${addFormOpen ? 'is-active' : ''}`}
+              onClick={onAddTarget}
+              title="Find or add target"
+              aria-pressed={addFormOpen}
+            >
+              <Search size={14} />
+            </button>
+          )}
+          {activeMode === 'stella' && onNewStellaChat && (
+            <button
+              type="button"
+              className="rw-side-icon-btn"
+              onClick={onNewStellaChat}
+              title="New chat"
+            >
+              <Plus size={14} />
+            </button>
+          )}
           <button
             type="button"
             className="rw-side-icon-btn"
@@ -761,57 +795,6 @@ export const TargetListSidebar: React.FC<TargetListSidebarProps> = ({
             </button>
           )}
         </div>
-      </div>
-
-      {/* Secondary tab row */}
-      <div className="flex items-center px-3 pb-2 rw-divider gap-3">
-        <button
-          type="button"
-          className={`rw-side-tab ${activeMode === 'workspace' ? 'is-active' : ''}`}
-          onClick={() => onModeChange('workspace')}
-        >
-          工作区
-        </button>
-        <button
-          type="button"
-          className={`rw-side-tab ${activeMode === 'stella' ? 'is-active' : ''}`}
-          onClick={() => onModeChange('stella')}
-        >
-          Ask
-        </button>
-        <div className="flex-1" />
-        {activeMode === 'workspace' ? (
-          <div className="flex items-center gap-1">
-            <button
-              type="button"
-              className={`rw-side-icon-btn ${addFormOpen ? 'is-active' : ''}`}
-              onClick={onAddTarget}
-              title="查找或添加 Target"
-              aria-pressed={addFormOpen}
-            >
-              <Search size={14} />
-            </button>
-            <button
-              type="button"
-              className="rw-side-icon-btn"
-              title="More (coming soon)"
-              onClick={() => console.log('[Research] more menu clicked (placeholder)')}
-            >
-              <MoreHorizontal size={14} />
-            </button>
-          </div>
-        ) : (
-          onNewStellaChat && (
-            <button
-              type="button"
-              className="rw-side-icon-btn"
-              onClick={onNewStellaChat}
-              title="New chat"
-            >
-              <Plus size={14} />
-            </button>
-          )
-        )}
       </div>
 
       {topSlot}
@@ -979,10 +962,10 @@ export const TargetListSidebar: React.FC<TargetListSidebarProps> = ({
                   className="ml-1.5 flex-shrink-0 text-[11px] text-[var(--rw-text-3)] cursor-pointer"
                   onClick={() => onSelectTarget(code)}
                 >
-                  {/* Unlisted targets carry `stock_code === name`; show a "未上市"
+                  {/* Unlisted targets carry `stock_code === name`; show an "Unlisted"
                       pill instead of the synthetic placeholder code. */}
                   {target.listed === false || target.stock_code === target.name
-                    ? <span className="px-1 rounded bg-gray-100 text-gray-500 text-[10px]">未上市</span>
+                    ? <span className="px-1 rounded bg-gray-100 text-gray-500 text-[10px]">Unlisted</span>
                     : code}
                 </span>
                 <div className="flex-1" />
@@ -1019,7 +1002,7 @@ export const TargetListSidebar: React.FC<TargetListSidebarProps> = ({
                       <div
                         className="rw-tree-row group cursor-pointer"
                         style={{ paddingLeft: 12 }}
-                        // Clicking the "对话" header behaves like clicking the
+                        // Clicking the "Chat" header behaves like clicking the
                         // target itself: re-select the target so its most
                         // recently-active chat is restored. Useful when the
                         // user is viewing a sub-chat and wants to jump back to
@@ -1028,7 +1011,7 @@ export const TargetListSidebar: React.FC<TargetListSidebarProps> = ({
                       >
                         <span style={{ width: 13 }} className="flex-shrink-0" />
                         <MessageSquare size={13} className="flex-shrink-0 mr-1" />
-                        <span className="truncate flex-1" style={{ color: 'var(--rw-text)' }}>对话</span>
+                        <span className="truncate flex-1" style={{ color: 'var(--rw-text)' }}>Chat</span>
                         {onNewChat && (
                           <button
                             type="button"
@@ -1112,7 +1095,7 @@ export const TargetListSidebar: React.FC<TargetListSidebarProps> = ({
                       top-level folders we find under this target (so files
                       placed in user-created subfolders remain visible).
                       Also includes optimistic folders just created via the
-                      right-click "新建文件夹" action — those are empty on disk
+                      right-click "New Folder" action — those are empty on disk
                       and would otherwise be invisible. */}
                   {(() => {
                     const optimistic = optimisticFolders[code] ?? [];
@@ -1388,16 +1371,16 @@ export const TargetListSidebar: React.FC<TargetListSidebarProps> = ({
       <Dialog open={!!pendingDeleteFolder} onOpenChange={(open) => { if (!open) setPendingDeleteFolder(null); }}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>删除文件夹？</DialogTitle>
+            <DialogTitle>Delete Folder?</DialogTitle>
           </DialogHeader>
           <div className="text-sm text-gray-600 py-2">
             {pendingDeleteFolder
-              ? `将 "${pendingDeleteFolder.folderName}" 及其全部内容移至回收站？`
+              ? `Move "${pendingDeleteFolder.folderName}" and all its contents to the Recycle Bin?`
               : null}
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setPendingDeleteFolder(null)}>取消</Button>
-            <Button variant="destructive" onClick={() => { void handleConfirmDeleteFolder(); }}>删除</Button>
+            <Button variant="outline" onClick={() => setPendingDeleteFolder(null)}>Cancel</Button>
+            <Button variant="destructive" onClick={() => { void handleConfirmDeleteFolder(); }}>Delete</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -1466,8 +1449,8 @@ export const TargetListSidebar: React.FC<TargetListSidebarProps> = ({
       {/* New file / new folder prompt */}
       <CreateItemDialog
         open={!!pendingCreate}
-        title={pendingCreate?.kind === 'folder' ? '新建文件夹' : '新建文件'}
-        placeholder={pendingCreate?.kind === 'folder' ? '文件夹名' : '文件名（含扩展名，如 notes.md）'}
+        title={pendingCreate?.kind === 'folder' ? 'New Folder' : 'New File'}
+        placeholder={pendingCreate?.kind === 'folder' ? 'Folder name' : 'File name (with extension, e.g. notes.md)'}
         parentHint={pendingCreate?.parentLabel}
         defaultValue=""
         onConfirm={(name) => { void handleConfirmCreate(name); }}

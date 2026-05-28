@@ -23,6 +23,7 @@ import { LayoutProvider } from '../layout/LayoutProvider';
 import { PasteToWorkspaceProvider } from '../chat/workspace/PasteToWorkspaceProvider';
 import { OverlayFileViewer } from '../ui/OverlayFileViewer';
 import { OverlayImageViewer } from '../ui/OverlayImageViewer';
+import { AttachMenuDropdown } from '../menu';
 import { agentChatSessionCacheManager, useCurrentChatSessionId } from '../../lib/chat/agentChatSessionCacheManager';
 import { profileDataManager } from '@renderer/lib/userData';
 import { useFsChanged } from '../../hooks/useFsChanged';
@@ -1508,6 +1509,7 @@ export const ResearchPage: React.FC = () => {
     {/* Global overlay viewers for chat tool-call file/image links. */}
     <OverlayFileViewer />
     <OverlayImageViewer />
+    <AttachMenuDropdown />
     </PasteToWorkspaceProvider>
     </LayoutProvider>
   );

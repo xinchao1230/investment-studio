@@ -4,7 +4,7 @@ import { Button } from '../ui/button';
 
 interface CreateItemDialogProps {
   open: boolean;
-  /** Dialog title, e.g., "新建文件" / "新建文件夹". */
+  /** Dialog title, e.g., "New File" / "New Folder". */
   title: string;
   /** Placeholder text for the input. */
   placeholder?: string;
@@ -70,7 +70,7 @@ export const CreateItemDialog: React.FC<CreateItemDialogProps> = ({
         <div className="py-2 space-y-2">
           {parentHint && (
             <div className="text-[11px] text-gray-500 truncate" title={parentHint}>
-              位置：{parentHint}
+              Location: {parentHint}
             </div>
           )}
           <input
@@ -86,13 +86,13 @@ export const CreateItemDialog: React.FC<CreateItemDialogProps> = ({
           />
           {draft.length > 0 && INVALID_RE.test(trimmed) && (
             <div className="text-xs text-amber-600">
-              名称不能包含这些字符：\ / : * ? " &lt; &gt; |
+              Name cannot contain these characters: \ / : * ? " &lt; &gt; |
             </div>
           )}
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={onCancel}>取消</Button>
-          <Button onClick={submit} disabled={invalid}>创建</Button>
+          <Button variant="outline" onClick={onCancel}>Cancel</Button>
+          <Button onClick={submit} disabled={invalid}>Create</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
