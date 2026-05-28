@@ -1,4 +1,4 @@
-<!-- Last verified: 2026-05-20 -->
+<!-- Last verified: 2026-05-28 -->
 # Chat Engine
 
 > Core multi-turn agent conversation engine: one `AgentChat` instance per active chat tab, orchestrated by `AgentChatManager`.
@@ -77,6 +77,9 @@ When cancellation happens during LLM streaming, `AgentChatStreamingService` can 
 
 ### Briefing User Identity Injection
 `AgentChatManagerScheduledRunner` injects the current user's email (via `aliasToAadAccount`) into briefing messages through `injectBriefingInstructions(message, userEmail)`. The identity is prepended before the briefing prompt so the LLM can attribute action items during scanning, and task-creation instructions filter to only create tasks for the current user. Non-briefing jobs are unaffected.
+
+### Multi-Provider Routing
+When `ProviderManager` reports a non-Copilot active provider, `AgentChat` must expose the same flattened `GhcModelCapabilities` shape as `ghcModelsManager.getModelCapabilities()` (`supportsTools`, `supportsImages`, `maxContextLength`, etc.). Do not return raw Copilot API `capabilities.supports/limits` objects on this path. `AgentChatStreamingService` must resolve the effective provider model through `ProviderManager.resolveModelId()` before sending, because persisted agents can still carry stale Copilot model IDs after a provider switch.
 
 ### Per-Chat Reasoning Effort
 `agentChatStreamingService.ts` injects an endpoint-specific reasoning fragment into the outbound request when the active model advertises `capabilities.supports.reasoning_effort`. The persisted choice lives on `chat.agent.reasoningEffort` (see [userDataADO](../userDataADO/ai.prompt.md)) and is plumbed through `agentChat.ts` → `getCurrentModelConfig()` → `AgentChatStreamingServiceDeps.getCurrentModelConfig().reasoningEffort`. The streaming service computes a vendor-aware default via `getDefaultReasoningEffort(modelId, supportedEfforts)` (Claude→high, GPT→medium) and passes both the user's choice and the default to `buildReasoningParams()` (see [LLM](../llm/ai.prompt.md)). When the user has not explicitly chosen a tier, the default is sent — an explicit `reasoning_effort` is **always** included for models that support reasoning, ensuring the wire payload matches the UI's "(default)" label. A diagnostic `🧠 reasoning_effort` log records `model / endpoint / requested / supported / applied` for every send so the actual wire payload can be inspected at runtime.

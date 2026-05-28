@@ -2,6 +2,8 @@ import { LlmApiSettings, Message, MessageHelper } from '@shared/types/chatTypes'
 import { getModelById, buildMaxTokensParam } from './ghcModelsManager';
 import { GHC_CONFIG } from '../auth/ghcConfig';
 import { MainAuthManager } from "../auth/authManager";
+import { providerManager } from './provider';
+import type { ChatMessage } from './provider';
 
 /**
  * Determine the API endpoint to use based on the model configuration
@@ -58,6 +60,12 @@ export class GhcModelApi {
     maxTokens: number = 4000,
     temperature: number = 0.7
   ): Promise<string> {
+    // Route through ProviderManager for non-Copilot providers
+    await providerManager.waitUntilReady();
+    if (providerManager.getActiveProviderId() !== 'copilot') {
+      return this.callViaProvider(userPrompt, systemPrompt, maxTokens, temperature);
+    }
+
     try {
       // Get session from auth manager
       const session = await this.getSessionFromAuthManager();
@@ -162,6 +170,12 @@ export class GhcModelApi {
     maxTokens: number = 4000,
     temperature: number = 0.7
   ): Promise<string> {
+    // Route through ProviderManager for non-Copilot providers
+    await providerManager.waitUntilReady();
+    if (providerManager.getActiveProviderId() !== 'copilot') {
+      return this.callViaProvider(userPrompt, systemPrompt, maxTokens, temperature, modelId);
+    }
+
     try {
       // Get session authentication info
       const session = await this.getSessionFromAuthManager();
@@ -265,6 +279,19 @@ export class GhcModelApi {
     maxTokens: number = 4000,
     temperature: number = 0.7
   ): Promise<string> {
+    // Route through ProviderManager for non-Copilot providers
+    await providerManager.waitUntilReady();
+    if (providerManager.getActiveProviderId() !== 'copilot') {
+      const resolvedModel = await providerManager.resolveModelId(modelId);
+      const result = await providerManager.chatCompletion({
+        model: resolvedModel,
+        messages: messages as ChatMessage[],
+        maxTokens,
+        temperature,
+      });
+      return result.content;
+    }
+
     const session = await this.getSessionFromAuthManager();
     if (!session) {
       throw new Error('GitHub Copilot authentication required');
@@ -363,6 +390,33 @@ export class GhcModelApi {
     }
 
     return formattedMessages;
+  }
+
+  /**
+   * Route a utility LLM call through ProviderManager.
+   * Used by callGPT41 and callModel when a non-Copilot provider is active.
+   */
+  private async callViaProvider(
+    userPrompt: string,
+    systemPrompt?: string,
+    maxTokens: number = 4000,
+    temperature: number = 0.7,
+    modelId?: string,
+  ): Promise<string> {
+    const resolvedModel = await providerManager.resolveModelId(modelId);
+    const messages: ChatMessage[] = [];
+    if (systemPrompt) {
+      messages.push({ role: 'system', content: systemPrompt });
+    }
+    messages.push({ role: 'user', content: userPrompt });
+
+    const result = await providerManager.chatCompletion({
+      model: resolvedModel,
+      messages,
+      maxTokens,
+      temperature,
+    });
+    return result.content;
   }
 }
 

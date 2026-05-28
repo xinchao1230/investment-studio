@@ -2,6 +2,7 @@
 // Provides common operations and validation functions for AuthData
 
 import { AuthData } from '../../types/authTypes';
+import { SKIP_LOGIN_ALIAS } from '@shared/constants/auth';
 
 /**
  * Extract Copilot Token from AuthData
@@ -84,6 +85,48 @@ export function isAuthDataValid(authData: AuthData | null): boolean {
   }
 
   return true;
+}
+
+/**
+ * Create a placeholder AuthData for Skip Login mode.
+ * Fills all required fields with valid-looking placeholders so that
+ * `isAuthDataValid()` returns true, allowing the auth guard to pass.
+ * The placeholder tokens are never sent to any real API — non-Copilot
+ * providers use their own API keys via ProviderManager.
+ */
+export function createSkipLoginAuthData(): AuthData {
+  const now = new Date().toISOString();
+  return {
+    version: '3.0.0',
+    createdAt: now,
+    updatedAt: now,
+    authProvider: 'ghc',
+    ghcAuth: {
+      alias: SKIP_LOGIN_ALIAS,
+      user: {
+        id: SKIP_LOGIN_ALIAS,
+        login: SKIP_LOGIN_ALIAS,
+        email: '',
+        name: 'Local User',
+        avatarUrl: '',
+        copilotPlan: 'none',
+      },
+      gitHubTokens: {
+        timestamp: now,
+        api_url: '',
+        access_token: 'skip-login-placeholder',
+        token_type: 'bearer',
+        scope: '',
+      },
+      copilotTokens: {
+        timestamp: now,
+        api_url: '',
+        expires_at: Math.floor(Date.now() / 1000) + 86400 * 365,
+        token: 'skip-login-placeholder',
+      },
+      capabilities: [],
+    },
+  };
 }
 
 /**

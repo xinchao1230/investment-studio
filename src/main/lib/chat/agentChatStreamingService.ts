@@ -7,6 +7,8 @@ import { GhcApiError } from '../utilities/errors';
 import { getEndpointForModel } from '../llm/ghcModelApi';
 import { buildMaxTokensParam, buildReasoningParams, getDefaultReasoningEffort } from '../llm/ghcModelsManager';
 import { createLogger } from '../unifiedLogger';
+import { providerManager } from '../llm/provider';
+import type { ChatMessage, ChatCompletionParams } from '../llm/provider';
 import {
   convertMcpToolsToOpenAiFormat,
   determineToolChoice,
@@ -212,7 +214,189 @@ export class AgentChatStreamingService {
     }
   }
 
+  /**
+   * Streaming API call routed through ProviderManager for non-Copilot providers.
+   * Converts the internal request format to ChatCompletionParams, streams via
+   * the active provider, and accumulates the result into StreamingApiResponse.
+   */
+  private async makeStreamingApiCallViaProvider(
+    requestOptions: any,
+    token?: CancellationToken,
+  ): Promise<StreamingApiResponse> {
+    // Resolve model ID — validates it exists on the active provider, or falls
+    // back to the provider's default. Prevents sending stale Copilot model IDs
+    // (e.g., 'gpt-4o-2024-11-20') to non-Copilot APIs that don't recognize them.
+    const rawModelId = this.deps.getCurrentModelId();
+    const resolvedModelId = await providerManager.resolveModelId(rawModelId);
+    const maxTokensValue = requestOptions._maxTokensValue;
+    const reasoningEffort = requestOptions._reasoningEffort;
+    const { _maxTokensValue, _reasoningEffort, ...cleanedOptions } = requestOptions;
+
+    const messageId = `msg_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
+    const abortController = new AbortController();
+
+    let fullContent = '';
+    let toolCalls: any[] = [];
+    let finishReason = 'stop';
+    let usage: { promptTokens: number; completionTokens: number; totalTokens: number } | undefined;
+    let apiModel: string | undefined;
+
+    let cancellationListener: { dispose(): void } | null = null;
+    if (token) {
+      cancellationListener = token.onCancellationRequested(() => {
+        abortController.abort();
+      });
+    }
+
+    try {
+      const params: ChatCompletionParams = {
+        model: resolvedModelId,
+        messages: cleanedOptions.messages as ChatMessage[],
+        maxTokens: maxTokensValue || 4000,
+        temperature: cleanedOptions.temperature,
+        signal: abortController.signal,
+        reasoningEffort,
+      };
+
+      if (cleanedOptions.tools && cleanedOptions.tools.length > 0) {
+        params.tools = cleanedOptions.tools;
+        if (cleanedOptions.tool_choice) {
+          params.tool_choice = cleanedOptions.tool_choice;
+        }
+      }
+
+      const stream = await providerManager.chatCompletionStream(params);
+
+      // Accumulate tool call arguments by index
+      const toolCallAccumulator: Record<number, any> = {};
+
+      for await (const chunk of stream) {
+        if (chunk.contentDelta) {
+          const prevContent = fullContent;
+          fullContent += chunk.contentDelta;
+
+          this.deps.emitStreamingChunk({
+            chunkId: `${messageId}_${Date.now()}`,
+            messageId,
+            chatId: this.deps.getChatId(),
+            chatSessionId: this.deps.getChatSessionId(),
+            timestamp: Date.now(),
+            type: 'content',
+            contentDelta: { text: chunk.contentDelta },
+          });
+
+          // Report TTFT on first content
+          if (prevContent === '' && fullContent !== '' && !this.ttftReportedForTurn) {
+            this.ttftReportedForTurn = true;
+          }
+        }
+
+        if (chunk.toolCallDelta) {
+          const tc = chunk.toolCallDelta;
+          const idx = tc.index ?? 0;
+
+          if (!toolCallAccumulator[idx]) {
+            toolCallAccumulator[idx] = {
+              id: tc.id || '',
+              type: 'function',
+              function: { name: '', arguments: '' },
+            };
+          }
+
+          if (tc.id) toolCallAccumulator[idx].id = tc.id;
+          if (tc.function?.name) toolCallAccumulator[idx].function.name += tc.function.name;
+          if (tc.function?.arguments) toolCallAccumulator[idx].function.arguments += tc.function.arguments;
+
+          // Forward the incremental tool-call delta to the renderer so the UI
+          // shows tool-call progress live, matching the Copilot streaming path.
+          // Without this, the chat panel sits silent until the final 'complete'
+          // chunk — a UX regression noted in the local-changes review.
+          this.deps.emitStreamingChunk({
+            chunkId: `${messageId}_tc_${idx}_${Date.now()}`,
+            messageId,
+            chatId: this.deps.getChatId(),
+            chatSessionId: this.deps.getChatSessionId(),
+            timestamp: Date.now(),
+            type: 'tool_call',
+            toolCallDelta: {
+              index: idx,
+              id: tc.id,
+              type: 'function',
+              function: tc.function,
+            },
+          });
+        }
+
+        if (chunk.finishReason) {
+          finishReason = chunk.finishReason;
+        }
+
+        if (chunk.usage) {
+          usage = chunk.usage;
+        }
+
+        if (chunk.model) {
+          apiModel = chunk.model;
+        }
+      }
+
+      // Convert accumulated tool calls to array
+      toolCalls = Object.values(toolCallAccumulator).filter(tc => tc.id);
+
+      const result: Message = MessageHelper.createTextMessage(fullContent, 'assistant', messageId);
+      if (toolCalls.length > 0) {
+        result.tool_calls = toolCalls;
+      }
+
+      this.deps.emitStreamingChunk({
+        chunkId: `${messageId}_complete`,
+        messageId,
+        chatId: this.deps.getChatId(),
+        chatSessionId: this.deps.getChatSessionId(),
+        timestamp: Date.now(),
+        type: 'complete',
+        complete: {
+          messageId,
+          hasToolCalls: toolCalls.length > 0,
+        },
+      });
+
+      return {
+        message: result,
+        finishReason,
+        usage,
+        model: apiModel,
+      };
+    } catch (error) {
+      if (error instanceof CancellationError) {
+        throw error;
+      }
+
+      if (error instanceof Error && error.name === 'AbortError') {
+        throw this.buildStreamCancellationError(
+          'Fetch request was aborted',
+          { messageId, fullContent, toolCalls, usage, apiModel },
+        );
+      }
+
+      throw new GhcApiError(
+        error instanceof Error ? error.message : String(error),
+        0,
+      );
+    } finally {
+      cancellationListener?.dispose();
+    }
+  }
+
   async makeStreamingApiCall(requestOptions: any, token?: CancellationToken): Promise<StreamingApiResponse> {
+    // Wait for ProviderManager to finish loading config before routing
+    await providerManager.waitUntilReady();
+
+    // Route through ProviderManager for non-Copilot providers
+    if (providerManager.getActiveProviderId() !== 'copilot') {
+      return this.makeStreamingApiCallViaProvider(requestOptions, token);
+    }
+
     const session = await this.deps.getSessionFromAuthManager();
     if (!session) {
       throw new GhcApiError('No GitHub Copilot session available', 401);

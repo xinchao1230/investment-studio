@@ -8,6 +8,7 @@ import { StartupValidationResult } from '../../types/startupValidationTypes';
 import '../../styles/SignInPage.css';
 import { APP_NAME } from '@shared/constants/branding';
 import { AuthManagerProxy } from "../../lib/auth/authManagerProxy";
+import { createSkipLoginAuthData } from "../../lib/auth/authDataAdapter";
 
 interface SignInPageProps {
   // SignInPage can optionally receive pre-scanned startup results
@@ -443,6 +444,52 @@ export const SignInPage: React.FC<SignInPageProps> = ({ startupResult }) => {
     clearSessionState();
   };
 
+  // Skip Login — use own API key without GitHub Copilot
+  const [showProviderSetup, setShowProviderSetup] = useState(false);
+
+  const handleSkipLogin = async () => {
+    // Probe whether any non-Copilot provider is already configured under the
+    // _local profile. If not, open an inline setup dialog instead of failing
+    // — users can't reach Settings before signing in (chicken-and-egg).
+    try {
+      const probe = await (window as any).electronAPI?.provider?.hasApiKeyProvider?.();
+      if (probe && probe.success && probe.data === false) {
+        setShowProviderSetup(true);
+        return;
+      }
+    } catch {
+      // Probe is best-effort; fall through to attempting the sign-in below.
+    }
+
+    try {
+      setIsLoading(true);
+      const authManager = new AuthManagerProxy();
+      const skipAuthData = createSkipLoginAuthData();
+      await authManager.setCurrentAuth(skipAuthData);
+
+      // Trigger authSuccess so SignInWrapper navigates to /loading
+      const authSuccessEvent = new CustomEvent('ghc:authSuccess', {
+        detail: {
+          authInfo: skipAuthData,
+          source: 'skip_login',
+          provider: 'local',
+        },
+      });
+      window.dispatchEvent(authSuccessEvent);
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : 'Unknown error';
+      // Backend rejected skip-login (no provider configured) — surface the
+      // setup dialog so the user has a path forward.
+      if (msg.toLowerCase().includes('skip login requires')) {
+        setShowProviderSetup(true);
+      } else {
+        showError('Skip login failed: ' + msg);
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handleCopyCode = async () => {
     if (deviceCode?.user_code) {
       try {
@@ -670,6 +717,32 @@ export const SignInPage: React.FC<SignInPageProps> = ({ startupResult }) => {
                   </>
                 )}
               </Button>
+
+              {/* Divider */}
+              <div className="relative py-2">
+                <div className="absolute inset-0 flex items-center">
+                  <div className="w-full border-t border-gray-200"></div>
+                </div>
+                <div className="relative flex justify-center text-xs">
+                  <span className="px-2 bg-white text-gray-500">or</span>
+                </div>
+              </div>
+
+              {/* Skip Login — use own API key */}
+              <Button
+                onClick={handleSkipLogin}
+                variant="outline"
+                className="w-full"
+                disabled={isLoading}
+              >
+                <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+                </svg>
+                Skip Login (Use Own API Key)
+              </Button>
+              <p className="text-xs text-gray-500 text-center">
+                Configure OpenAI, DeepSeek, or other API keys in Settings
+              </p>
             </div>
           </CardContent>
         </Card>
@@ -845,6 +918,136 @@ export const SignInPage: React.FC<SignInPageProps> = ({ startupResult }) => {
         </Card>
         </div>
       )}
+
+      {/* Provider setup modal — opened from skip-login when no provider is configured */}
+      {showProviderSetup && (
+        <SkipLoginProviderSetup
+          onClose={() => setShowProviderSetup(false)}
+          onConfigured={async () => {
+            setShowProviderSetup(false);
+            // Re-attempt skip-login now that a provider exists
+            await handleSkipLogin();
+          }}
+        />
+      )}
+    </div>
+  );
+};
+/**
+ * Minimal inline provider-setup dialog used by Skip Login when no non-Copilot
+ * provider has been configured under the _local profile yet. Solves the
+ * chicken-and-egg problem where the full Settings → LLM Providers view is
+ * only reachable after a successful sign-in.
+ */
+type SkipProviderId = 'openai' | 'deepseek' | 'ollama' | 'custom-openai';
+
+const SKIP_PROVIDERS: Array<{ id: SkipProviderId; label: string; needsKey: boolean; needsUrl: boolean; defaultUrl: string }> = [
+  { id: 'openai', label: 'OpenAI', needsKey: true, needsUrl: false, defaultUrl: 'https://api.openai.com/v1' },
+  { id: 'deepseek', label: 'DeepSeek', needsKey: true, needsUrl: false, defaultUrl: 'https://api.deepseek.com/v1' },
+  { id: 'ollama', label: 'Ollama (Local)', needsKey: false, needsUrl: true, defaultUrl: 'http://localhost:11434/v1' },
+  { id: 'custom-openai', label: 'Custom (OpenAI-compatible)', needsKey: true, needsUrl: true, defaultUrl: '' },
+];
+
+const SkipLoginProviderSetup: React.FC<{ onClose: () => void; onConfigured: () => void }> = ({ onClose, onConfigured }) => {
+  const [selected, setSelected] = useState<SkipProviderId>('openai');
+  const [apiKey, setApiKey] = useState('');
+  const [baseUrl, setBaseUrl] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const spec = SKIP_PROVIDERS.find((p) => p.id === selected)!;
+
+  const handleSave = async () => {
+    setError(null);
+    if (spec.needsKey && !apiKey.trim()) {
+      setError('API key is required for this provider.');
+      return;
+    }
+    setBusy(true);
+    try {
+      const api = (window as any).electronAPI?.provider;
+      if (!api) throw new Error('Provider API unavailable');
+
+      const updates: Record<string, unknown> = { enabled: true };
+      if (spec.needsKey && apiKey.trim()) updates.apiKey = apiKey.trim();
+      if (spec.needsUrl && baseUrl.trim()) updates.baseUrl = baseUrl.trim();
+      else if (spec.needsUrl) updates.baseUrl = spec.defaultUrl;
+
+      const saveResult = await api.updateConfig(selected, updates);
+      if (!saveResult?.success) throw new Error(saveResult?.error || 'Failed to save provider config');
+
+      const switchResult = await api.switch(selected);
+      if (!switchResult?.success) throw new Error(switchResult?.error || 'Failed to activate provider');
+
+      onConfigured();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/40">
+      <div className="bg-white rounded-lg shadow-xl w-full max-w-md p-5">
+        <h2 className="text-base font-semibold mb-1">Configure an LLM Provider</h2>
+        <p className="text-xs text-gray-500 mb-4">
+          Skip Login uses your own API key instead of GitHub Copilot. Choose a provider to continue.
+        </p>
+
+        <label className="block text-xs font-medium mb-1">Provider</label>
+        <select
+          value={selected}
+          onChange={(e) => { setSelected(e.target.value as SkipProviderId); setError(null); }}
+          className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm mb-3"
+          disabled={busy}
+        >
+          {SKIP_PROVIDERS.map((p) => (
+            <option key={p.id} value={p.id}>{p.label}</option>
+          ))}
+        </select>
+
+        {spec.needsKey && (
+          <>
+            <label className="block text-xs font-medium mb-1">API Key</label>
+            <input
+              type="password"
+              value={apiKey}
+              onChange={(e) => setApiKey(e.target.value)}
+              placeholder="sk-..."
+              className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm mb-3"
+              autoComplete="off"
+              disabled={busy}
+            />
+          </>
+        )}
+
+        {spec.needsUrl && (
+          <>
+            <label className="block text-xs font-medium mb-1">Base URL</label>
+            <input
+              type="text"
+              value={baseUrl}
+              onChange={(e) => setBaseUrl(e.target.value)}
+              placeholder={spec.defaultUrl || 'https://your-api.example.com/v1'}
+              className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm mb-3"
+              autoComplete="off"
+              disabled={busy}
+            />
+          </>
+        )}
+
+        {error && (
+          <div className="mb-3 text-xs text-red-600">{error}</div>
+        )}
+
+        <div className="flex justify-end gap-2">
+          <Button variant="outline" onClick={onClose} disabled={busy}>Cancel</Button>
+          <Button onClick={handleSave} disabled={busy}>
+            {busy ? 'Saving...' : 'Save & Continue'}
+          </Button>
+        </div>
+      </div>
     </div>
   );
 };

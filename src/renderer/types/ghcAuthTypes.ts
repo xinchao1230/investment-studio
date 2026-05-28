@@ -5,7 +5,7 @@ export interface GhcUser {
   email: string;
   name: string;
   avatarUrl?: string;
-  copilotPlan: 'individual' | 'business' | 'enterprise';
+  copilotPlan: 'individual' | 'business' | 'enterprise' | 'none';
 }
 
 export interface GhcSession {

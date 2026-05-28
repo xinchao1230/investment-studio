@@ -503,6 +503,19 @@ export interface ElectronAPI {
     ) => () => void;
   };
 
+  // Provider APIs - multi-provider LLM management
+  provider: {
+    getAll: () => Promise<{ success: boolean; data?: any[]; error?: string }>;
+    getActive: () => Promise<{ success: boolean; data?: string; error?: string }>;
+    switch: (targetId: string) => Promise<{ success: boolean; error?: string }>;
+    getConfig: (id: string) => Promise<{ success: boolean; data?: any; error?: string }>;
+    updateConfig: (id: string, updates: Record<string, unknown>) => Promise<{ success: boolean; error?: string }>;
+    testConnection: (id?: string) => Promise<{ success: boolean; data?: any; error?: string }>;
+    listModels: (id?: string) => Promise<{ success: boolean; data?: any[]; error?: string }>;
+    hasApiKeyProvider: () => Promise<{ success: boolean; data?: boolean; error?: string }>;
+    onProviderSwitched: (callback: (data: { activeProvider: string }) => void) => () => void;
+  };
+
   // Feature Flags APIs - developer feature toggles (read-only)
   featureFlags: {
     // Get values of all feature flags
@@ -2002,6 +2015,22 @@ export const electronAPI: ElectronAPI = {
       const listener = (event: any, data: any) => callback(data);
       ipcRenderer.on('models:updated', listener);
       return () => ipcRenderer.removeListener('models:updated', listener);
+    },
+  },
+  provider: {
+    getAll: () => ipcRenderer.invoke('provider:getAll'),
+    getActive: () => ipcRenderer.invoke('provider:getActive'),
+    switch: (targetId: string) => ipcRenderer.invoke('provider:switch', targetId),
+    getConfig: (id: string) => ipcRenderer.invoke('provider:getConfig', id),
+    updateConfig: (id: string, updates: Record<string, unknown>) =>
+      ipcRenderer.invoke('provider:updateConfig', id, updates),
+    testConnection: (id?: string) => ipcRenderer.invoke('provider:testConnection', id),
+    listModels: (id?: string) => ipcRenderer.invoke('provider:listModels', id),
+    hasApiKeyProvider: () => ipcRenderer.invoke('provider:hasApiKeyProvider'),
+    onProviderSwitched: (callback: (data: { activeProvider: string }) => void) => {
+      const listener = (_event: any, data: any) => callback(data);
+      ipcRenderer.on('provider:switched', listener);
+      return () => ipcRenderer.removeListener('provider:switched', listener);
     },
   },
   featureFlags: {
