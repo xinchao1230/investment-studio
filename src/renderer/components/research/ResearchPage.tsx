@@ -30,6 +30,17 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Button } from '../ui/button';
 import './research-theme.css';
 
+// File extensions that should open as ContentTabs but cannot be rendered
+// inline — these route to the open-externally fallback UI in ContentTabs.
+// Used for both tab-type derivation and lazy-content-load skipping (we
+// must NOT read xlsx as utf-8: it would corrupt the cache and the file).
+const BINARY_TAB_EXTENSIONS = new Set([
+  'xls', 'xlsx', 'xlsm', 'xlsb', 'ods',
+  'doc', 'docx', 'odt', 'rtf',
+  'ppt', 'pptx', 'odp',
+  'zip', 'tar', 'gz', '7z', 'rar',
+]);
+
 // Local resizable divider for the research workspace. The upstream
 // ResizableDivider now only accepts `className?` and uses atoms internally,
 // so we implement a simple drag-to-resize divider inline.
@@ -801,8 +812,13 @@ export const ResearchPage: React.FC = () => {
   );
 
   const handleOpenFile = useCallback(
-    (file: TargetFile) => {
-      const owningCode = findOwningCode(file.absPath);
+    (file: TargetFile, opts?: { bucketCode?: string }) => {
+      // Resolve the tab bucket. Normally a file belongs to a target (its
+      // path is under the target directory); for chat-generated artifacts
+      // (e.g. an LLM-produced xlsx in the chat-session attachments dir)
+      // the caller supplies `bucketCode` so we still surface the file as
+      // a tab — bucketed under whichever target the user currently sees.
+      const owningCode = opts?.bucketCode ?? findOwningCode(file.absPath);
       if (!owningCode) {
         console.warn('[ResearchPage] handleOpenFile: no owning target for', file.absPath);
         return;
@@ -816,7 +832,12 @@ export const ResearchPage: React.FC = () => {
         ...prev,
         [owningCode]: openTabRec(prev[owningCode], file.absPath),
       }));
-      void ensureContentLoaded(file.absPath);
+      // Skip the text-content read for binary types (xlsx etc); the tab
+      // renders an open-externally fallback and never needs the bytes.
+      const ext = (file.absPath.split('.').pop() ?? '').toLowerCase();
+      if (!BINARY_TAB_EXTENSIONS.has(ext)) {
+        void ensureContentLoaded(file.absPath);
+      }
     },
     [findOwningCode, ensureContentLoaded, setTabsByCode, handleSelectTarget],
   );
@@ -1060,7 +1081,11 @@ export const ResearchPage: React.FC = () => {
       const ext = (lower.split('.').pop() ?? '').toLowerCase();
       let type: Tab['type'];
       let language: string | undefined;
-      if (ext === 'csv' || ext === 'tsv') {
+      if (BINARY_TAB_EXTENSIONS.has(ext)) {
+        // xlsx / docx / pptx / archives — surface as tabs but render an
+        // open-externally placeholder. Never attempt a utf-8 read.
+        type = 'binary';
+      } else if (ext === 'csv' || ext === 'tsv') {
         type = 'csv';
       } else if (ext === 'md' || ext === 'markdown') {
         type = 'markdown';
@@ -1130,6 +1155,7 @@ export const ResearchPage: React.FC = () => {
   // Lazily load file content for any visible tab that hasn't been read yet.
   useEffect(() => {
     for (const t of visibleTabs) {
+      if (t.type === 'binary') continue; // binary tabs never read as utf-8
       if (!fileContentCacheRef.current.has(t.id)) {
         void ensureContentLoaded(t.id);
       }
@@ -1138,15 +1164,19 @@ export const ResearchPage: React.FC = () => {
 
   // === Chat file-link routing (workspace mode) ===================
   // When the user clicks a file link in the embedded chat (e.g. an LLM-
-  // produced report.md), open it as a tab in ContentTabs rather than the
-  // chat-side InlineFilePreviewPanel — the middle pane is now the single
-  // source of truth for the file viewer experience.
+  // produced report.md or an xlsx attached to the chat session), open it
+  // as a tab in ContentTabs rather than the chat-side InlineFilePreviewPanel
+  // — the middle pane is the single source of truth for the file viewer
+  // experience while Research workspace mode is active.
   //
   // Flow: GeneratedFileCards / Message dispatch a `fileViewer:open` custom
   // event with `{ file: { name, url } }`. We listen in capture phase, set
   // `__researchTabOpenEnabled` so ChatSide bails, resolve the URL to an
-  // absolute path, find its owning target, switch + open as tab. Files
-  // outside any known target fall through to the inline preview as before.
+  // absolute path, then bucket the tab under either:
+  //   1. The target that owns the path (target-internal file), or
+  //   2. The currently-selected target (chat-attached artifact).
+  // If neither is available (no target selected), we leave the event
+  // unclaimed so ChatSide's InlineFilePreviewPanel can take over.
   useEffect(() => {
     if (activeMode !== 'workspace') return;
     (window as any).__researchTabOpenEnabled = true;
@@ -1165,11 +1195,15 @@ export const ResearchPage: React.FC = () => {
         ? decodeURIComponent(url.replace(/^file:\/\/\/?/, '/').replace(/^\/([a-zA-Z]:)/, '$1'))
         : url;
       const owningCode = findOwningCode(absPath);
-      if (!owningCode) return; // not under any known target — let inline preview handle
+      const bucketCode = owningCode ?? selectedCodeRef.current;
+      if (!bucketCode) return; // no target context — let inline preview handle
       (ce as any)._inlineHandled = true;
       ce.preventDefault?.();
       ce.stopImmediatePropagation?.();
-      handleOpenFile({ relPath: absPath, absPath, mtime: 0 });
+      handleOpenFile(
+        { relPath: absPath, absPath, mtime: 0 },
+        { bucketCode },
+      );
     };
     window.addEventListener('fileViewer:open', handle, true);
     return () => {
