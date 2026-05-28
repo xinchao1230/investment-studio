@@ -9,7 +9,7 @@ import { agentChatSessionCacheManager } from '@/lib/chat/agentChatSessionCacheMa
 
 /** Provider display names for the badge */
 const PROVIDER_LABELS: Record<string, string> = {
-  copilot: 'GitHub Copilot',
+  copilot: 'Copilot',
   openai: 'OpenAI',
   deepseek: 'DeepSeek',
   ollama: 'Ollama',

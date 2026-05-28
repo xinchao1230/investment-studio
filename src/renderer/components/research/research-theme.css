@@ -520,7 +520,7 @@
    the Send button). */
 [data-theme="research"] .chat-view--compact .chat-input-container .model-selector,
 [data-theme="research"] .chat-view--compact .chat-input-container .model-button {
-  width: 210px !important;
+  width: 250px !important;
 }
 
 /* Model dropdown — wider than the trigger so full model names fit;
@@ -725,7 +725,7 @@
 /* Model selector trigger: smaller text + tighter padding. */
 [data-theme="research"] .chat-view--compact .chat-input-container .model-selector,
 [data-theme="research"] .chat-view--compact .chat-input-container .model-button {
-  width: 210px !important;
+  width: 250px !important;
   height: 28px;
   min-height: 28px;
   font-size: 12px;
