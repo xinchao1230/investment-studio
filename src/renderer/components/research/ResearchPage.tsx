@@ -30,6 +30,23 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Button } from '../ui/button';
 import './research-theme.css';
 
+// Spreadsheet extensions: routed through the main-process ExcelService and
+// rendered with <UniverSheet> in the middle pane. Loaded as binary via
+// IPC — we must NOT read these as utf-8 (would corrupt cache + content).
+const SPREADSHEET_TAB_EXTENSIONS = new Set([
+  'xls', 'xlsx', 'xlsm', 'xlsb', 'ods',
+]);
+
+// File extensions that should open as ContentTabs but cannot be rendered
+// inline — these route to the open-externally fallback UI in ContentTabs.
+// Used for both tab-type derivation and lazy-content-load skipping (we
+// must NOT read these as utf-8: it would corrupt the cache and the file).
+const BINARY_TAB_EXTENSIONS = new Set([
+  'doc', 'docx', 'odt', 'rtf',
+  'ppt', 'pptx', 'odp',
+  'zip', 'tar', 'gz', '7z', 'rar',
+]);
+
 // Local resizable divider for the research workspace. The upstream
 // ResizableDivider now only accepts `className?` and uses atoms internally,
 // so we implement a simple drag-to-resize divider inline.
@@ -188,6 +205,12 @@ export const ResearchPage: React.FC = () => {
   const [contentCacheVersion, setContentCacheVersion] = useState(0);
   // Track in-flight reads to avoid duplicate fetches when visibleTabs churns.
   const inflightReadsRef = useRef<Set<string>>(new Set());
+
+  // Spreadsheet cache, keyed by absPath. Stores Univer IWorkbookData
+  // returned by `electronAPI.excel.readFile` so <UniverSheet> in the
+  // ContentTabs middle pane can render xlsx files clicked from chat.
+  const sheetDataCacheRef = useRef<Map<string, any>>(new Map());
+  const inflightSheetReadsRef = useRef<Set<string>>(new Set());
 
   const targetChats = useTargetChats();
   const targetsRef = useRef(targets);
@@ -756,6 +779,34 @@ export const ResearchPage: React.FC = () => {
     }
   }, []);
 
+  // Async-load xlsx / csv via main-process ExcelService into the sheet
+  // cache. Result is Univer's IWorkbookData (see excelService.ts).
+  // Idempotent and de-duplicates concurrent reads.
+  const ensureSheetDataLoaded = useCallback(async (absPath: string) => {
+    if (sheetDataCacheRef.current.has(absPath)) return;
+    if (inflightSheetReadsRef.current.has(absPath)) return;
+    const api = (window.electronAPI as any)?.excel;
+    if (!api?.readFile) return;
+    inflightSheetReadsRef.current.add(absPath);
+    try {
+      const result = await api.readFile(absPath);
+      if (result && result.success && result.data) {
+        sheetDataCacheRef.current.set(absPath, result.data);
+      } else {
+        sheetDataCacheRef.current.set(absPath, {
+          __error: result?.error ?? 'Failed to read spreadsheet',
+        });
+      }
+    } catch (err: any) {
+      sheetDataCacheRef.current.set(absPath, {
+        __error: err?.message ?? String(err),
+      });
+    } finally {
+      inflightSheetReadsRef.current.delete(absPath);
+      setContentCacheVersion((v) => v + 1);
+    }
+  }, []);
+
   // ── Filesystem-change subscriptions ────────────────────────────────
   // When a builtin tool (e.g. LLM-initiated portfolio_init_target,
   // write_file, move_file, download_and_save_as) mutates a file inside
@@ -801,8 +852,13 @@ export const ResearchPage: React.FC = () => {
   );
 
   const handleOpenFile = useCallback(
-    (file: TargetFile) => {
-      const owningCode = findOwningCode(file.absPath);
+    (file: TargetFile, opts?: { bucketCode?: string }) => {
+      // Resolve the tab bucket. Normally a file belongs to a target (its
+      // path is under the target directory); for chat-generated artifacts
+      // (e.g. an LLM-produced xlsx in the chat-session attachments dir)
+      // the caller supplies `bucketCode` so we still surface the file as
+      // a tab — bucketed under whichever target the user currently sees.
+      const owningCode = opts?.bucketCode ?? findOwningCode(file.absPath);
       if (!owningCode) {
         console.warn('[ResearchPage] handleOpenFile: no owning target for', file.absPath);
         return;
@@ -816,9 +872,17 @@ export const ResearchPage: React.FC = () => {
         ...prev,
         [owningCode]: openTabRec(prev[owningCode], file.absPath),
       }));
-      void ensureContentLoaded(file.absPath);
+      // Skip the text-content read for binary / spreadsheet types; the
+      // bytes would either corrupt the cache (xlsx is a zip) or be
+      // useless (docx/pptx). Spreadsheets get their own read path below.
+      const ext = (file.absPath.split('.').pop() ?? '').toLowerCase();
+      if (SPREADSHEET_TAB_EXTENSIONS.has(ext)) {
+        void ensureSheetDataLoaded(file.absPath);
+      } else if (!BINARY_TAB_EXTENSIONS.has(ext)) {
+        void ensureContentLoaded(file.absPath);
+      }
     },
-    [findOwningCode, ensureContentLoaded, setTabsByCode, handleSelectTarget],
+    [findOwningCode, ensureContentLoaded, ensureSheetDataLoaded, setTabsByCode, handleSelectTarget],
   );
 
   // Rewrite any open-tab record + cached content keyed by `oldAbsPath` to
@@ -1056,11 +1120,21 @@ export const ResearchPage: React.FC = () => {
     const pathPrefix = `${target.name}.${target.stock_code.split('.').pop() ?? target.stock_code}`;
     return sortedTabs(state).map((rec) => {
       const cached = fileContentCacheRef.current.get(rec.absPath);
+      const sheetCached = sheetDataCacheRef.current.get(rec.absPath);
       const lower = rec.absPath.toLowerCase();
       const ext = (lower.split('.').pop() ?? '').toLowerCase();
       let type: Tab['type'];
       let language: string | undefined;
-      if (ext === 'csv' || ext === 'tsv') {
+      if (SPREADSHEET_TAB_EXTENSIONS.has(ext)) {
+        // xlsx / xls / ods — rendered by <UniverSheet> in ContentTabs.
+        // sheetData (Univer IWorkbookData) is loaded async via
+        // electronAPI.excel.readFile and cached in sheetDataCacheRef.
+        type = 'spreadsheet';
+      } else if (BINARY_TAB_EXTENSIONS.has(ext)) {
+        // xlsx / docx / pptx / archives — surface as tabs but render an
+        // open-externally placeholder. Never attempt a utf-8 read.
+        type = 'binary';
+      } else if (ext === 'csv' || ext === 'tsv') {
         type = 'csv';
       } else if (ext === 'md' || ext === 'markdown') {
         type = 'markdown';
@@ -1118,6 +1192,7 @@ export const ResearchPage: React.FC = () => {
         language,
         mtime: cached?.mtime ?? 0,
         pathPrefix,
+        sheetData: sheetCached && !sheetCached.__error ? sheetCached : undefined,
       };
     });
     // contentCacheVersion intentionally tracked to refresh content cells.
@@ -1130,23 +1205,35 @@ export const ResearchPage: React.FC = () => {
   // Lazily load file content for any visible tab that hasn't been read yet.
   useEffect(() => {
     for (const t of visibleTabs) {
+      if (t.type === 'binary') continue; // binary tabs never read as utf-8
+      if (t.type === 'spreadsheet') {
+        if (!sheetDataCacheRef.current.has(t.id)) {
+          void ensureSheetDataLoaded(t.id);
+        }
+        continue;
+      }
       if (!fileContentCacheRef.current.has(t.id)) {
         void ensureContentLoaded(t.id);
       }
     }
-  }, [visibleTabs, ensureContentLoaded]);
+  }, [visibleTabs, ensureContentLoaded, ensureSheetDataLoaded]);
 
   // === Chat file-link routing (workspace mode) ===================
   // When the user clicks a file link in the embedded chat (e.g. an LLM-
-  // produced report.md), open it as a tab in ContentTabs rather than the
-  // chat-side InlineFilePreviewPanel — the middle pane is now the single
-  // source of truth for the file viewer experience.
+  // produced report.md or an xlsx attached to the chat session), open it
+  // as a tab in ContentTabs rather than the chat-side InlineFilePreviewPanel
+  // — the middle pane is the single source of truth for the file viewer
+  // experience while Research workspace mode is active.
   //
   // Flow: GeneratedFileCards / Message dispatch a `fileViewer:open` custom
-  // event with `{ file: { name, url } }`. We listen in capture phase, set
-  // `__researchTabOpenEnabled` so ChatSide bails, resolve the URL to an
-  // absolute path, find its owning target, switch + open as tab. Files
-  // outside any known target fall through to the inline preview as before.
+  // event with `{ file: { name, url } }`. We set `__researchTabOpenEnabled`
+  // so ChatSide unconditionally bails for the lifetime of workspace mode,
+  // resolve the URL to an absolute path, then bucket the tab under either:
+  //   1. The target that owns the path (target-internal file), or
+  //   2. The currently-selected target (chat-attached artifact).
+  // Fallback when neither is available (rare — workspace mode with no
+  // target selected): open with the system default app. Either way we
+  // claim the event so it never surfaces in InlineFilePreviewPanel.
   useEffect(() => {
     if (activeMode !== 'workspace') return;
     (window as any).__researchTabOpenEnabled = true;
@@ -1154,7 +1241,7 @@ export const ResearchPage: React.FC = () => {
       const ce = event as CustomEvent<{ file?: { name?: string; url?: string } }>;
       const file = ce.detail?.file;
       if (!file?.url) return;
-      // Only intercept local files — remote URLs fall through.
+      // Only intercept local files — remote URLs fall through to overlay.
       const url = file.url;
       const isLocal =
         url.startsWith('file://') ||
@@ -1164,12 +1251,27 @@ export const ResearchPage: React.FC = () => {
       const absPath = url.startsWith('file://')
         ? decodeURIComponent(url.replace(/^file:\/\/\/?/, '/').replace(/^\/([a-zA-Z]:)/, '$1'))
         : url;
-      const owningCode = findOwningCode(absPath);
-      if (!owningCode) return; // not under any known target — let inline preview handle
+      // Claim the event regardless of whether we can resolve a bucket —
+      // the inline right-column preview must never fire while workspace
+      // mode owns the surface.
       (ce as any)._inlineHandled = true;
       ce.preventDefault?.();
       ce.stopImmediatePropagation?.();
-      handleOpenFile({ relPath: absPath, absPath, mtime: 0 });
+      const owningCode = findOwningCode(absPath);
+      const bucketCode = owningCode ?? selectedCodeRef.current;
+      if (bucketCode) {
+        handleOpenFile(
+          { relPath: absPath, absPath, mtime: 0 },
+          { bucketCode },
+        );
+        return;
+      }
+      // No target context — open with system default app as fallback.
+      try {
+        void window.electronAPI.workspace?.openPath?.(absPath);
+      } catch {
+        // best-effort
+      }
     };
     window.addEventListener('fileViewer:open', handle, true);
     return () => {

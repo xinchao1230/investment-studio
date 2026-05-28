@@ -15,12 +15,15 @@ function ChatSide(props: {
     (window as any).__inlineFilePreviewEnabled = true;
 
     const handleFileViewerOpen = (event: Event) => {
-      // Investment-studio Research mode: when the file lives under a target
-      // directory, ResearchPage opens it as a workspace tab instead of an
-      // inline preview. ResearchPage sets this flag while it's mounted in
-      // workspace mode and installs its own capture-phase listener that
-      // marks the event as `_inlineHandled` if it claimed it.
+      // When Research Assistant workspace mode is mounted, the middle
+      // ContentTabs pane is the single source of truth for previewing
+      // files clicked from the embedded chat. Defer unconditionally so
+      // the user never sees a stray right-column inline preview while
+      // workspace mode is the active surface — this is more robust than
+      // relying on capture-vs-bubble event ordering, which can race when
+      // listeners register in unexpected order.
       if ((window as any).__researchTabOpenEnabled) return;
+      if ((event as any)._inlineHandled) return;
 
       const customEvent = event as CustomEvent;
       const { file } = customEvent.detail || {};
@@ -31,10 +34,10 @@ function ChatSide(props: {
         previewActions.open(file);
       }
     };
-    window.addEventListener('fileViewer:open', handleFileViewerOpen, true);
+    window.addEventListener('fileViewer:open', handleFileViewerOpen, false);
     return () => {
       (window as any).__inlineFilePreviewEnabled = false;
-      window.removeEventListener('fileViewer:open', handleFileViewerOpen, true);
+      window.removeEventListener('fileViewer:open', handleFileViewerOpen, false);
     };
   }, []);
 
