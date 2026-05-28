@@ -14,7 +14,6 @@ import {
   Pencil,
   Settings,
   PanelLeftClose,
-  LogOut,
 } from 'lucide-react';
 import type { TargetFile, MoveResult } from './usePortfolio';
 import type { ResearchChatSessionMeta } from './researchChatIpc';
@@ -708,7 +707,7 @@ export const TargetListSidebar: React.FC<TargetListSidebarProps> = ({
   return (
     <div className="rw-pane-left flex flex-col h-full" style={{ width }}>
       {/* Tab row with mode tabs + action buttons */}
-      <div className="flex items-center px-3 pt-3 pb-2 rw-divider gap-3">
+      <div className="flex items-center px-3 pb-2 rw-divider gap-3" style={{ paddingTop: 40 }}>
         <button
           type="button"
           className={`rw-side-tab ${activeMode === 'workspace' ? 'is-active' : ''}`}
@@ -721,7 +720,7 @@ export const TargetListSidebar: React.FC<TargetListSidebarProps> = ({
           className={`rw-side-tab ${activeMode === 'stella' ? 'is-active' : ''}`}
           onClick={() => onModeChange('stella')}
         >
-          Ask
+          Chat
         </button>
         <div className="flex-1" />
         <div className="flex items-center gap-1">
@@ -762,26 +761,6 @@ export const TargetListSidebar: React.FC<TargetListSidebarProps> = ({
             }}
           >
             <Settings size={14} />
-          </button>
-          <button
-            type="button"
-            className="rw-side-icon-btn"
-            title="Logout"
-            aria-label="Logout"
-            onClick={async () => {
-              const confirmed = window.confirm(
-                'Are you sure you want to sign out? Any unsaved work in this workspace will be lost.'
-              );
-              if (!confirmed) return;
-              try {
-                await window.electronAPI.auth.signOut();
-              } catch (err) {
-                console.error('[Logout] Sign-out failed:', err);
-                window.alert('Sign out failed. Please try again.');
-              }
-            }}
-          >
-            <LogOut size={14} />
           </button>
           {onCollapse && (
             <button
@@ -860,7 +839,7 @@ export const TargetListSidebar: React.FC<TargetListSidebarProps> = ({
                       {pill}
                     </span>
                   )}
-                  <span className="truncate flex-1">{chat.title || 'Untitled'}</span>
+                  <span className="truncate flex-1">{chat.title === 'New Chat' ? '新对话' : chat.title || 'Untitled'}</span>
                   {(useUnified ? onRenameAnyChat : onRenameStellaChat) && (
                     <button
                       type="button"
@@ -1037,7 +1016,7 @@ export const TargetListSidebar: React.FC<TargetListSidebarProps> = ({
                         >
                           <span style={{ width: 13 }} className="flex-shrink-0" />
                           <MessageSquare size={12} className="flex-shrink-0 mr-1 text-[var(--rw-text-3)]" />
-                          <span className="truncate flex-1">{chat.title || 'Untitled'}</span>
+                          <span className="truncate flex-1">{chat.title === 'New Chat' ? '新对话' : chat.title || 'Untitled'}</span>
                           {onRenameChat && (
                             <button
                               type="button"

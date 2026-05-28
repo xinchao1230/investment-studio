@@ -60,8 +60,28 @@ export async function sendUserMessageOptimistically<T>(options: {
 export async function sendUserMessage(message: UserMessage) {
   try {
     logger.debug('[SendUserMessage] 📤 Sending message...');
+
+    // After sign-out → sign-in the session may still be bootstrapping.
+    // Wait up to 8s for a current session to appear before giving up.
+    let chatSessionId = agentChatSessionCacheManager.getCurrentChatSessionId();
+    if (!chatSessionId) {
+      chatSessionId = await new Promise<string | null>((resolve) => {
+        const timeout = setTimeout(() => { unsub(); resolve(null); }, 8000);
+        const unsub = agentChatSessionCacheManager.subscribeToCurrentChatSessionId(() => {
+          const sid = agentChatSessionCacheManager.getCurrentChatSessionId();
+          if (sid) { clearTimeout(timeout); unsub(); resolve(sid); }
+        });
+        // Re-check in case it arrived between the read and subscribe
+        const immediate = agentChatSessionCacheManager.getCurrentChatSessionId();
+        if (immediate) { clearTimeout(timeout); unsub(); resolve(immediate); }
+      });
+      if (chatSessionId) {
+        await agentChatSessionCacheManager.waitForSendReady(chatSessionId, 5000);
+      }
+    }
+
     await sendUserMessageOptimistically({
-      chatSessionId: agentChatSessionCacheManager.getCurrentChatSessionId(),
+      chatSessionId,
       userMessage: message,
       cacheManager: agentChatSessionCacheManager,
       send: () => agentChatIpc.streamMessage(message, {

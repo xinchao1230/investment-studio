@@ -1,4 +1,5 @@
-import { useState, useRef, useEffect, memo } from 'react';
+import React, { useState, useRef, useEffect, memo } from 'react';
+import { PROVIDER_ICONS } from '../../ui/icons/ProviderIcons';
 import { profileDataManager } from '@/lib/userData/profileDataManager';
 import { useAgentConfig } from '../../userData/userDataProvider';
 import { getModelById, getModelCapabilities } from '@/lib/models/ghcModels';
@@ -9,6 +10,7 @@ import { agentChatSessionCacheManager } from '@/lib/chat/agentChatSessionCacheMa
 
 /** Provider display names for the badge */
 const PROVIDER_LABELS: Record<string, string> = {
+  copilot: 'Copilot',
   openai: 'OpenAI',
   deepseek: 'DeepSeek',
   ollama: 'Ollama',
@@ -135,9 +137,26 @@ function Selector(props: Props) {
 
   // Track active provider for the badge
   const activeProvider = useActiveProvider();
-  const providerLabel = activeProvider && activeProvider !== 'copilot'
+  const providerLabel = activeProvider
     ? PROVIDER_LABELS[activeProvider] || activeProvider
     : null;
+
+  // When the provider switches, the current model may not exist in the new
+  // provider's model list. Auto-select the first available model so the user
+  // isn't stuck with an invalid model ID in the text box.
+  useEffect(() => {
+    if (!activeProvider || availableModels.length === 0) return;
+    // If the current model is already in the new list, nothing to do
+    if (displayModel && availableModels.some(m => m.id === displayModel)) return;
+    // Pick the first model from the new provider
+    const fallback = availableModels[0];
+    if (fallback) {
+      setPendingModel(fallback.id);
+      if (currentChatId) {
+        updateModel(fallback.id);
+      }
+    }
+  }, [activeProvider, availableModels]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Scroll the currently selected option into view when the dropdown opens.
   const selectedOptionRef = useScrollSelectedIntoView<HTMLButtonElement>(
@@ -211,9 +230,13 @@ function Selector(props: Props) {
         disabled={isLoading || shouldLockComposeUi}
         title="Select AI Model"
       >
-        {providerLabel && (
+        {activeProvider && PROVIDER_ICONS[activeProvider] ? (
+          <span className="provider-badge provider-badge--icon" title={providerLabel || activeProvider}>
+            {React.createElement(PROVIDER_ICONS[activeProvider])}
+          </span>
+        ) : providerLabel ? (
           <span className="provider-badge">{providerLabel}</span>
-        )}
+        ) : null}
         <span className="model-name">
           {currentModelInfo?.name || displayModel || 'Select Model'}
         </span>

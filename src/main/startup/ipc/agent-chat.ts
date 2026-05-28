@@ -70,6 +70,18 @@ export default function(ctx: Context) {
     }
   });
 
+  // Start a new chat for the current user's primary agent (main-process-authoritative)
+  ipcMain.handle('agentChat:startNewChatForPrimaryAgent', async () => {
+    try {
+      const result = await agentChatManager.startNewChatForPrimaryAgent();
+      return result
+        ? { success: true, chatId: result.chatId, chatSessionId: result.instance.getChatSessionId() }
+        : { success: false };
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+    }
+  });
+
   // Process conversation (with streaming support)
   ipcMain.handle('agentChat:streamMessage', async (event, message: UserMessage, targetChatSessionId?: string) => {
     try {

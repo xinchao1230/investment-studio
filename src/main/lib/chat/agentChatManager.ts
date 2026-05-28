@@ -6,6 +6,8 @@ import { Message, MessageHelper, UserMessage } from '@shared/types/chatTypes';
 import { interactiveRequestManager } from './interactiveRequestManager';
 import { BuiltinToolsManager } from '../mcpRuntime/builtinTools/builtinToolsManager';
 import { profileCacheManager } from '../userDataADO/profileCacheManager';
+import { getDefaultPrimaryAgentName } from '../userDataADO/types/profile';
+import { BRAND_NAME } from '@shared/constants/branding';
 import { generateChatSessionId as generateRuntimeChatSessionId } from '../userDataADO/pathUtils';
 import { chatSessionStore } from './chatSessionStore';
 import type {
@@ -566,10 +568,38 @@ export class AgentChatManager {
    * 2. Ensure instance exists (via getOrCreateInstanceByChatSession)
    * 3. Call switchToChatSession to handle switching and notification uniformly
    */
+  /**
+   * Resolve the primary agent's chatId for the current user.
+   * Returns null if no profile/chats exist.
+   */
+  private resolvePrimaryAgentChatId(): string | null {
+    if (!this.currentUserAlias) return null;
+    const profile = profileCacheManager.getCachedProfile(this.currentUserAlias);
+    if (!profile?.chats?.length) return null;
+    const primaryName = profile.primaryAgent || getDefaultPrimaryAgentName(BRAND_NAME);
+    const primary = profile.chats.find((c) => c.agent?.name === primaryName);
+    return primary?.chat_id || profile.chats[0]?.chat_id || null;
+  }
+
   async startNewChatFor(chatId: string): Promise<AgentChat | null> {
     if (!chatId) {
       logger.error('[AgentChatManager] chatId is required for startNewChatFor');
       return null;
+    }
+
+    // Validate chatId belongs to the current user.  After sign-out → sign-in
+    // the renderer may reference a stale chatId from the previous user.
+    if (this.currentUserAlias) {
+      const chatConfig = profileCacheManager.getChatConfig(this.currentUserAlias, chatId);
+      if (!chatConfig?.agent) {
+        const fallback = this.resolvePrimaryAgentChatId();
+        if (fallback) {
+          logger.warn('[AgentChatManager] chatId not found for current user, falling back to primary agent', 'startNewChatFor', {
+            requestedChatId: chatId, fallbackChatId: fallback, alias: this.currentUserAlias,
+          });
+          chatId = fallback;
+        }
+      }
     }
 
     logger.info('[AgentChatManager] Starting new chat for chatId:', 'startNewChatFor', { chatId });
@@ -607,6 +637,21 @@ export class AgentChatManager {
     }
 
     return instance;
+  }
+
+  /**
+   * Start a new chat for the current user's primary agent.
+   * Resolves the chatId entirely on the main process — avoids renderer-side
+   * stale-profile races during sign-out → sign-in transitions.
+   */
+  async startNewChatForPrimaryAgent(): Promise<{ chatId: string; instance: AgentChat } | null> {
+    const chatId = this.resolvePrimaryAgentChatId();
+    if (!chatId) {
+      logger.error('[AgentChatManager] Cannot resolve primary agent chatId', 'startNewChatForPrimaryAgent', { alias: this.currentUserAlias });
+      return null;
+    }
+    const instance = await this.startNewChatFor(chatId);
+    return instance ? { chatId, instance } : null;
   }
 
   /**

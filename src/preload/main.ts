@@ -885,6 +885,7 @@ export interface ElectronAPI {
         };
       },
     ) => Promise<{ success: boolean; chatSessionId?: string; error?: string }>;
+    startNewChatForPrimaryAgent: () => Promise<{ success: boolean; chatId?: string; chatSessionId?: string; error?: string }>;
     streamMessage: (
       message: UserMessage,
       targetChatSessionId?: string,
@@ -2226,6 +2227,8 @@ export const electronAPI: ElectronAPI = {
         };
       },
     ) => ipcRenderer.invoke('agentChat:startNewChatFor', chatId),
+    startNewChatForPrimaryAgent: () =>
+      ipcRenderer.invoke('agentChat:startNewChatForPrimaryAgent'),
     streamMessage: (message: UserMessage, targetChatSessionId?: string) =>
       ipcRenderer.invoke('agentChat:streamMessage', message, targetChatSessionId),
     // 🔥 Retry the last failed conversation

@@ -131,6 +131,20 @@ export class ProviderManager {
       }
     }
 
+    // When a Copilot user signs in, auto-switch to the copilot provider.
+    // This mirrors the skip-login → non-copilot fallback above: users who
+    // previously used skip-login may have a non-copilot activeProvider saved
+    // to disk, but once they authenticate with GitHub Copilot they should
+    // default to the copilot provider.  Users can still switch providers
+    // manually within a session via Settings; this only applies at sign-in.
+    if (this.currentAlias && this.currentAlias !== SKIP_LOGIN_ALIAS && this.activeProviderId !== 'copilot') {
+      logger.debug(`[ProviderManager] Copilot user detected, auto-switching from ${this.activeProviderId} to copilot`);
+      this.activeProviderId = 'copilot';
+      this.config.activeProvider = 'copilot';
+      await this.saveConfig(this.config);
+      this.notifyRenderer('provider:switched', { activeProvider: 'copilot' });
+    }
+
     // For non-Copilot providers, warm the model cache in background so that
     // subsequent IPC calls (getModelById, getModelCapabilities, etc.) hit cache
     // instead of each firing a separate HTTP request to the provider.
@@ -226,23 +240,34 @@ export class ProviderManager {
       await this.saveConfig(this.config);
     }
 
-    // Warm model cache for the new provider in background — prevents N concurrent
-    // HTTP calls when the renderer fires multiple IPC model queries after switch.
-    if (targetId !== 'copilot') {
-      provider.listModels().catch((err) => {
-        logger.warn(`[ProviderManager] Model cache warm on switch failed: ${err instanceof Error ? err.message : String(err)}`);
-      });
-    }
-
     // Notify renderer of provider switch
     this.notifyRenderer('provider:switched', { activeProvider: targetId });
 
-    // Push updated model list so the renderer's ModelCacheManager refreshes
-    this.notifyRenderer('models:updated', {
-      count: 0, // Renderer will re-fetch via syncFromBackend()
-      timestamp: Date.now(),
-      source: 'provider-switch',
-    });
+    // Warm model cache then notify renderer so it fetches the new model list.
+    // The notification must wait until the cache is warm; otherwise the renderer's
+    // syncFromBackend() races with the cache-warm fetch and may get an empty list.
+    if (targetId !== 'copilot') {
+      provider.listModels()
+        .catch((err) => {
+          logger.warn(`[ProviderManager] Model cache warm on switch failed: ${err instanceof Error ? err.message : String(err)}`);
+        })
+        .finally(() => {
+          this.notifyRenderer('models:updated', {
+            count: 0,
+            timestamp: Date.now(),
+            source: 'provider-switch',
+          });
+        });
+    } else {
+      // Copilot models are managed by GhcModelsManager which fires its own
+      // models:updated event, but push one immediately so the renderer clears
+      // the stale non-Copilot list and re-syncs.
+      this.notifyRenderer('models:updated', {
+        count: 0,
+        timestamp: Date.now(),
+        source: 'provider-switch',
+      });
+    }
 
     logger.info(`[ProviderManager] Switched active provider to: ${targetId}`);
     return { success: true };

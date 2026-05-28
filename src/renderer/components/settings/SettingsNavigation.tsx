@@ -1,12 +1,13 @@
 import React, { useCallback, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Camera, Terminal, Archive, Key, Cpu, LogOut, ChevronLeft } from 'lucide-react';
+import { Camera, Terminal, Archive, Key, Cpu, LogOut, LogIn, ChevronLeft } from 'lucide-react';
 import NavItem from '../ui/navigation/NavItem';
 import '../../styles/LeftNavigation.css';
 import { APP_NAME, BRAND_NAME, BRAND_CONFIG } from '@shared/constants/branding';
 import { useFeatureFlag } from '../../lib/featureFlags';
 import { LeftNavSizeAtom } from '@renderer/states/left-nav.atom';
 import { useAuthContext } from '../auth/AuthProvider';
+import { SKIP_LOGIN_ALIAS } from '@shared/constants/auth';
 
 // MCP icon - from McpHeaderView
 const McpIcon = () => (
@@ -76,8 +77,9 @@ interface SettingsNavigationProps {
 const SettingsNavigation: React.FC<SettingsNavigationProps> = ({ onBack }) => {
   const location = useLocation();
   const navigate = useNavigate();
-  const { signOut } = useAuthContext();
+  const { signOut, authData } = useAuthContext();
   const [isSigningOut, setIsSigningOut] = useState(false);
+  const isCopilotUser = authData?.ghcAuth?.alias !== SKIP_LOGIN_ALIAS;
 
   const handleSignOut = useCallback(async () => {
     if (isSigningOut) return;
@@ -187,6 +189,7 @@ const SettingsNavigation: React.FC<SettingsNavigationProps> = ({ onBack }) => {
       >
         {/* Header with Settings title */}
         <div
+          onClick={handleBack}
           style={{
             display: 'flex',
             alignItems: 'center',
@@ -194,11 +197,11 @@ const SettingsNavigation: React.FC<SettingsNavigationProps> = ({ onBack }) => {
             width: '100%',
             height: layout.headerHeight,
             paddingBottom: layout.headerPaddingBottom,
+            cursor: 'pointer',
             ...dividerStyle('bottom'),
           }}
         >
-          <button
-            onClick={handleBack}
+          <span
             aria-label="Go Back"
             style={{
               display: 'flex',
@@ -206,17 +209,14 @@ const SettingsNavigation: React.FC<SettingsNavigationProps> = ({ onBack }) => {
               justifyContent: 'center',
               background: 'none',
               border: 'none',
-              cursor: 'pointer',
               padding: '4px',
               borderRadius: '6px',
               color: '#111827',
               flexShrink: 0,
             }}
-            onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'rgba(0,0,0,0.06)')}
-            onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
           >
             <ChevronLeft size={20} />
-          </button>
+          </span>
           <h2
             style={{
               fontSize: layout.titleFontSize,
@@ -225,7 +225,7 @@ const SettingsNavigation: React.FC<SettingsNavigationProps> = ({ onBack }) => {
               margin: 0,
             }}
           >
-            Settings
+            Investment Studio Panel
           </h2>
         </div>
 
@@ -247,7 +247,7 @@ const SettingsNavigation: React.FC<SettingsNavigationProps> = ({ onBack }) => {
           {isInvestmentStudio && (
             <NavItem
               icon={<Key size={18} />}
-              label="API"
+              label="Financial Data API"
               isActive={activeView === 'research-api'}
               onClick={() => navigate('/settings/research-api')}
               ariaLabel="Research API tokens"
@@ -383,11 +383,19 @@ const SettingsNavigation: React.FC<SettingsNavigationProps> = ({ onBack }) => {
           }}
         >
           <NavItem
-            icon={<LogOut size={20} />}
-            label={isSigningOut ? 'Signing out...' : 'Sign Out'}
+            icon={isCopilotUser ? <LogOut size={20} /> : <LogIn size={20} />}
+            label={
+              isSigningOut
+                ? 'Signing out...'
+                : isCopilotUser
+                  ? 'Sign Out GitHub Copilot'
+                  : 'Sign In GitHub Copilot'
+            }
             isActive={false}
-            onClick={handleSignOut}
-            ariaLabel="Sign out of your account"
+            onClick={isCopilotUser ? handleSignOut : () => {
+              handleSignOut(); // sign out skip-login first, then redirect to login
+            }}
+            ariaLabel={isCopilotUser ? 'Sign out of GitHub Copilot' : 'Sign in with GitHub Copilot'}
           />
         </div>
       </div>

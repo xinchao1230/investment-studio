@@ -430,7 +430,7 @@ function registerResearchChatIpc(deps: InvestmentStudioDeps): void {
       const { generateChatSessionId } = await import('../lib/userDataADO/pathUtils');
       const sessionId = generateChatSessionId();
       const nowIso = new Date().toISOString();
-      const title = (opts?.title?.trim()) || 'New Chat';
+      const title = (opts?.title?.trim()) || '新对话';
 
       const metadata = {
         chatSession_id: sessionId,

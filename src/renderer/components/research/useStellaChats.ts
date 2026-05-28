@@ -45,7 +45,7 @@ export function useStellaChats(): UseStellaChatsApi {
 
   const createChat = useCallback(async (): Promise<ActiveChat | null> => {
     try {
-      const created = await researchChatIpc.create(null, { title: 'New Chat' });
+      const created = await researchChatIpc.create(null, { title: '新对话' });
       const { sessions } = await researchChatIpc.listByTarget(null);
       setChats(sessions);
       await researchChatIpc.setLastActive(null, created.chatSessionId);

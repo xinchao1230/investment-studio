@@ -310,7 +310,16 @@ export default function(ctx: Context) {
             await authManager.setCurrentAuth(authInfo);
 
             // Set current user alias
-            ctx.currentUserAlias = authInfo.ghcAuth.user.login;
+            const userLogin = authInfo.ghcAuth.user.login;
+            ctx.currentUserAlias = userLogin;
+
+            // Initialize ProviderManager in background — must not block sign-in
+            if (userLogin !== SKIP_LOGIN_ALIAS) {
+              providerManager.initialize(userLogin).catch((err) => {
+                const logger = getAdvancedLogger();
+                logger.warn(`[Startup] ProviderManager initialization failed (device flow): ${err instanceof Error ? err.message : String(err)}`, 'auth:deviceFlow');
+              });
+            }
 
             await ctx.registerGlobalShortcuts(); // Register global shortcuts
 
@@ -344,6 +353,21 @@ export default function(ctx: Context) {
       // 🆕 Stop Browser Control HTTP server
       if (isFeatureEnabled('browserControl') && (process.platform === 'win32' || process.platform === 'darwin')) {
         await browserControlHttpServer.stop();
+      }
+
+      // If the active provider is Copilot, switch to the first available
+      // API-key provider before signing out. Copilot requires a valid GitHub
+      // session, so it becomes unusable after sign-out.
+      if (providerManager.getActiveProviderId() === 'copilot') {
+        const allInfos = providerManager.getAllProviderInfos();
+        for (const info of allInfos) {
+          if (info.id === 'copilot') continue;
+          const cfg = providerManager.getProviderConfig(info.id);
+          if (cfg?.enabled && (!info.requiresApiKey || cfg.apiKey)) {
+            await providerManager.switchProvider(info.id);
+            break;
+          }
+        }
       }
 
       const authManager = await getMainAuthManager();

@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { Eye, EyeOff, Check, AlertCircle, Loader2 } from 'lucide-react';
+import { PROVIDER_ICONS } from '../ui/icons/ProviderIcons';
 
 type ProviderId = 'openai' | 'deepseek' | 'ollama' | 'custom-openai';
 
@@ -77,6 +78,9 @@ export const ProviderSettingsView: React.FC = () => {
     'custom-openai': emptyCard(),
   });
   const [activeProvider, setActiveProvider] = useState<string>('copilot');
+  /** True when the user is signed in with a real GitHub account (not skip-login) */
+  const [isCopilotAvailable, setIsCopilotAvailable] = useState(false);
+  const [copilotUser, setCopilotUser] = useState<{ login: string; name?: string; email?: string; avatarUrl?: string; copilotPlan?: string } | null>(null);
 
   // Load current config from main process
   useEffect(() => {
@@ -94,6 +98,21 @@ export const ProviderSettingsView: React.FC = () => {
 
       if (activeResult.success && activeResult.data) {
         setActiveProvider(activeResult.data);
+      }
+
+      // Check if the user is signed in with a real GitHub/Copilot account
+      try {
+        const sessionResult = await window.electronAPI.auth.getCurrentSession();
+        if (sessionResult?.success && sessionResult.data) {
+          const login = sessionResult.data?.ghcAuth?.user?.login;
+          setIsCopilotAvailable(!!login && login !== '_local');
+          if (login && login !== '_local') {
+            const u = sessionResult.data.ghcAuth.user;
+            setCopilotUser({ login: u.login, name: u.name, email: u.email, avatarUrl: u.avatarUrl, copilotPlan: u.copilotPlan });
+          }
+        }
+      } catch {
+        // Ignore — defaults to false
       }
 
       const newCards = { ...cards };
@@ -114,6 +133,15 @@ export const ProviderSettingsView: React.FC = () => {
     // Listen for provider switch events
     const unsub = api.onProviderSwitched?.((data: { activeProvider: string }) => {
       setActiveProvider(data.activeProvider);
+      // Re-check auth status — Copilot may no longer be available after sign-out
+      window.electronAPI.auth.getCurrentSession().then((res: any) => {
+        if (res?.success && res.data) {
+          const login = res.data?.ghcAuth?.user?.login;
+          setIsCopilotAvailable(!!login && login !== '_local');
+        } else {
+          setIsCopilotAvailable(false);
+        }
+      }).catch(() => setIsCopilotAvailable(false));
     });
 
     return () => {
@@ -219,6 +247,62 @@ export const ProviderSettingsView: React.FC = () => {
       </div>
 
       <div className="space-y-3">
+        {/* GitHub Copilot card — shown when user is signed in with a real GitHub account */}
+        {isCopilotAvailable && (
+          <div
+            className={`border rounded-md p-3 bg-white ${activeProvider === 'copilot' ? 'border-blue-400 ring-1 ring-blue-200' : 'border-gray-200'}`}
+          >
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                {PROVIDER_ICONS.copilot && React.createElement(PROVIDER_ICONS.copilot, { size: 18 })}
+                <h2 className="text-sm font-medium">GitHub Copilot</h2>
+                {activeProvider === 'copilot' && (
+                  <span className="px-1.5 py-0.5 text-[10px] font-medium bg-blue-100 text-blue-700 rounded">
+                    ACTIVE
+                  </span>
+                )}
+              </div>
+            </div>
+            <p className="text-xs text-gray-500 mb-2">
+              Use models from your GitHub Copilot subscription
+            </p>
+            {copilotUser && (
+              <div className="flex items-center gap-1.5 mb-2">
+                {copilotUser.avatarUrl && (
+                  <img
+                    src={copilotUser.avatarUrl}
+                    alt={copilotUser.login}
+                    style={{ width: 16, height: 16 }}
+                    className="rounded-full"
+                  />
+                )}
+                <span className="text-xs text-gray-500">
+                  Signed in as <span className="font-medium text-gray-700">{copilotUser.login}</span>
+                  {copilotUser.name ? ` (${copilotUser.name})` : ''}
+                </span>
+                {copilotUser.copilotPlan && copilotUser.copilotPlan !== 'none' && (
+                  <span className="px-1.5 py-0.5 text-[10px] font-medium bg-gray-100 text-gray-600 rounded">
+                    {copilotUser.copilotPlan}
+                  </span>
+                )}
+              </div>
+            )}
+            {activeProvider !== 'copilot' && (
+              <button
+                onClick={async () => {
+                  const api = window.electronAPI.provider;
+                  if (!api) return;
+                  const result = await api.switch('copilot' as any);
+                  if (result.success) setActiveProvider('copilot');
+                }}
+                className="px-3 py-1.5 text-sm rounded border border-blue-300 text-blue-600 hover:bg-blue-50"
+              >
+                Set as Active
+              </button>
+            )}
+          </div>
+        )}
+
         {PROVIDERS.map((spec) => {
           const c = cards[spec.id];
           const isActive = activeProvider === spec.id;
@@ -231,6 +315,7 @@ export const ProviderSettingsView: React.FC = () => {
               {/* Header */}
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-2">
+                  {PROVIDER_ICONS[spec.id] && React.createElement(PROVIDER_ICONS[spec.id], { size: 18 })}
                   <h2 className="text-sm font-medium">{spec.title}</h2>
                   {isActive && (
                     <span className="px-1.5 py-0.5 text-[10px] font-medium bg-blue-100 text-blue-700 rounded">
