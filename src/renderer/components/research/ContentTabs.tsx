@@ -787,8 +787,14 @@ export const ContentTabs: React.FC<ContentTabsProps> = ({
       }`}
       style={{ background: 'var(--rw-bg)' }}
     >
-      {/* Tab strip */}
-      <div className="flex h-7 rw-divider overflow-x-auto bg-[var(--rw-bg-soft)]">
+      {/* Tab strip.
+          `relative z-20 isolate` gives the strip its own stacking
+          context above the body. Univer's UI plugin installs global
+          mousedown / pointerdown listeners on document for selection
+          drag + popup dismissal, and without an explicit stacking
+          context our X button click was sometimes intercepted when
+          the active tab was a spreadsheet. */}
+      <div className="relative z-20 isolate flex h-7 rw-divider overflow-x-auto bg-[var(--rw-bg-soft)]">
         {tabs.map((tab) => {
           const isActive = tab.id === activeTabId;
           const tabIsDirty =
@@ -811,9 +817,20 @@ export const ContentTabs: React.FC<ContentTabsProps> = ({
                 />
               )}
               <button
+                // Close on pointerDown (not click) so we win the race
+                // with Univer's document-level pointerdown handler
+                // when the active tab is a spreadsheet — otherwise the
+                // workbench can preventDefault / stopPropagation and
+                // the synthetic click never reaches React.
+                onPointerDown={(e) => {
+                  e.stopPropagation();
+                  e.preventDefault();
+                  handleTabCloseGuarded(tab.id);
+                }}
+                // Keep onClick as a fallback for keyboard activation
+                // (Enter / Space synthesizes a click without pointerdown).
                 onClick={(e) => {
                   e.stopPropagation();
-                  handleTabCloseGuarded(tab.id);
                 }}
                 className={`p-0.5 rounded hover:bg-black/10 ${
                   isActive ? 'opacity-60' : 'opacity-0 group-hover:opacity-100'
@@ -939,7 +956,15 @@ export const ContentTabs: React.FC<ContentTabsProps> = ({
         {activeTab && !activeIsEditing && (
           <div className="absolute inset-0 overflow-auto">
             {activeTab.type === 'spreadsheet' && activeTab.sheetData ? (
-              <UniverSheet data={activeTab.sheetData} />
+              // `isolation: isolate` + a relative positioned wrapper
+              // confines Univer's internal stacking + portals so they
+              // can't visually leak over the tab strip / toolbar.
+              <div
+                className="relative h-full w-full"
+                style={{ isolation: 'isolate' }}
+              >
+                <UniverSheet data={activeTab.sheetData} />
+              </div>
             ) : activeTab.type === 'csv' ? (
               <div className="min-h-0">
                 <CSVTable
