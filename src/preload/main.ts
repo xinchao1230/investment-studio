@@ -1255,6 +1255,13 @@ export interface ElectronAPI {
     testConnection: (provider: 'tushare' | 'eastmoney') => Promise<{ ok: boolean; error?: string }>;
   };
 
+  // Excel / xlsx reading (investment-studio brand). Reads files into
+  // Univer's IWorkbookData schema so the renderer can pass the result
+  // straight to <UniverSheet data={...} />.
+  excel: {
+    readFile: (filePath: string) => Promise<{ success: boolean; data?: any; error?: string }>;
+  };
+
   // Research workspace: Target ↔ Chat binding (see docs/research-target-chat-binding.md)
   researchChat?: {
     listByTarget: (targetCode: string | null) => Promise<{
@@ -2461,6 +2468,10 @@ export const electronAPI: ElectronAPI = {
       ipcRenderer.invoke('researchApi:setToken', provider, token) as Promise<{ ok: boolean; error?: string }>,
     testConnection: (provider: 'tushare' | 'eastmoney') =>
       ipcRenderer.invoke('researchApi:testConnection', provider) as Promise<{ ok: boolean; error?: string }>,
+  },
+  excel: {
+    readFile: (filePath: string) =>
+      ipcRenderer.invoke('excel:readFile', filePath) as Promise<{ success: boolean; data?: any; error?: string }>,
   },
   // Research workspace: Target ↔ Chat binding
   researchChat: {
