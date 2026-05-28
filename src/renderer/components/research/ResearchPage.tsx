@@ -30,12 +30,18 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Button } from '../ui/button';
 import './research-theme.css';
 
+// Spreadsheet extensions: routed through the main-process ExcelService and
+// rendered with <UniverSheet> in the middle pane. Loaded as binary via
+// IPC — we must NOT read these as utf-8 (would corrupt cache + content).
+const SPREADSHEET_TAB_EXTENSIONS = new Set([
+  'xls', 'xlsx', 'xlsm', 'xlsb', 'ods',
+]);
+
 // File extensions that should open as ContentTabs but cannot be rendered
 // inline — these route to the open-externally fallback UI in ContentTabs.
 // Used for both tab-type derivation and lazy-content-load skipping (we
-// must NOT read xlsx as utf-8: it would corrupt the cache and the file).
+// must NOT read these as utf-8: it would corrupt the cache and the file).
 const BINARY_TAB_EXTENSIONS = new Set([
-  'xls', 'xlsx', 'xlsm', 'xlsb', 'ods',
   'doc', 'docx', 'odt', 'rtf',
   'ppt', 'pptx', 'odp',
   'zip', 'tar', 'gz', '7z', 'rar',
@@ -199,6 +205,12 @@ export const ResearchPage: React.FC = () => {
   const [contentCacheVersion, setContentCacheVersion] = useState(0);
   // Track in-flight reads to avoid duplicate fetches when visibleTabs churns.
   const inflightReadsRef = useRef<Set<string>>(new Set());
+
+  // Spreadsheet cache, keyed by absPath. Stores Univer IWorkbookData
+  // returned by `electronAPI.excel.readFile` so <UniverSheet> in the
+  // ContentTabs middle pane can render xlsx files clicked from chat.
+  const sheetDataCacheRef = useRef<Map<string, any>>(new Map());
+  const inflightSheetReadsRef = useRef<Set<string>>(new Set());
 
   const targetChats = useTargetChats();
   const targetsRef = useRef(targets);
@@ -767,6 +779,34 @@ export const ResearchPage: React.FC = () => {
     }
   }, []);
 
+  // Async-load xlsx / csv via main-process ExcelService into the sheet
+  // cache. Result is Univer's IWorkbookData (see excelService.ts).
+  // Idempotent and de-duplicates concurrent reads.
+  const ensureSheetDataLoaded = useCallback(async (absPath: string) => {
+    if (sheetDataCacheRef.current.has(absPath)) return;
+    if (inflightSheetReadsRef.current.has(absPath)) return;
+    const api = (window.electronAPI as any)?.excel;
+    if (!api?.readFile) return;
+    inflightSheetReadsRef.current.add(absPath);
+    try {
+      const result = await api.readFile(absPath);
+      if (result && result.success && result.data) {
+        sheetDataCacheRef.current.set(absPath, result.data);
+      } else {
+        sheetDataCacheRef.current.set(absPath, {
+          __error: result?.error ?? 'Failed to read spreadsheet',
+        });
+      }
+    } catch (err: any) {
+      sheetDataCacheRef.current.set(absPath, {
+        __error: err?.message ?? String(err),
+      });
+    } finally {
+      inflightSheetReadsRef.current.delete(absPath);
+      setContentCacheVersion((v) => v + 1);
+    }
+  }, []);
+
   // ── Filesystem-change subscriptions ────────────────────────────────
   // When a builtin tool (e.g. LLM-initiated portfolio_init_target,
   // write_file, move_file, download_and_save_as) mutates a file inside
@@ -832,14 +872,17 @@ export const ResearchPage: React.FC = () => {
         ...prev,
         [owningCode]: openTabRec(prev[owningCode], file.absPath),
       }));
-      // Skip the text-content read for binary types (xlsx etc); the tab
-      // renders an open-externally fallback and never needs the bytes.
+      // Skip the text-content read for binary / spreadsheet types; the
+      // bytes would either corrupt the cache (xlsx is a zip) or be
+      // useless (docx/pptx). Spreadsheets get their own read path below.
       const ext = (file.absPath.split('.').pop() ?? '').toLowerCase();
-      if (!BINARY_TAB_EXTENSIONS.has(ext)) {
+      if (SPREADSHEET_TAB_EXTENSIONS.has(ext)) {
+        void ensureSheetDataLoaded(file.absPath);
+      } else if (!BINARY_TAB_EXTENSIONS.has(ext)) {
         void ensureContentLoaded(file.absPath);
       }
     },
-    [findOwningCode, ensureContentLoaded, setTabsByCode, handleSelectTarget],
+    [findOwningCode, ensureContentLoaded, ensureSheetDataLoaded, setTabsByCode, handleSelectTarget],
   );
 
   // Rewrite any open-tab record + cached content keyed by `oldAbsPath` to
@@ -1077,11 +1120,17 @@ export const ResearchPage: React.FC = () => {
     const pathPrefix = `${target.name}.${target.stock_code.split('.').pop() ?? target.stock_code}`;
     return sortedTabs(state).map((rec) => {
       const cached = fileContentCacheRef.current.get(rec.absPath);
+      const sheetCached = sheetDataCacheRef.current.get(rec.absPath);
       const lower = rec.absPath.toLowerCase();
       const ext = (lower.split('.').pop() ?? '').toLowerCase();
       let type: Tab['type'];
       let language: string | undefined;
-      if (BINARY_TAB_EXTENSIONS.has(ext)) {
+      if (SPREADSHEET_TAB_EXTENSIONS.has(ext)) {
+        // xlsx / xls / ods — rendered by <UniverSheet> in ContentTabs.
+        // sheetData (Univer IWorkbookData) is loaded async via
+        // electronAPI.excel.readFile and cached in sheetDataCacheRef.
+        type = 'spreadsheet';
+      } else if (BINARY_TAB_EXTENSIONS.has(ext)) {
         // xlsx / docx / pptx / archives — surface as tabs but render an
         // open-externally placeholder. Never attempt a utf-8 read.
         type = 'binary';
@@ -1143,6 +1192,7 @@ export const ResearchPage: React.FC = () => {
         language,
         mtime: cached?.mtime ?? 0,
         pathPrefix,
+        sheetData: sheetCached && !sheetCached.__error ? sheetCached : undefined,
       };
     });
     // contentCacheVersion intentionally tracked to refresh content cells.
@@ -1156,11 +1206,17 @@ export const ResearchPage: React.FC = () => {
   useEffect(() => {
     for (const t of visibleTabs) {
       if (t.type === 'binary') continue; // binary tabs never read as utf-8
+      if (t.type === 'spreadsheet') {
+        if (!sheetDataCacheRef.current.has(t.id)) {
+          void ensureSheetDataLoaded(t.id);
+        }
+        continue;
+      }
       if (!fileContentCacheRef.current.has(t.id)) {
         void ensureContentLoaded(t.id);
       }
     }
-  }, [visibleTabs, ensureContentLoaded]);
+  }, [visibleTabs, ensureContentLoaded, ensureSheetDataLoaded]);
 
   // === Chat file-link routing (workspace mode) ===================
   // When the user clicks a file link in the embedded chat (e.g. an LLM-
