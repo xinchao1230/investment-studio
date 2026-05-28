@@ -3,6 +3,7 @@ import { BrowserWindow, app } from 'electron';
 import * as fs from 'fs';
 import * as path from 'path';
 import { createLogger } from '../unifiedLogger';
+import { SKIP_LOGIN_ALIAS } from '@shared/constants/auth';
 import {
   AuthData,
   TokenRefreshResult,
@@ -100,8 +101,8 @@ export class MainAuthManager implements IAuthManager {
   private sanitizeAuthData(authData: AuthData): AuthData {
     try {
       const rawPlan = authData.ghcAuth?.user?.copilotPlan || 'individual';
-      const validPlans: Array<'individual' | 'business' | 'enterprise'> = ['individual', 'business', 'enterprise'];
-      const copilotPlan = validPlans.includes(rawPlan as any) ? rawPlan as 'individual' | 'business' | 'enterprise' : 'individual';
+      const validPlans: Array<'individual' | 'business' | 'enterprise' | 'none'> = ['individual', 'business', 'enterprise', 'none'];
+      const copilotPlan = validPlans.includes(rawPlan as any) ? rawPlan as 'individual' | 'business' | 'enterprise' | 'none' : 'individual';
 
       const cleanUser = {
         id: String(authData.ghcAuth?.user?.id || ''),
@@ -900,9 +901,17 @@ export class MainAuthManager implements IAuthManager {
       };
     }
 
-    try {
-      const userLogin = this.currentAuth.ghcAuth.user.login;
+    // Skip-login users have placeholder tokens that must never be sent to GitHub
+    const userLogin = this.currentAuth.ghcAuth.user.login;
+    if (userLogin === SKIP_LOGIN_ALIAS) {
+      return {
+        success: false,
+        error: 'Token refresh not available in skip-login mode',
+        requiresReauth: false
+      };
+    }
 
+    try {
       const gitHubToken = this.currentAuth.ghcAuth.gitHubTokens.access_token;
       const refreshResult = await this.ghcAuth.refreshCopilotToken(gitHubToken);
 

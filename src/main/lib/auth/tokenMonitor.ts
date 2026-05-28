@@ -1,6 +1,7 @@
 // src/main/lib/auth/tokenMonitor.ts - Main process Token Monitor (V3.0 - New Token Format)
 import { BrowserWindow } from 'electron';
 import { createLogger } from '../unifiedLogger';
+import { SKIP_LOGIN_ALIAS } from '@shared/constants/auth';
 import { MainAuthManager } from './authManager';
 import { AuthData } from './types/authTypes';
 
@@ -109,6 +110,11 @@ export class MainTokenMonitor {
 
       if (!currentAuth) {
         logger.debug(`[MainTokenMonitor] No current authentication; waiting for auth to recover`, 'MainTokenMonitor');
+        return;
+      }
+
+      // Skip-login users have placeholder tokens — never attempt refresh against GitHub
+      if (currentAuth.ghcAuth.user.login === SKIP_LOGIN_ALIAS) {
         return;
       }
 

@@ -1,6 +1,6 @@
 import React from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Camera, Terminal, Archive, Key } from 'lucide-react';
+import { Camera, Terminal, Archive, Key, Cpu } from 'lucide-react';
 import NavItem from '../ui/navigation/NavItem';
 import '../../styles/LeftNavigation.css';
 import { APP_NAME, BRAND_NAME, BRAND_CONFIG } from '@shared/constants/branding';
@@ -106,6 +106,7 @@ const SettingsNavigation: React.FC<SettingsNavigationProps> = ({ onBack }) => {
 
   const getActiveView = () => {
     const path = location.pathname;
+    if (path.includes('/settings/providers')) return 'providers';
     if (path.includes('/settings/runtime')) return 'runtime';
     if (path.includes('/settings/mcp')) return 'mcp';
     if (path.includes('/settings/skills')) return 'skills';
@@ -219,6 +220,14 @@ const SettingsNavigation: React.FC<SettingsNavigationProps> = ({ onBack }) => {
               ariaLabel="Research API tokens"
             />
           )}
+
+          <NavItem
+            icon={<Cpu size={18} />}
+            label="LLM Providers"
+            isActive={activeView === 'providers'}
+            onClick={() => navigate('/settings/providers')}
+            ariaLabel="LLM Provider Configuration"
+          />
 
           <NavItem
             icon={<McpIcon />}

@@ -7,6 +7,36 @@ import { useScrollSelectedIntoView } from '@/lib/hooks/useScrollSelectedIntoView
 import { chatOps } from '@/lib/chat/chatOps';
 import { agentChatSessionCacheManager } from '@/lib/chat/agentChatSessionCacheManager';
 
+/** Provider display names for the badge */
+const PROVIDER_LABELS: Record<string, string> = {
+  openai: 'OpenAI',
+  deepseek: 'DeepSeek',
+  ollama: 'Ollama',
+  'custom-openai': 'Custom',
+};
+
+/** Hook to track the active LLM provider */
+function useActiveProvider(): string | null {
+  const [provider, setProvider] = useState<string | null>(null);
+
+  useEffect(() => {
+    const api = window.electronAPI?.provider;
+    if (!api) return;
+
+    api.getActive().then((res) => {
+      if (res?.success) setProvider(res.data ?? null);
+    });
+
+    const unsub = api.onProviderSwitched?.((data: { activeProvider: string }) => {
+      setProvider(data.activeProvider);
+    });
+
+    return () => { unsub?.(); };
+  }, []);
+
+  return provider;
+}
+
 interface Props {
   currentChatId: string | null;
   shouldLockComposeUi: boolean;
@@ -103,6 +133,12 @@ function Selector(props: Props) {
   // in sync with `modelCacheUpdated` events via the shared hook.
   const { models: availableModels } = useAvailableModels();
 
+  // Track active provider for the badge
+  const activeProvider = useActiveProvider();
+  const providerLabel = activeProvider && activeProvider !== 'copilot'
+    ? PROVIDER_LABELS[activeProvider] || activeProvider
+    : null;
+
   // Scroll the currently selected option into view when the dropdown opens.
   const selectedOptionRef = useScrollSelectedIntoView<HTMLButtonElement>(
     showModelDropdown,
@@ -153,8 +189,11 @@ function Selector(props: Props) {
         disabled={isLoading || shouldLockComposeUi}
         title="Select AI Model"
       >
+        {providerLabel && (
+          <span className="provider-badge">{providerLabel}</span>
+        )}
         <span className="model-name">
-          {currentModelInfo?.name || 'Select Model'}
+          {currentModelInfo?.name || displayModel || 'Select Model'}
         </span>
         <svg
           className={`dropdown-arrow ${showModelDropdown ? 'rotated' : ''
