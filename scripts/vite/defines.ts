@@ -8,9 +8,12 @@
  * is safer for string operations and avoids potential TypeError on .includes() etc.
  */
 
-// OpenKosmos brand config (hardcoded — multi-brand support removed)
+// Active brand — selected via BRAND env var, `--brand=` npm flag, or .npmrc.
+// Mirrors the behaviour of scripts/brand-config.js (used by the webpack pipeline)
+// so that vite and webpack builds always produce the same brand bindings.
+const brandName = process.env.BRAND || process.env.npm_config_brand || 'openkosmos';
 // eslint-disable-next-line @typescript-eslint/no-require-imports
-const openkosmosConfig = require('../../brands/openkosmos/config.json') as {
+const brandConfig = require(`../../brands/${brandName}/config.json`) as {
   appId: string
   productName: string
   userDataName?: string
@@ -20,9 +23,9 @@ const openkosmosConfig = require('../../brands/openkosmos/config.json') as {
 export function sharedDefines(mode: string): Record<string, string> {
   return {
     'process.env.NODE_ENV': JSON.stringify(mode),
-    'process.env.BRAND_NAME': JSON.stringify('openkosmos'),
-    'process.env.BRAND_CONFIG': JSON.stringify(openkosmosConfig),
-    'process.env.APP_NAME': JSON.stringify(openkosmosConfig.productName),
+    'process.env.BRAND_NAME': JSON.stringify(brandName),
+    'process.env.BRAND_CONFIG': JSON.stringify(brandConfig),
+    'process.env.APP_NAME': JSON.stringify(brandConfig.productName),
     'process.env.DEVELOPMENT_BASE_CDN_URL': JSON.stringify(process.env.DEVELOPMENT_BASE_CDN_URL || ''),
     'process.env.PRODUCTION_BASE_CDN_URL': JSON.stringify(process.env.PRODUCTION_BASE_CDN_URL || ''),
     'process.env.RELEASE_CDN_URL': JSON.stringify(process.env.RELEASE_CDN_URL || ''),
@@ -44,8 +47,8 @@ export function sharedDefines(mode: string): Record<string, string> {
 
 export function mainOnlyDefines(): Record<string, string> {
   return {
-    'process.env.APP_ID': JSON.stringify(openkosmosConfig.appId),
-    'process.env.USER_DATA_NAME': JSON.stringify(openkosmosConfig.userDataName || openkosmosConfig.productName),
+    'process.env.APP_ID': JSON.stringify(brandConfig.appId),
+    'process.env.USER_DATA_NAME': JSON.stringify(brandConfig.userDataName || brandConfig.productName),
     'process.env.DEVELOPMENT_RELAY_SERVICE_URL': JSON.stringify(process.env.DEVELOPMENT_RELAY_SERVICE_URL || ''),
     'process.env.PRODUCTION_RELAY_SERVICE_URL': JSON.stringify(process.env.PRODUCTION_RELAY_SERVICE_URL || ''),
     'process.env.ACTIVE_USER_THRESHOLD_MIN': JSON.stringify(process.env.ACTIVE_USER_THRESHOLD_MIN || ''),

@@ -1,11 +1,12 @@
-import React from 'react';
+import React, { useCallback, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Camera, Terminal, Archive, Key, Cpu } from 'lucide-react';
+import { Camera, Terminal, Archive, Key, Cpu, LogOut } from 'lucide-react';
 import NavItem from '../ui/navigation/NavItem';
 import '../../styles/LeftNavigation.css';
 import { APP_NAME, BRAND_NAME, BRAND_CONFIG } from '@shared/constants/branding';
 import { useFeatureFlag } from '../../lib/featureFlags';
 import { LeftNavSizeAtom } from '@renderer/states/left-nav.atom';
+import { useAuthContext } from '../auth/AuthProvider';
 
 // MCP icon - from McpHeaderView
 const McpIcon = () => (
@@ -75,6 +76,18 @@ interface SettingsNavigationProps {
 const SettingsNavigation: React.FC<SettingsNavigationProps> = ({ onBack }) => {
   const location = useLocation();
   const navigate = useNavigate();
+  const { signOut } = useAuthContext();
+  const [isSigningOut, setIsSigningOut] = useState(false);
+
+  const handleSignOut = useCallback(async () => {
+    if (isSigningOut) return;
+    setIsSigningOut(true);
+    try {
+      await signOut();
+    } finally {
+      setIsSigningOut(false);
+    }
+  }, [signOut, isSigningOut]);
 
   // Chrome Extension / Browser Control entry (controlled by feature flag, Dev + Windows only)
   const browserControlEnabled = useFeatureFlag('browserControl');
@@ -338,14 +351,24 @@ const SettingsNavigation: React.FC<SettingsNavigationProps> = ({ onBack }) => {
           />
         </div>
 
-        {/* Bottom Back Button */}
+        {/* Bottom: Logout + Back */}
         <div
           style={{
             width: '100%',
             paddingTop: '16px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: layout.itemGap,
             ...dividerStyle('top'),
           }}
         >
+          <NavItem
+            icon={<LogOut size={20} />}
+            label={isSigningOut ? 'Signing out...' : 'Sign Out'}
+            isActive={false}
+            onClick={handleSignOut}
+            ariaLabel="Sign out of your account"
+          />
           <NavItem
             icon={
               <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
