@@ -996,14 +996,20 @@ export const ResearchPage: React.FC = () => {
 
   const handleTabSelect = useCallback(
     (id: string) => {
-      const code = findOwningCode(id);
-      if (!code) return;
-      setTabsByCode((prev) => ({
-        ...prev,
-        [code]: activateTabRec(prev[code], id),
-      }));
+      setTabsByCode((prev) => {
+        // Find whichever bucket currently holds this tab. We can't use
+        // `findOwningCode(id)` here because chat-generated files (e.g.
+        // an LLM-produced xlsx under chat_workspaces/...) live outside
+        // the target's directory but were filed into a target's bucket
+        // by `handleOpenFile`'s explicit `bucketCode` parameter.
+        const code = Object.keys(prev).find((c) =>
+          prev[c]?.tabs?.some((t) => t.absPath === id),
+        );
+        if (!code) return prev;
+        return { ...prev, [code]: activateTabRec(prev[code], id) };
+      });
     },
-    [findOwningCode, setTabsByCode],
+    [setTabsByCode],
   );
 
   const handleDeleteTarget = useCallback(
@@ -1084,14 +1090,18 @@ export const ResearchPage: React.FC = () => {
 
   const handleTabClose = useCallback(
     (id: string) => {
-      const code = findOwningCode(id);
-      if (!code) return;
-      setTabsByCode((prev) => ({
-        ...prev,
-        [code]: closeTabRec(prev[code], id),
-      }));
+      setTabsByCode((prev) => {
+        // Same caveat as handleTabSelect: chat-workspace files don't
+        // live under any target's directory, so we look up the owning
+        // bucket from current tab state instead of by path prefix.
+        const code = Object.keys(prev).find((c) =>
+          prev[c]?.tabs?.some((t) => t.absPath === id),
+        );
+        if (!code) return prev;
+        return { ...prev, [code]: closeTabRec(prev[code], id) };
+      });
     },
-    [findOwningCode, setTabsByCode],
+    [setTabsByCode],
   );
 
   // In-editor save → refresh our content cache directly. The fs watcher
