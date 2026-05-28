@@ -741,7 +741,7 @@ class ElectronApp {
       // frame: defaults to true, no need to set explicitly
       icon: app.isPackaged
         ? path.join(process.resourcesPath, 'brand-assets/win/app.ico')
-        : path.join(__dirname, `../../brands/openkosmos/assets/win/app.ico`),
+        : path.join(__dirname, `../../brands/${process.env.BRAND_NAME || 'openkosmos'}/assets/win/app.ico`),
       webPreferences: {
         nodeIntegration: false,
         contextIsolation: true,
@@ -1194,7 +1194,7 @@ class ElectronApp {
         ? path.join(process.resourcesPath, 'brand-assets/win/app.ico')
         : path.join(
             __dirname,
-            `../../brands/openkosmos/assets/win/app.ico`,
+            `../../brands/${process.env.BRAND_NAME || 'openkosmos'}/assets/win/app.ico`,
           ),
       webPreferences: {
         nodeIntegration: false,
