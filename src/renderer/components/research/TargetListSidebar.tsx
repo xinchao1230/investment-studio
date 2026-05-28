@@ -15,6 +15,7 @@ import {
   Pencil,
   Settings,
   PanelLeftClose,
+  LogOut,
 } from 'lucide-react';
 import type { TargetFile, MoveResult } from './usePortfolio';
 import type { ResearchChatSessionMeta } from './researchChatIpc';
@@ -707,8 +708,8 @@ export const TargetListSidebar: React.FC<TargetListSidebarProps> = ({
 
   return (
     <div className="rw-pane-left flex flex-col h-full" style={{ width }}>
-      {/* Header — Workspace title */}
-      <div className="flex items-center justify-between px-3 pt-3 pb-2">
+      {/* Header — Workspace title (extra top padding for macOS traffic lights) */}
+      <div className="flex items-center justify-between px-3 pb-2" style={{ paddingTop: 40 }}>
         <span className="rw-side-title">Workspace</span>
         <div className="flex items-center gap-1">
           <button
@@ -727,6 +728,26 @@ export const TargetListSidebar: React.FC<TargetListSidebarProps> = ({
             }}
           >
             <Settings size={14} />
+          </button>
+          <button
+            type="button"
+            className="rw-side-icon-btn"
+            title="Logout"
+            aria-label="Logout"
+            onClick={async () => {
+              const confirmed = window.confirm(
+                'Are you sure you want to sign out? Any unsaved work in this workspace will be lost.'
+              );
+              if (!confirmed) return;
+              try {
+                await window.electronAPI.auth.signOut();
+              } catch (err) {
+                console.error('[Logout] Sign-out failed:', err);
+                window.alert('Sign out failed. Please try again.');
+              }
+            }}
+          >
+            <LogOut size={14} />
           </button>
           {onCollapse && (
             <button

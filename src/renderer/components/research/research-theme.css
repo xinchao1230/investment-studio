@@ -497,6 +497,8 @@
 [data-theme="research"] .chat-view--compact .chat-content-wrapper .chat-content .chat-input-container {
   max-width: 100%;
   padding: 8px 8px 8px 8px;
+  position: relative;
+  z-index: 20;
 }
 
 /* Trim the chat textarea height in compact pane (default 72px is too tall) */
@@ -534,14 +536,13 @@
   max-height: min(640px, calc(100vh - 120px));
   bottom: calc(100% + 4px);
   border-radius: 8px;
-  /* Force fully opaque background and drop backdrop-filter — the translucent
-     rgba(255,255,255,0.98) + blur in ChatInput.css visually disappears on the
-     top portion of tall dropdowns (rows bleed through onto quickstart cards
-     behind). A solid white surface guarantees the entire card is opaque. */
-  background: #ffffff;
+  background: #ffffff !important;
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
   overflow: hidden;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.18);
+  z-index: 99999;
 }
 
 [data-theme="research"] .chat-view--compact .chat-input-container .model-list {
@@ -551,11 +552,12 @@
   flex-direction: column;
   gap: 2px;
   overflow-y: auto;
-  background: #ffffff;
+  background: #ffffff !important;
 }
 
 [data-theme="research"] .chat-view--compact .chat-input-container .model-option {
   padding: 12px 10px;
+  background: #ffffff;
   border-radius: 6px;
   align-items: center;
   gap: 8px;

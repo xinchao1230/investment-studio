@@ -29,6 +29,7 @@ import handleAgentChatIPC from './agent-chat';
 import handleFsIPC from './fs';
 import handleWorkspaceIPC from './workspace';
 import handleLlmIPC from './llm';
+import handleProviderIPC from './provider';
 import handleWhisperIPC from './whisper';
 import handleWindowIPC from './window';
 import handlePluginIPC from './plugin';
@@ -82,6 +83,7 @@ export function setUpIPC(ctx: Context) {
   handleFsIPC(ctx);
   handleWorkspaceIPC(ctx);
   handleLlmIPC(ctx);
+  handleProviderIPC(ctx);
   handleWhisperIPC(ctx);
   handleWindowIPC(ctx);
   handlePluginIPC(ctx);

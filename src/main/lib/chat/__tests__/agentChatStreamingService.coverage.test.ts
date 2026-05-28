@@ -74,6 +74,15 @@ vi.mock('../../auth/ghcConfig', () => ({
   },
 }));
 
+vi.mock('../../llm/provider', () => ({
+  providerManager: {
+    waitUntilReady: vi.fn().mockResolvedValue(undefined),
+    getActiveProviderId: vi.fn().mockReturnValue('copilot'),
+    resolveModelId: vi.fn().mockImplementation((id: string) => Promise.resolve(id)),
+    getCachedModels: vi.fn().mockReturnValue([]),
+  },
+}));
+
 import { CancellationTokenSource, CancellationError } from '../../cancellation';
 import { GhcApiError } from '../../utilities/errors';
 import {

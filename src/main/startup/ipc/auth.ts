@@ -2,6 +2,7 @@ import { ipcMain } from 'electron';
 
 import { isFeatureEnabled } from '../../lib/featureFlags';
 import { getMainAuthManager, getMainTokenMonitor, getAdvancedLogger } from '../lazy';
+import { providerManager, SKIP_LOGIN_ALIAS } from '../../lib/llm/provider';
 import type { Context } from './shared';
 import { browserControlHttpServer } from "../../lib/browserControl/browserControlHttpServer";
 import { schedulerManager } from "../../lib/scheduler/SchedulerManager";
@@ -33,10 +34,32 @@ export default function(ctx: Context) {
       const logger = getAdvancedLogger();
 
       const authManager = await getMainAuthManager();
+
+      // Skip Login is only valid when a non-GitHub provider is already configured.
+      // Validate that before accepting the placeholder auth data as the current session.
+      if (userLogin === SKIP_LOGIN_ALIAS) {
+        try {
+          await providerManager.initializeForSkipLogin();
+        } catch {
+          return {
+            success: false,
+            error: 'Skip Login requires at least one enabled non-GitHub LLM provider with credentials. Configure a provider first, or sign in with GitHub.',
+          };
+        }
+      }
+
       await authManager.setCurrentAuth(authData);
 
       // 🔥 Set currentUserAlias in main process
       ctx.currentUserAlias = userLogin;
+
+      // Initialize ProviderManager in background for real GitHub sessions — must not block sign-in
+      if (userLogin !== SKIP_LOGIN_ALIAS) {
+        providerManager.initialize(userLogin).catch((err) => {
+          const logger = getAdvancedLogger();
+          logger.warn(`[Startup] ProviderManager initialization failed: ${err instanceof Error ? err.message : String(err)}`, 'auth:setCurrentSession');
+        });
+      }
 
       await ctx.registerGlobalShortcuts(); // Register global shortcuts
 

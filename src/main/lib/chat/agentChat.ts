@@ -59,6 +59,7 @@ import {
   getAllOpenKosmosUsedModels
 } from '../llm/ghcModelsManager';
 import { getEndpointForModel } from '../llm/ghcModelApi';
+import { providerManager, PROVIDER_TOKENIZER } from '../llm/provider';
 import { mainAuthManager } from '../auth/authManager';
 import type {
   AgentChatInteractionPolicy,
@@ -1530,8 +1531,30 @@ export class AgentChat {
    * 🔄 New: Get current model config from ghcModels.ts
    */
   private getCurrentModelConfig(modelId: string) {
-    const model = getModelById(modelId);
     const reasoningEffort = this.getLatestAgentConfig()?.reasoningEffort?.toLowerCase();
+
+    // For non-Copilot providers, look up real model capabilities from the provider's
+    // in-memory cache (synchronous — no await needed). Falls back to safe defaults
+    // if models haven't been fetched yet.
+    if (providerManager.getActiveProviderId() !== 'copilot') {
+      const cached = providerManager.getCachedModels();
+      const m = cached.find(pm => pm.id === modelId);
+      // Reasoning detection drives supportsTemperature: o-series and DeepSeek-R1
+      // reject `temperature` and return HTTP 400 if it's sent.
+      const idLower = modelId.toLowerCase();
+      const isReasoning = /^o\d/.test(idLower) || idLower.includes('reasoner') || idLower.includes('deepseek-r');
+      return {
+        // Prefer per-model output limit; fall back to a generous family-aware
+        // default rather than a hardcoded 4096 that silently truncates GPT-5 / o3 / Claude.
+        maxTokens: m?.maxOutputTokens || 8192,
+        supportsTemperature: !isReasoning,
+        supportsTools: m?.supportsTools ?? true,
+        supportsImages: m?.supportsImages ?? false,
+        reasoningEffort,
+      };
+    }
+
+    const model = getModelById(modelId);
     if (!model) {
       return {
         maxTokens: 4000,
@@ -1552,6 +1575,29 @@ export class AgentChat {
   }
 
   getModelCapabilities(modelId: string): GhcModelCapabilities {
+    // For non-Copilot providers, build capabilities from the provider's cached model data.
+    // Returns the same flattened GhcModelCapabilities shape that callers expect.
+    if (providerManager.getActiveProviderId() !== 'copilot') {
+      const cached = providerManager.getCachedModels();
+      const m = cached.find(pm => pm.id === modelId);
+      const providerId = providerManager.getActiveProviderId();
+      // Heuristic: detect reasoning models by ID pattern (o1, o3, o4-mini, deepseek-r1, etc.)
+      const idLower = modelId.toLowerCase();
+      const isReasoning = /^o\d/.test(idLower) || idLower.includes('reasoner') || idLower.includes('deepseek-r');
+      return {
+        supportsStreaming: m?.supportsStreaming ?? true,
+        supportsTools: m?.supportsTools ?? true,
+        supportsImages: m?.supportsImages ?? false,
+        supportsAudio: false,
+        supportsVideo: false,
+        supportsReasoning: isReasoning,
+        supportsTemperature: !isReasoning, // Reasoning models typically don't accept temperature
+        maxContextLength: m?.maxContextTokens || 128000,
+        maxOutputLength: m?.maxOutputTokens || 4096,
+        tokenizer: (PROVIDER_TOKENIZER[providerId] || 'cl100k_base') as 'cl100k_base' | 'o200k_base',
+      };
+    }
+
     const capabilities = getModelCapabilities(modelId);
     if (!capabilities) {
       throw new GhcApiError(`Model capabilities not found for: ${modelId}`, 404);

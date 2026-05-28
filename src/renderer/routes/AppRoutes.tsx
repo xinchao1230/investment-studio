@@ -16,6 +16,7 @@ import EditSubAgentView from '../components/subAgents/EditSubAgentView';
 import SettingsPage from '../components/pages/SettingsPage';
 import RuntimeSettingsView from '../components/settings/RuntimeSettingsView';
 import VoiceInputSettingsView from '../components/settings/VoiceInputSettingsView';
+import ProviderSettingsView from '../components/settings/ProviderSettingsView';
 import ScreenshotSettingsView from '../components/settings/ScreenshotSettingsView';
 import AboutAppView from '../components/settings/AboutAppView';
 import BrowserControlView from '../components/settings/BrowserControlView';
@@ -199,6 +200,7 @@ export const AppRoutes: React.FC = () => {
             }
           />
           <Route path="voice-input" element={<VoiceInputSettingsView />} />
+          <Route path="providers" element={<ProviderSettingsView />} />
           <Route path="screenshot" element={<ScreenshotSettingsView />} />
           <Route path="mcp" element={<McpView />} />
           <Route path="mcp/new" element={<AddNewMcpServerView />} />

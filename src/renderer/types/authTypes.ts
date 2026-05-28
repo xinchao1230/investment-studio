@@ -22,7 +22,7 @@ export interface AuthData {
       email: string;
       name: string;
       avatarUrl: string;
-      copilotPlan: 'individual' | 'business' | 'enterprise';
+      copilotPlan: 'individual' | 'business' | 'enterprise' | 'none';
     };
     gitHubTokens: {
       timestamp: string;
