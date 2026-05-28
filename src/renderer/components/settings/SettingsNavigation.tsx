@@ -1,6 +1,6 @@
 import React, { useCallback, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Camera, Terminal, Archive, Key, Cpu, LogOut } from 'lucide-react';
+import { Camera, Terminal, Archive, Key, Cpu, LogOut, ChevronLeft } from 'lucide-react';
 import NavItem from '../ui/navigation/NavItem';
 import '../../styles/LeftNavigation.css';
 import { APP_NAME, BRAND_NAME, BRAND_CONFIG } from '@shared/constants/branding';
@@ -197,6 +197,26 @@ const SettingsNavigation: React.FC<SettingsNavigationProps> = ({ onBack }) => {
             ...dividerStyle('bottom'),
           }}
         >
+          <button
+            onClick={handleBack}
+            aria-label="Go Back"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+              padding: '4px',
+              borderRadius: '6px',
+              color: '#111827',
+              flexShrink: 0,
+            }}
+            onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'rgba(0,0,0,0.06)')}
+            onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+          >
+            <ChevronLeft size={20} />
+          </button>
           <h2
             style={{
               fontSize: layout.titleFontSize,
@@ -368,17 +388,6 @@ const SettingsNavigation: React.FC<SettingsNavigationProps> = ({ onBack }) => {
             isActive={false}
             onClick={handleSignOut}
             ariaLabel="Sign out of your account"
-          />
-          <NavItem
-            icon={
-              <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M12.3544 15.8529C12.1594 16.0485 11.8429 16.0491 11.6472 15.8542L6.16276 10.3892C5.94705 10.1743 5.94705 9.82495 6.16276 9.61L11.6472 4.14502C11.8429 3.95011 12.1594 3.95067 12.3544 4.14628C12.5493 4.34189 12.5487 4.65848 12.3531 4.85339L7.18851 9.99961L12.3531 15.1458C12.5487 15.3407 12.5493 15.6573 12.3544 15.8529Z" fill="currentColor"></path>
-              </svg>
-            }
-            label="Back"
-            isActive={false}
-            onClick={handleBack}
-            ariaLabel="Go Back"
           />
         </div>
       </div>
