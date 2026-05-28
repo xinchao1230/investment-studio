@@ -199,6 +199,28 @@ root.render(
   </React.StrictMode>
 );
 
+// Tell the main process React has mounted and the first frame is being
+// rendered, so it can finally call BrowserWindow.show(). Until this signal
+// arrives the window stays hidden — the user never sees the raw HTML boot
+// splash flash before React paints. See main.ts createMainWindow() for the
+// receiving side and the fallback timeout that guarantees the window is
+// eventually shown even if this signal is missed.
+//
+// requestAnimationFrame ensures we run after React has committed the tree
+// and the browser has scheduled the first paint, not just after the
+// synchronous render() call returns.
+try {
+  requestAnimationFrame(() => {
+    try {
+      window.electronAPI?.window?.notifyRendererReady?.();
+    } catch (err) {
+      logger.warn('[Startup] notifyRendererReady failed:', err);
+    }
+  });
+} catch (err) {
+  logger.warn('[Startup] requestAnimationFrame for notifyRendererReady failed:', err);
+}
+
 logger.success('App rendered successfully');
 void recordCrashBreadcrumb('renderer-app-rendered', {
   href: window.location.href,

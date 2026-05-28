@@ -114,11 +114,27 @@ const mocks = vi.hoisted(() => {
     unregisterAll: vi.fn(),
   };
 
+  const ipcMainHandlers: Record<string, Function[]> = {};
+  const mockIpcMain = {
+    on: vi.fn((event: string, handler: Function) => {
+      if (!ipcMainHandlers[event]) ipcMainHandlers[event] = [];
+      ipcMainHandlers[event].push(handler);
+    }),
+    once: vi.fn((event: string, handler: Function) => {
+      if (!ipcMainHandlers[event]) ipcMainHandlers[event] = [];
+      ipcMainHandlers[event].push(handler);
+    }),
+    handle: vi.fn(),
+    removeHandler: vi.fn(),
+    removeAllListeners: vi.fn(),
+  };
+
   return {
     appEventHandlers,
     windowEventHandlers,
     webContentsEventHandlers,
     powerMonitorHandlers,
+    ipcMainHandlers,
     mockApp,
     mockWebContents,
     mockMainBrowserWindow,
@@ -129,6 +145,7 @@ const mocks = vi.hoisted(() => {
     mockPowerMonitor,
     mockScreen,
     mockGlobalShortcut,
+    mockIpcMain,
   };
 });
 
@@ -142,6 +159,7 @@ vi.mock('electron', () => ({
   powerMonitor: mocks.mockPowerMonitor,
   screen: mocks.mockScreen,
   globalShortcut: mocks.mockGlobalShortcut,
+  ipcMain: mocks.mockIpcMain,
 }));
 
 // ─── selection-hook mock ──────────────────────────────────────────────────────
@@ -563,22 +581,36 @@ describe('main.ts – coverage2', () => {
 
   // ─── ready-to-show handler ───────────────────────────────────────────────
   describe('ready-to-show handler', () => {
-    it('shows window and calls setMainWindow on managers', async () => {
+    it('registers a renderer-ready IPC listener and defers show() until it fires', async () => {
       const handlers = mocks.windowEventHandlers['ready-to-show'];
       if (handlers && handlers.length > 0) {
+        // Reset any earlier show() calls from other tests in this describe block.
+        mocks.mockMainBrowserWindow.show.mockClear();
+
         await handlers[0]();
-        expect(mocks.mockMainBrowserWindow.show).toHaveBeenCalled();
+
+        // show() must NOT have been called synchronously from ready-to-show.
+        // The new behavior delays it until the renderer signals it has mounted.
+        expect(mocks.mockMainBrowserWindow.show).not.toHaveBeenCalled();
+
+        // ready-to-show should have registered a one-shot listener for the
+        // renderer-ready IPC signal.
+        const rendererReadyHandlers = mocks.ipcMainHandlers['window:rendererReady'];
+        if (rendererReadyHandlers && rendererReadyHandlers.length > 0) {
+          // Simulating the renderer signal should finally trigger show().
+          await rendererReadyHandlers[0]();
+          expect(mocks.mockMainBrowserWindow.show).toHaveBeenCalled();
+        }
       }
     });
 
-    it('maximizes window when mainWindowMaximized is true', async () => {
-      mockAppCacheManager.getConfig.mockReturnValueOnce({ zoomLevel: 0, mainWindowMaximized: true });
-      const handlers = mocks.windowEventHandlers['ready-to-show'];
-      if (handlers && handlers.length > 0) {
-        await handlers[0]();
-        expect(mocks.mockMainBrowserWindow.maximize).toHaveBeenCalled();
-      }
-    });
+    // NOTE: maximize() is no longer called from ready-to-show. It now runs
+    // during createMainWindow (before loadURL) so the renderer's first paint
+    // already uses the maximized viewport — avoids a startup flash where
+    // content was briefly laid out at 1200x800 inside a maximized window.
+    // The createMainWindow-driven maximize path is exercised implicitly by
+    // module-load tests; no direct assertion is feasible here because the
+    // module-under-test is a singleton initialized once with default config.
   });
 
   // ─── power monitor handlers ──────────────────────────────────────────────

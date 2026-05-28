@@ -38,8 +38,8 @@
             margin: 0;
             padding: 0;
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
-            background: linear-gradient(135deg, #fafafa 0%, #ffffff 50%, #f5f5f5 100%);
-            color: #1a1a1a;
+            background: linear-gradient(135deg, #FFFBF8 0%, #FFFFFF 50%, #F8F4F1 100%);
+            color: #1c1c1c;
             overflow: hidden;
             -webkit-font-smoothing: antialiased;
             -moz-osx-font-smoothing: grayscale;
@@ -50,41 +50,22 @@
             height: 100vh;
             display: flex;
             flex-direction: column;
+            background: linear-gradient(135deg, #FFFBF8 0%, #FFFFFF 50%, #F8F4F1 100%);
         }
 
-        .loading {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            height: 100vh;
-            font-size: 16px;
-            font-weight: 500;
-            color: #525252;
-            letter-spacing: 0.01em;
-        }
-
-        .loading::after {
-            content: '';
-            width: 18px;
-            height: 18px;
-            margin-left: 12px;
-            border: 2px solid rgba(14, 165, 233, 0.2);
-            border-top: 2px solid #0ea5e9;
-            border-radius: 50%;
-            animation: spin 0.8s linear infinite;
-        }
-
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
+        /* No HTML boot splash: the Electron main process keeps the window
+           hidden until the renderer signals it has mounted (see
+           `window:rendererReady` IPC in main.ts), so users never see the
+           pre-React HTML. The light gradient background above matches the
+           StartupPage gradient (src/renderer/styles/StartupPage.css) so:
+             1. When the window finally shows, the framebuffer behind React's
+                first paint already matches the page — no dark flash.
+             2. The rare 8s-fallback case (renderer never signals) shows the
+                same brand-consistent background instead of a dark hole. */
     </style>
 </head>
 <body>
-    <div id="root">
-        <div class="loading">Starting <%= htmlWebpackPlugin.options.productName %>
-        </div>
-    </div>
+    <div id="root"></div>
     <%- entryScript %>
 </body>
 </html>
