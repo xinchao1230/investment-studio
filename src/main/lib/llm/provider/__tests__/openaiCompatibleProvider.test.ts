@@ -68,6 +68,26 @@ describe('OpenAICompatibleProvider', () => {
         })
       ).rejects.toThrow();
     });
+
+    // Regression: Azure's OpenAI-v1 sample URL ends in `/`, e.g.
+    //   https://<resource>.cognitiveservices.azure.com/openai/v1/
+    // The naive `${baseUrl}/chat/completions` concat produced a double
+    // slash and Azure's gateway routed it into the legacy deployment
+    // handler, returning `DeploymentNotFound`. getBaseUrl() must strip
+    // trailing slashes before path joining.
+    it('should strip trailing slashes from baseUrl', () => {
+      const cases: Array<[string, string]> = [
+        ['https://example.com/openai/v1/', 'https://example.com/openai/v1'],
+        ['https://example.com/openai/v1///', 'https://example.com/openai/v1'],
+        ['https://example.com/openai/v1', 'https://example.com/openai/v1'],
+        ['http://localhost:11434/v1/', 'http://localhost:11434/v1'],
+      ];
+      for (const [input, expected] of cases) {
+        const p = new OpenAICompatibleProvider('custom-openai');
+        p.configure({ enabled: true, apiKey: 'k', baseUrl: input });
+        expect((p as any).getBaseUrl()).toBe(expected);
+      }
+    });
   });
 
   describe('SSE chunk parsing', () => {

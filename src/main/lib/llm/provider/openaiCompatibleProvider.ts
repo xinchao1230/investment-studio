@@ -86,9 +86,24 @@ export class OpenAICompatibleProvider implements ILlmProvider {
     return this.modelsCache;
   }
 
-  /** Get the effective base URL (user override or provider default) */
+  /**
+   * Get the effective base URL (user override or provider default),
+   * with any trailing slash(es) stripped.
+   *
+   * Why this matters: the chat/completions and models paths are joined
+   * by string concatenation (`${baseUrl}/chat/completions`). If the user
+   * pastes a URL ending in `/` (as Azure's OpenAI-v1 sample does:
+   * `https://<resource>.cognitiveservices.azure.com/openai/v1/`), the
+   * naive concat produces a double slash, e.g.
+   *   https://.../openai/v1//chat/completions
+   * Azure's gateway then misroutes that into the legacy Azure-OpenAI
+   * deployment handler and returns `DeploymentNotFound`. The OpenAI
+   * Python SDK normalizes the trailing slash internally, which is why
+   * the same URL works there.
+   */
   private getBaseUrl(): string {
-    return this.config.baseUrl || this.info.defaultBaseUrl;
+    const raw = this.config.baseUrl || this.info.defaultBaseUrl;
+    return raw.replace(/\/+$/, '');
   }
 
   /** Get the API key from config */
