@@ -704,10 +704,27 @@ export const TargetListSidebar: React.FC<TargetListSidebarProps> = ({
 
   const navigate = useNavigate();
 
+  // Platform-aware top padding for the tab row.
+  // On macOS the app uses a frameless titleBarStyle: 'hiddenInset' window,
+  // so the traffic-light controls overlap the top of the renderer — we
+  // need ~40px of clearance for them.
+  // On Windows/Linux, the separate <WindowsTitleBar /> component already
+  // provides the title bar (also 40px), and the sidebar sits below it.
+  // Stacking another 40px there produces a visible dead band above the
+  // Workspace/Chat tabs. `electronAPI.platform` is set synchronously by
+  // the preload, so this resolves on first render with no flicker.
+  const isMac =
+    typeof window !== 'undefined' &&
+    window.electronAPI?.platform === 'darwin';
+  const tabRowPaddingTop = isMac ? 40 : 8;
+
   return (
     <div className="rw-pane-left flex flex-col h-full" style={{ width }}>
       {/* Tab row with mode tabs + action buttons */}
-      <div className="flex items-center px-3 pb-2 rw-divider gap-3" style={{ paddingTop: 40 }}>
+      <div
+        className="flex items-center px-3 pb-2 rw-divider gap-3"
+        style={{ paddingTop: tabRowPaddingTop }}
+      >
         <button
           type="button"
           className={`rw-side-tab ${activeMode === 'workspace' ? 'is-active' : ''}`}
