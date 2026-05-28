@@ -34,7 +34,9 @@ const logger = createLogger();
  * webpack's require() cannot handle runtime dynamic absolute paths (e.g. cached
  * modules under userData); createRequire must be used to obtain the native require.
  */
-const nativeRequire = createRequire(__filename);
+// Indirect reference prevents webpack from trying to parse createRequire's argument.
+const thisFile: string = __filename;
+const nativeRequire = createRequire(thisFile);
 
 // --------------------------------------------------------------------------
 // Types

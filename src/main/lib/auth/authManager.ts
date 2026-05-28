@@ -401,6 +401,33 @@ export class MainAuthManager implements IAuthManager {
 
     this.currentAuth = sanitizedAuthData;
 
+    // Eagerly refresh an expired Copilot token before any downstream service
+    // (models manager, scheduler, etc.) tries to use it. This avoids a race
+    // where services start up with a stale token and fail on their first API
+    // call. The refresh uses the long-lived GitHub token and is fast (~200ms).
+    try {
+      const copilot = sanitizedAuthData.ghcAuth.copilotTokens;
+      const nowSeconds = Math.floor(Date.now() / 1000);
+      if (copilot?.expires_at && copilot.expires_at <= nowSeconds) {
+        logger.info('[MainAuthManager] Copilot token expired at startup, refreshing before initialization', 'MainAuthManager', {
+          user: userLogin,
+          expiredAgo: `${Math.round((nowSeconds - copilot.expires_at) / 60)} minutes`
+        });
+        const refreshResult = await this.refreshCopilotToken();
+        if (refreshResult.success) {
+          logger.info('[MainAuthManager] Copilot token refreshed successfully at startup', 'MainAuthManager');
+        } else {
+          logger.warn('[MainAuthManager] Copilot token refresh failed at startup, downstream services may retry', 'MainAuthManager', {
+            error: refreshResult.error
+          });
+        }
+      }
+    } catch (error) {
+      logger.warn('[MainAuthManager] Error during startup token refresh:', 'MainAuthManager', {
+        error: error instanceof Error ? error.message : String(error)
+      });
+    }
+
     // Run the complete user initialization flow
     try {
       console.time('[MainAuthManager] handlePostAuthentication');
@@ -877,7 +904,16 @@ export class MainAuthManager implements IAuthManager {
    * Get the Copilot access token
    */
   getCopilotAccessToken(): string | null {
-    return this.currentAuth?.ghcAuth.copilotTokens.token || null;
+    const copilotTokens = this.currentAuth?.ghcAuth.copilotTokens;
+    if (!copilotTokens?.token) return null;
+
+    // Return null for expired tokens so callers trigger a refresh
+    const nowSeconds = Math.floor(Date.now() / 1000);
+    if (copilotTokens.expires_at && copilotTokens.expires_at <= nowSeconds) {
+      return null;
+    }
+
+    return copilotTokens.token;
   }
 
   /**
