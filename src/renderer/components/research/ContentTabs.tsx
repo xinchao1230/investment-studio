@@ -787,8 +787,16 @@ export const ContentTabs: React.FC<ContentTabsProps> = ({
       }`}
       style={{ background: 'var(--rw-bg)' }}
     >
-      {/* Tab strip */}
-      <div className="flex h-7 rw-divider overflow-x-auto bg-[var(--rw-bg-soft)]">
+      {/* Tab strip.
+       *
+       * `relative z-50 isolate pointer-events-auto` defends against Univer:
+       * when an xlsx tab is active, Univer's UI shell may portal floating
+       * widgets (popups, dropdowns, range selectors) onto `document.body`
+       * with high z-index. Without an explicit stacking context here, those
+       * portals can sit above the tab strip and silently swallow clicks,
+       * making tabs appear non-switchable and the X close button inert.
+       */}
+      <div className="relative z-50 isolate flex h-7 rw-divider overflow-x-auto bg-[var(--rw-bg-soft)] pointer-events-auto">
         {tabs.map((tab) => {
           const isActive = tab.id === activeTabId;
           const tabIsDirty =
@@ -811,7 +819,19 @@ export const ContentTabs: React.FC<ContentTabsProps> = ({
                 />
               )}
               <button
+                // Fires on pointerdown so the close happens before any
+                // capture-phase handler from Univer (or another global
+                // listener) can preempt the synthetic click. stopProp
+                // keeps the parent tab's onClick (which would re-activate
+                // the tab) from firing on the same gesture.
+                onPointerDown={(e) => {
+                  e.stopPropagation();
+                  handleTabCloseGuarded(tab.id);
+                }}
                 onClick={(e) => {
+                  // Keyboard (Enter/Space) "click" path. For mouse we
+                  // already closed on pointerdown; this is a no-op
+                  // because the tab is already gone from state.
                   e.stopPropagation();
                   handleTabCloseGuarded(tab.id);
                 }}
@@ -938,7 +958,13 @@ export const ContentTabs: React.FC<ContentTabsProps> = ({
 
         {/* View mode for the active tab (only when NOT editing). */}
         {activeTab && !activeIsEditing && (
-          <div className="absolute inset-0 overflow-auto">
+          <div
+            className="absolute inset-0 overflow-auto"
+            // `isolation: isolate` keeps Univer's internal stacking
+            // contexts (canvas, ribbon, formula bar, popups) scoped to
+            // this pane so they cannot bleed above the tab strip.
+            style={{ isolation: 'isolate' }}
+          >
             {activeTab.type === 'spreadsheet' && activeTab.sheetData ? (
               <UniverSheet data={activeTab.sheetData} />
             ) : activeTab.type === 'csv' ? (
