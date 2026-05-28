@@ -97,3 +97,12 @@
 .editable-pane-retry:hover {
   background: rgba(0, 0, 0, 0.04);
 }
+
+/* ── Monaco Find Widget hover tooltip fix ──
+ * Monaco's workbench-hover-container tooltip overlaps find-widget
+ * buttons at the widget boundary, causing a flicker loop. Hide it
+ * entirely for find-widget buttons — the aria-label still provides
+ * accessibility, and the icons are self-explanatory. */
+.workbench-hover-container {
+  display: none !important;
+}
