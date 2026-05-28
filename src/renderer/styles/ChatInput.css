@@ -42,18 +42,25 @@
 }
 
 .chat-textarea {
+  -webkit-appearance: none; /* Remove Chromium internal textarea chrome that offsets text */
+  appearance: none;
   width: 100%;
   resize: none;
-  border: none;
+  border: 0;
   padding: 0 20px 0 20px;
   margin: 0;
+  box-sizing: border-box;
+  font-family: var(--font-sans);
   font-size: 15px;
   line-height: 1.6;
+  letter-spacing: normal;
   background: transparent;
   color: #1a1a1a;
   outline: none;
   height: 72px; /* 3-line text height: 15px × 1.6 × 3 = 72px */
-  font-family: inherit;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
   /* Auto-resize based on content */
   overflow-y: auto;
   scrollbar-width: none;
@@ -931,15 +938,19 @@
   left: 0;
   right: 0;
   bottom: 0;
-  /* Must exactly match .chat-textarea padding and margin */
+  /* Must exactly match .chat-textarea padding, margin, border, box-sizing and font */
   padding: 0 20px 0 20px;
   margin: 0;
-  font-family: inherit;
+  border: 0;
+  box-sizing: border-box;
+  font-family: var(--font-sans);
   /* Explicitly specify same font size and line height as .chat-textarea */
   font-size: 15px;
   line-height: 1.6;
+  letter-spacing: normal;
   white-space: pre-wrap;
   word-wrap: break-word;
+  overflow-wrap: break-word;
   /* Must match .chat-textarea scroll behavior */
   overflow-y: auto;
   scrollbar-width: none;

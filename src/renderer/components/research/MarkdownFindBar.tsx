@@ -229,7 +229,7 @@ export const MarkdownFindBar: React.FC<MarkdownFindBarProps> = ({
         value={query}
         onChange={(e) => setQuery(e.target.value)}
         onKeyDown={handleKeyDown}
-        placeholder="查找…"
+        placeholder="Find…"
         className="w-44 px-1.5 py-0.5 outline-none bg-transparent text-[var(--rw-text)]"
       />
       <span className="text-[var(--rw-text-3)] min-w-[3rem] text-right tabular-nums">
@@ -243,7 +243,7 @@ export const MarkdownFindBar: React.FC<MarkdownFindBarProps> = ({
             ? 'bg-[var(--rw-accent,#3b82f6)]/15 text-[var(--rw-accent,#3b82f6)]'
             : 'hover:bg-black/5 text-[var(--rw-text-2)]'
         }`}
-        title="区分大小写"
+        title="Case sensitive"
       >
         Aa
       </button>
@@ -252,7 +252,6 @@ export const MarkdownFindBar: React.FC<MarkdownFindBarProps> = ({
         onClick={prev}
         disabled={matches.length === 0}
         className="p-1 rounded hover:bg-black/5 text-[var(--rw-text-2)] disabled:opacity-40 disabled:cursor-not-allowed"
-        title="上一个 (Shift+Enter)"
       >
         <ChevronUp size={14} />
       </button>
@@ -261,7 +260,6 @@ export const MarkdownFindBar: React.FC<MarkdownFindBarProps> = ({
         onClick={next}
         disabled={matches.length === 0}
         className="p-1 rounded hover:bg-black/5 text-[var(--rw-text-2)] disabled:opacity-40 disabled:cursor-not-allowed"
-        title="下一个 (Enter)"
       >
         <ChevronDown size={14} />
       </button>
@@ -269,7 +267,6 @@ export const MarkdownFindBar: React.FC<MarkdownFindBarProps> = ({
         type="button"
         onClick={onClose}
         className="p-1 rounded hover:bg-black/5 text-[var(--rw-text-2)]"
-        title="关闭 (Esc)"
       >
         <X size={14} />
       </button>

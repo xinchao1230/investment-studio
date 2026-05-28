@@ -92,7 +92,8 @@ const ChatViewContent: React.FC<ChatViewContentProps> = memo(({
     (zeroStates.quick_starts && zeroStates.quick_starts.length > 0)
   );
   const shouldDisableZeroStates =
-    agentName === PM_AGENT_CANONICAL_NAME && isBuiltinAgent(agentName, BRAND_NAME);
+    BRAND_NAME === 'investment-studio' ||
+    (agentName === PM_AGENT_CANONICAL_NAME && isBuiltinAgent(agentName, BRAND_NAME));
   const showZeroStates = !isSessionSwitching && !shouldDisableZeroStates && isEmpty && hasValidZeroStates;
 
   const currentChatSessionId = useCurrentChatSessionId();

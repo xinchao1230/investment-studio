@@ -114,13 +114,25 @@ export const UniverSheet: React.FC<UniverSheetProps> = ({ data }) => {
 
     return () => {
       disposed = true;
-      if (univer) {
+      const u = univer;
+      if (!u) return;
+      // Defer dispose to a macrotask. Univer's `dispose()` internally
+      // unmounts a React root (its own UI shell — ribbon, formula bar,
+      // sheets canvas overlay) via ReactDOM.Root.unmount(). Calling that
+      // synchronously from inside this cleanup runs it nested in the
+      // outer React commit phase, which React 18.3+/19 detects and
+      // surfaces as:
+      //   "Attempted to synchronously unmount a root while React was
+      //    already rendering."
+      // setTimeout(_, 0) pushes the dispose onto the next macrotask so
+      // the outer commit finishes first.
+      setTimeout(() => {
         try {
-          univer.dispose();
+          u.dispose();
         } catch {
           // ignore disposal errors
         }
-      }
+      }, 0);
     };
   }, [data]);
 

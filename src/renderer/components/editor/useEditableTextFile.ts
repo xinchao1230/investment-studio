@@ -50,8 +50,13 @@ export interface EditableTextFileState {
 
 export function useEditableTextFile(opts: {
   filePath: string | null;
+  /** When provided, skip the initial disk read and use this value as
+   *  both the editor content and the dirty-detection baseline. This
+   *  avoids a race where a previous unmount save hasn't flushed to
+   *  disk yet. */
+  initialContent?: string;
 }): EditableTextFileState {
-  const { filePath } = opts;
+  const { filePath, initialContent } = opts;
 
   const [status, setStatus] = useState<FileStatus>('idle');
   const [content, setContent] = useState<string | null>(null);
@@ -105,8 +110,14 @@ export function useEditableTextFile(opts: {
     }
   }, []);
 
+  // Track whether we used initialContent so we only apply it once per
+  // filePath. Without this guard, a re-render with the same
+  // initialContent would reset edits in progress.
+  const usedInitialRef = useRef(false);
+
   useEffect(() => {
     currentPathRef.current = filePath;
+    usedInitialRef.current = false;
     if (!filePath) {
       setStatus('idle');
       setContent(null);
@@ -115,8 +126,20 @@ export function useEditableTextFile(opts: {
       setSaveError(null);
       return;
     }
-    void loadFile(filePath);
-  }, [filePath, loadFile]);
+    if (initialContent !== undefined) {
+      // Use the caller-supplied content as the baseline, skipping
+      // the async disk read that may return stale data.
+      diskContentRef.current = initialContent;
+      setContent(initialContent);
+      setStatus('ready');
+      setIsDirty(false);
+      setLoadErrorMessage(null);
+      setSaveError(null);
+      usedInitialRef.current = true;
+    } else {
+      void loadFile(filePath);
+    }
+  }, [filePath, loadFile]); // initialContent intentionally omitted — only consumed on mount
 
   const reloadFromDisk = useCallback(async () => {
     const fp = currentPathRef.current;

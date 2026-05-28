@@ -116,6 +116,29 @@ export default function(ctx: Context) {
           });
       });
 
+      // Seed builtin skills in background — must not block sign-in
+      import('../../lib/skill/builtinSkillSeeder')
+        .then(({ seedBuiltinSkills }) => {
+          const brandName = process.env.BRAND_NAME || 'openkosmos';
+          return seedBuiltinSkills(userLogin, brandName);
+        })
+        .then((seedResult) => {
+          if (seedResult.installed.length > 0 || seedResult.failed.length > 0) {
+            logger.info('[Startup] Builtin skills seeded', 'auth:setCurrentSession', {
+              userLogin,
+              installed: seedResult.installed,
+              skipped: seedResult.skipped.length,
+              failed: seedResult.failed,
+            });
+          }
+        })
+        .catch((seedError) => {
+          logger.warn('[Startup] Builtin skills seeding failed', 'auth:setCurrentSession', {
+            userLogin,
+            error: seedError instanceof Error ? seedError.message : String(seedError),
+          });
+        });
+
       return { success: true };
     } catch (error) {
       return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
@@ -299,6 +322,14 @@ export default function(ctx: Context) {
             }
 
             await ctx.registerGlobalShortcuts(); // Register global shortcuts
+
+            // Seed builtin skills in background — must not block sign-in
+            import('../../lib/skill/builtinSkillSeeder')
+              .then(({ seedBuiltinSkills }) => {
+                const brandName = process.env.BRAND_NAME || 'openkosmos';
+                return seedBuiltinSkills(authInfo.ghcAuth.user.login, brandName);
+              })
+              .catch(() => { /* best effort */ });
 
             // 🔥 Important: only notify frontend after all initialization is complete
             safeSend('auth:deviceFlowSuccess', { authInfo });

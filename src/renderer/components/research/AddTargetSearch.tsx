@@ -10,13 +10,13 @@ interface AddTargetSearchProps {
   onCancel: () => void;
   /**
    * Optional pool of already-added targets. When supplied, the combobox
-   * shows a "已有 Target" section above the API results so users can
+   * shows an "Existing Targets" section above the API results so users can
    * pick an existing target without leaving the input — turning the same
    * widget into the unified "find or add" entry point.
    */
   existingTargets?: Target[];
   /**
-   * Fired when the user picks a row from the "已有 Target" section.
+   * Fired when the user picks a row from the "Existing Targets" section.
    * Receives the target's stock_code. The component will close itself
    * (via onCancel) immediately after invoking this so the dropdown
    * dismisses just like a successful add.
@@ -197,7 +197,7 @@ export const AddTargetSearch: React.FC<AddTargetSearchProps> = ({
           ref={inputRef}
           className="w-full pl-7 pr-7 py-1.5 text-[13px] border rounded outline-none focus:border-[var(--rw-accent)]"
           style={{ borderColor: 'var(--rw-border)', background: '#fff' }}
-          placeholder="查找或添加（代码 / 名称）"
+          placeholder="Find or add (code / name)"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={onKeyDown}
@@ -230,7 +230,7 @@ export const AddTargetSearch: React.FC<AddTargetSearchProps> = ({
                   className="px-2 py-1 text-[10px] uppercase tracking-wide text-[var(--rw-text-3)]"
                   style={{ background: 'var(--rw-bg-soft)' }}
                 >
-                  已有 Target
+                  Existing Targets
                 </div>
               )}
               {filteredExisting.map((t, i) => {
@@ -247,12 +247,12 @@ export const AddTargetSearch: React.FC<AddTargetSearchProps> = ({
                     <span
                       className="text-[10px] px-1 rounded bg-emerald-50 text-emerald-700"
                       style={{ minWidth: 16, textAlign: 'center' }}
-                      title="已添加"
+                      title="Already added"
                     >
                       ✓
                     </span>
                     <span className="font-mono text-[12px] text-[var(--rw-text-2)]" style={{ minWidth: 60 }}>
-                      {isUnlisted ? '未上市' : t.stock_code}
+                      {isUnlisted ? 'Unlisted' : t.stock_code}
                     </span>
                     <span className="truncate flex-1 text-[var(--rw-text)]">{t.name}</span>
                   </div>
@@ -269,7 +269,7 @@ export const AddTargetSearch: React.FC<AddTargetSearchProps> = ({
                   className="px-2 py-1 text-[10px] uppercase tracking-wide text-[var(--rw-text-3)] border-t"
                   style={{ background: 'var(--rw-bg-soft)', borderTopColor: 'var(--rw-border)' }}
                 >
-                  添加新 Target
+                  Add New Target
                 </div>
               )}
               {results.map((s, i) => {
@@ -316,7 +316,7 @@ export const AddTargetSearch: React.FC<AddTargetSearchProps> = ({
                       +
                     </span>
                     <span className="truncate flex-1 text-[var(--rw-text)]">
-                      添加未上市公司:「<span className="font-medium">{query.trim()}</span>」
+                      Add unlisted company: "<span className="font-medium">{query.trim()}</span>"
                     </span>
                   </div>
                 );
@@ -328,19 +328,19 @@ export const AddTargetSearch: React.FC<AddTargetSearchProps> = ({
 
       <div className="flex items-center justify-between pt-1 px-0.5">
         <span className="text-[10px] text-[var(--rw-text-3)]">
-          ↑↓ 选择 · Enter 确认 · Esc 取消
+          ↑↓ Navigate · Enter Select · Esc Cancel
         </span>
         <button
           onClick={onCancel}
           disabled={busy}
           className="text-[11px] text-[var(--rw-text-3)] hover:text-[var(--rw-text)] disabled:opacity-50"
         >
-          取消
+          Cancel
         </button>
       </div>
 
       {busy && (
-        <div className="text-[11px] text-[var(--rw-text-3)]">添加中…</div>
+        <div className="text-[11px] text-[var(--rw-text-3)]">Adding…</div>
       )}
       {error && (
         <div className="text-[11px] text-red-600 break-words">{error}</div>

@@ -61,6 +61,11 @@ export interface EditableMonacoPaneProps {
   filePath: string | null;
   /** Monaco language id (e.g. 'markdown', 'csv', 'plaintext'). Defaults to 'plaintext'. */
   language?: string;
+  /** Optional cached content. When provided, the editor initializes
+   *  from this value instead of reading from disk, avoiding a race
+   *  when a previous unmount save hasn't flushed yet. The hook still
+   *  treats this as the baseline for dirty detection. */
+  initialContent?: string;
   /** Called every time isDirty changes — parent uses this to drive a Save button. */
   onDirtyChange?(dirty: boolean): void;
   /** Called after a successful save with the just-written content so
@@ -69,7 +74,7 @@ export interface EditableMonacoPaneProps {
    *  for our own writes). */
   onSaved?(filePath: string, content: string): void;
   /** Called whenever a save() goes in-flight / finishes. Useful for a
-   *  "保存中…" status indicator next to the toolbar. */
+   *  saving status indicator next to the toolbar. */
   onSavingChange?(saving: boolean): void;
   /** When true, schedules a debounced save on every buffer change.
    *  Ctrl+S still works to force an immediate save. Defaults to false. */
@@ -85,10 +90,10 @@ const EditableMonacoPane = forwardRef<
   EditableMonacoPaneHandle,
   EditableMonacoPaneProps
 >(function EditableMonacoPane(
-  { filePath, language = 'plaintext', onDirtyChange, onSaved, onSavingChange, autoSave = false, autoSaveDelay = 500, readOnly = false, className },
+  { filePath, language = 'plaintext', initialContent, onDirtyChange, onSaved, onSavingChange, autoSave = false, autoSaveDelay = 500, readOnly = false, className },
   ref,
 ) {
-  const file = useEditableTextFile({ filePath });
+  const file = useEditableTextFile({ filePath, initialContent });
   const onSavedRef = useRef(onSaved);
   onSavedRef.current = onSaved;
   const onSavingChangeRef = useRef(onSavingChange);
@@ -303,15 +308,36 @@ const EditableMonacoPane = forwardRef<
 
     return () => {
       disposed = true;
+      const editor = editorRef.current;
       // Flush any pending auto-save so we don't lose the last
       // keystroke when the editor unmounts (tab switch, file change,
       // window close).
       if (autoSaveTimerRef.current) {
         clearTimeout(autoSaveTimerRef.current);
         autoSaveTimerRef.current = null;
-        // Fire-and-forget; the hook's save() is its own promise and
-        // the OS will hold the page alive long enough.
-        void performSaveRef.current();
+      }
+      // Synchronously capture the editor content before disposal.
+      // The async save() depends on React state which may already be
+      // stale after unmount, so we grab the value from the live
+      // Monaco model and write it directly. This also pushes the
+      // content into the parent's cache via onSaved so the view-mode
+      // tab shows up-to-date text without waiting for the write to
+      // hit disk.
+      if (editor && filePath) {
+        const latestContent = editor.getValue();
+        const baseline = fileApiRef.current.content;
+        const dirty = latestContent !== (baseline ?? '');
+        if (dirty) {
+          // Fire the write and notify the parent cache synchronously
+          // (the callback itself is sync; only the IPC is async).
+          window.electronAPI?.fs?.writeFile?.(filePath, latestContent, 'utf-8')
+            ?.catch?.((err: unknown) => {
+              console.warn('[EditableMonacoPane] unmount save failed', err);
+            });
+          if (onSavedRef.current) {
+            try { onSavedRef.current(filePath, latestContent); } catch { /* */ }
+          }
+        }
       }
       changeDisposableRef.current?.dispose();
       changeDisposableRef.current = null;
@@ -373,13 +399,13 @@ const EditableMonacoPane = forwardRef<
     return (
       <div className={`editable-pane editable-pane-error ${className ?? ''}`}>
         <AlertTriangle size={20} />
-        <span>{file.loadErrorMessage ?? '加载失败'}</span>
+        <span>{file.loadErrorMessage ?? 'Failed to load'}</span>
         <button
           type="button"
           className="editable-pane-retry"
           onClick={() => void file.reloadFromDisk()}
         >
-          <RotateCw size={14} /> 重试
+          <RotateCw size={14} /> Retry
         </button>
       </div>
     );
