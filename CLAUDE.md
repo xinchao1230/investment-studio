@@ -123,3 +123,11 @@ See [ai.prompt/postmortem-token-estimation-overflow.md](ai.prompt/postmortem-tok
 ## Postmortem: Excessive main-process logging causes UI freeze
 
 See [ai.prompt/postmortem-excessive-logging-ui-freeze.md](ai.prompt/postmortem-excessive-logging-ui-freeze.md) for full details. Summary: Four logging hotspots (streaming catch-all, scheduler heartbeat, token monitor, terminal cleanup) produced 44K+ entries/day; the streaming logger alone fired 37K times with synchronous JSON serialization, blocking the event loop and causing IPC burst delivery that froze the renderer. Fix: silence normal-path logs, deduplicate unknown-type logs, remove payload serialization from hot paths.
+
+## Postmortem: Sign-out → sign-in leaves chat unable to send messages (chatStatus null)
+
+**Root cause:** After sign-out → sign-in, the compact-mode `ChatView.ensureCompactChatSession()` reads stale renderer-side `profileDataManager` cache (previous user's chatId) before the new user's profile is loaded. The main process rejects the stale chatId. No chat session is created, `chatStatus` stays null, and messages cannot be sent.
+
+**Fix (defense-in-depth):** (1) New `agentChat:startNewChatForPrimaryAgent` IPC — main process resolves the correct primary agent chatId without depending on renderer cache. (2) `startNewChatFor` chatId fallback — auto-resolves to primary agent if requested chatId doesn't belong to current user. (3) `sendUserMessage` waits up to 8s for a session to appear rather than failing immediately.
+
+**Lesson:** For critical-path operations during auth transitions, prefer main-process-authoritative IPC calls over renderer-side cache reads. The main process is the single source of truth for user identity; renderer caches are eventually-consistent and race-prone.

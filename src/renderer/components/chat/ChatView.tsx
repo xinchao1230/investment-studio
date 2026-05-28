@@ -9,6 +9,7 @@ import ChatViewHeader from './ChatViewHeader';
 import ChatViewContent from './ChatViewContent';
 import { ContextMenu } from './chat-input/ContextMenu';
 import { useAgentConfig } from '../userData/userDataProvider';
+import { useAuthContext } from '../auth/AuthProvider';
 import { useToast } from '../ui/ToastProvider';
 import { useLayout } from '../layout/LayoutProvider';
 import { CurrentSessionStatus, useHasChatSessionCache, agentChatSessionCacheManager } from '../../lib/chat/agentChatSessionCacheManager';
@@ -22,23 +23,33 @@ import { BRAND_NAME } from '../../../shared/constants/branding';
 const logger = createLogger('[ChatView]');
 
 // Compact (embedded) mode: ensure the backend has an active chat session.
-// If not, pick the primary agent (or first chat) from the profile and start
-// a new chat session for it. Mirrors AgentPage's primary-agent selection so
-// that the embedded Research ChatView has a model selector populated and
-// sendMessage has a target session.
+// After sign-out → sign-in, renderer-side profile data may be stale, so we
+// prefer the main-process-authoritative `startNewChatForPrimaryAgent` IPC
+// which resolves the correct chatId for the current user without relying on
+// renderer cache timing.
 async function ensureCompactChatSession(): Promise<void> {
   if (agentChatSessionCacheManager.getCurrentChatSessionId()) return;
   try {
+    // 1. Try recovering an existing backend session
     if (window.electronAPI?.agentChat?.getCurrentChatSession) {
       const cur = await window.electronAPI.agentChat.getCurrentChatSession();
       if (cur?.success && cur.data?.chatId && cur.data?.chatSessionId) {
-        agentChatSessionCacheManager.setCurrentChatSessionId(
-          cur.data.chatId,
-          cur.data.chatSessionId,
-        );
+        agentChatSessionCacheManager.setCurrentChatSessionId(cur.data.chatId, cur.data.chatSessionId);
         return;
       }
     }
+
+    // 2. Ask the main process to create a session for the primary agent
+    const ipc = (window as any).electronAPI?.agentChat;
+    if (ipc?.startNewChatForPrimaryAgent) {
+      const result = await ipc.startNewChatForPrimaryAgent();
+      if (result?.success && result.chatId && result.chatSessionId) {
+        agentChatSessionCacheManager.setCurrentChatSessionId(result.chatId, result.chatSessionId);
+        return;
+      }
+    }
+
+    // 3. Fallback: renderer-side profile lookup (original path)
     const profile = profileDataManager.getProfile() as any;
     if (!profile) return;
     const primaryAgentName: string = profile.primaryAgent || getDefaultPrimaryAgentName(BRAND_NAME);
@@ -49,10 +60,7 @@ async function ensureCompactChatSession(): Promise<void> {
     if (!targetChatId) return;
     const result = await startNewChatFor(targetChatId);
     if (result?.success && result.chatSessionId) {
-      agentChatSessionCacheManager.setCurrentChatSessionId(
-        targetChatId,
-        result.chatSessionId,
-      );
+      agentChatSessionCacheManager.setCurrentChatSessionId(targetChatId, result.chatSessionId);
     }
   } catch (err) {
     logger.error('[ChatView compact] ensureCompactChatSession failed:', err);
@@ -76,6 +84,8 @@ const ChatView: React.FC<ChatViewProps> = memo(({ mode = 'full' }) => {
   const { chatId: routeChatId, sessionId: routeSessionId } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
+  const { authData } = useAuthContext();
+  const currentUserAlias = authData?.ghcAuth?.alias;
 
   const navigationState = (location.state as {
     selectedText?: string;
@@ -103,9 +113,16 @@ const ChatView: React.FC<ChatViewProps> = memo(({ mode = 'full' }) => {
   // Get chatId and chatSessionId from agentChatSessionCacheManager
   const { chatId, chatSessionId, chatStatus } = CurrentSessionStatus.use();
 
-  // On first render, if cache manager has no value, proactively fetch current session state from backend
-  // Scenario: backend already sent currentChatSessionIdChanged event before frontend set up IPC listener
+  // On first render (or when user identity changes), if cache manager has no
+  // value, proactively fetch current session state from backend.
+  // Scenario: backend already sent currentChatSessionIdChanged event before
+  // frontend set up IPC listener, or sign-out → sign-in cleared the session.
   const initialFetchDoneRef = useRef(false);
+  const prevAliasRef = useRef(currentUserAlias);
+  if (prevAliasRef.current !== currentUserAlias) {
+    prevAliasRef.current = currentUserAlias;
+    initialFetchDoneRef.current = false; // re-bootstrap on user switch
+  }
   useEffect(() => {
     if (initialFetchDoneRef.current) return;
     initialFetchDoneRef.current = true;
@@ -136,7 +153,7 @@ const ChatView: React.FC<ChatViewProps> = memo(({ mode = 'full' }) => {
     };
 
     setTimeout(fetchCurrentSession, 100);
-  }, [mode]);
+  }, [mode, currentUserAlias]);
 
   // We need to track the last processed route to avoid redundant updates
   const lastProcessedRouteRef = useRef<string>('');

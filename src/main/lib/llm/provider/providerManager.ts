@@ -131,6 +131,20 @@ export class ProviderManager {
       }
     }
 
+    // When a Copilot user signs in, auto-switch to the copilot provider.
+    // This mirrors the skip-login → non-copilot fallback above: users who
+    // previously used skip-login may have a non-copilot activeProvider saved
+    // to disk, but once they authenticate with GitHub Copilot they should
+    // default to the copilot provider.  Users can still switch providers
+    // manually within a session via Settings; this only applies at sign-in.
+    if (this.currentAlias && this.currentAlias !== SKIP_LOGIN_ALIAS && this.activeProviderId !== 'copilot') {
+      logger.debug(`[ProviderManager] Copilot user detected, auto-switching from ${this.activeProviderId} to copilot`);
+      this.activeProviderId = 'copilot';
+      this.config.activeProvider = 'copilot';
+      await this.saveConfig(this.config);
+      this.notifyRenderer('provider:switched', { activeProvider: 'copilot' });
+    }
+
     // For non-Copilot providers, warm the model cache in background so that
     // subsequent IPC calls (getModelById, getModelCapabilities, etc.) hit cache
     // instead of each firing a separate HTTP request to the provider.
