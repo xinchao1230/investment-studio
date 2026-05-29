@@ -65,7 +65,7 @@ export const Dialog: React.FC<DialogProps> = ({ open, onOpenChange, children, cl
 
   return (
     <DialogCloseContext.Provider value={handleClose}>
-      <div className={cn("fixed inset-0 z-50 flex items-center justify-center", className)}>
+      <div className={cn("fixed inset-0 z-[60] flex items-center justify-center", className)}>
         <div
           className="fixed inset-0 bg-black/50"
           onClick={handleClose}

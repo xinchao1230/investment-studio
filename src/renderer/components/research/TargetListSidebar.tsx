@@ -70,6 +70,10 @@ interface TargetListSidebarProps {
   onRenameFile?: (sourceAbs: string, newName: string) => Promise<MoveResult>;
   /** Move a file to the OS trash. */
   onTrashFile?: (sourceAbs: string) => Promise<{ success: boolean; error?: string }>;
+  /** Close an open tab by its absPath (used after deletion). */
+  onCloseFile?: (absPath: string) => void;
+  /** Close all open tabs whose absPath starts with the given directory (used after folder deletion). */
+  onCloseFilesUnder?: (dirAbsPath: string) => void;
   /**
    * Force-reload the file list for a target. Used after creating files
    * via `fs:writeTextFileSafe` (which suppresses the watcher echo to
@@ -158,6 +162,8 @@ export const TargetListSidebar: React.FC<TargetListSidebarProps> = ({
   onMoveFile,
   onRenameFile,
   onTrashFile,
+  onCloseFile,
+  onCloseFilesUnder,
   onRefreshTarget,
   topSlot,
   addFormOpen,
@@ -373,9 +379,12 @@ export const TargetListSidebar: React.FC<TargetListSidebarProps> = ({
       return;
     }
     const r = await onTrashFile(ref.absPath);
-    if (r.success) showSuccess('Moved to trash');
+    if (r.success) {
+      showSuccess('Moved to trash');
+      onCloseFile?.(ref.absPath);
+    }
     else showError(r.error || 'Delete failed');
-  }, [pendingDeleteFile, onTrashFile, showError, showSuccess]);
+  }, [pendingDeleteFile, onTrashFile, showError, showSuccess, onCloseFile]);
 
   const handleConfirmDeleteFolder = useCallback(async () => {
     const ctx = pendingDeleteFolder;
@@ -408,6 +417,7 @@ export const TargetListSidebar: React.FC<TargetListSidebarProps> = ({
           }
         }
         showSuccess(`Deleted ${ctx.folderName}`);
+        onCloseFilesUnder?.(ctx.folderAbsPath);
         onRefreshTarget?.(ctx.ownerCode);
       } else {
         showError(r?.error || 'Delete failed');
@@ -415,7 +425,7 @@ export const TargetListSidebar: React.FC<TargetListSidebarProps> = ({
     } catch (err) {
       showError(err instanceof Error ? err.message : String(err));
     }
-  }, [pendingDeleteFolder, targets, showError, showSuccess, onRefreshTarget]);
+  }, [pendingDeleteFolder, targets, showError, showSuccess, onCloseFilesUnder, onRefreshTarget]);
 
   const handleConfirmRenameFile = useCallback(async (newName: string) => {
     const ref = pendingRenameFile;

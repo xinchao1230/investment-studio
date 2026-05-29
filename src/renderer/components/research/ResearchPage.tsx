@@ -1105,6 +1105,36 @@ export const ResearchPage: React.FC = () => {
     [setTabsByCode],
   );
 
+  // Close all tabs whose absPath starts with the given directory prefix.
+  // Used after a folder is deleted so stale tabs don't linger.
+  const handleCloseFilesUnder = useCallback(
+    (dirAbsPath: string) => {
+      setTabsByCode((prev) => {
+        const next = { ...prev };
+        let changed = false;
+        for (const code of Object.keys(next)) {
+          const state = next[code];
+          if (!state?.tabs?.length) continue;
+          // Normalize to forward slashes for comparison and ensure
+          // trailing separator so /foo doesn't match /foobar.
+          const norm = dirAbsPath.replace(/\\/g, '/').replace(/\/$/, '') + '/';
+          const matching = state.tabs.filter(
+            (t) => t.absPath.replace(/\\/g, '/').startsWith(norm),
+          );
+          if (matching.length === 0) continue;
+          let s = state;
+          for (const tab of matching) {
+            s = closeTabRec(s, tab.absPath);
+          }
+          next[code] = s;
+          changed = true;
+        }
+        return changed ? next : prev;
+      });
+    },
+    [setTabsByCode],
+  );
+
   // In-editor save → refresh our content cache directly. The fs watcher
   // echo is intentionally suppressed by writeTextFileSafe for our own
   // writes, so we can't rely on the watcher to invalidate the cache here.
@@ -1391,6 +1421,8 @@ export const ResearchPage: React.FC = () => {
             onMoveFile={handleMoveFile}
             onRenameFile={handleRenameFile}
             onTrashFile={trashFile}
+            onCloseFile={handleTabClose}
+            onCloseFilesUnder={handleCloseFilesUnder}
             onRefreshTarget={(code) => { void loadFiles(code, { force: true }); }}
             addFormOpen={showAddForm}
             chatsByCode={targetChats.chatsByCode}
