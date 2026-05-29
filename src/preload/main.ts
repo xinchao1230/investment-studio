@@ -1250,6 +1250,11 @@ export interface ElectronAPI {
       failCount?: number;
       error?: string;
     }>;
+    mkdir: (dirPath: string) => Promise<{
+      success: boolean;
+      exists?: boolean;
+      error?: string;
+    }>;
     // New: download file from URL to local path
     downloadFile: (url: string, destPath: string) => Promise<{
       success: boolean;
@@ -2485,6 +2490,7 @@ export const electronAPI: ElectronAPI = {
     }) => ipcRenderer.invoke('fs:selectFiles', options),
     // New: delete files or directories (supports multiple paths, recursive directory deletion)
     deletePaths: (paths: string[]) => ipcRenderer.invoke('fs:deletePaths', paths),
+    mkdir: (dirPath: string) => ipcRenderer.invoke('fs:mkdir', dirPath),
     // New: download file from URL to local path
     downloadFile: (url: string, destPath: string) =>
       ipcRenderer.invoke('fs:downloadFile', url, destPath),

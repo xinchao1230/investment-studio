@@ -330,7 +330,7 @@ const EditableMonacoPane = forwardRef<
         if (dirty) {
           // Fire the write and notify the parent cache synchronously
           // (the callback itself is sync; only the IPC is async).
-          window.electronAPI?.fs?.writeFile?.(filePath, latestContent, 'utf-8')
+          window.electronAPI?.fs?.writeFile?.(filePath, latestContent, 'utf-8', { conflictResolution: 'replace' })
             ?.catch?.((err: unknown) => {
               console.warn('[EditableMonacoPane] unmount save failed', err);
             });

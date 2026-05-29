@@ -664,8 +664,14 @@ export default function(ctx: Context) {
         };
       }
 
-      // Use shell.showItemInFolder to show in file manager
-      shell.showItemInFolder(targetPath);
+      // For directories, open the folder directly; for files, reveal
+      // in the parent folder with the item selected.
+      const stat = fs.statSync(targetPath);
+      if (stat.isDirectory()) {
+        await shell.openPath(targetPath);
+      } else {
+        shell.showItemInFolder(targetPath);
+      }
 
       return { success: true };
     } catch (error) {
