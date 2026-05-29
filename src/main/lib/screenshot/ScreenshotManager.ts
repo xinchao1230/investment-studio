@@ -59,8 +59,14 @@ export class ScreenshotManager {
 
   private displays = new Map<number, DisplayCapture>();
   private capturePromise: ResolveablePromise<CaptureResult> | null = null;
-  private captureReadyPromise: Promise<void> = Promise.reject();
-  private activeDisplayId: number | null = null;
+  // Initial state: no active capture session. The rejection is swallowed
+  // to prevent unhandled-rejection warnings; getInitData will surface
+  // "Screenshot not ready" if called before capture().
+  private captureReadyPromise: Promise<void> = (() => {
+    const p = Promise.reject(new Error('Screenshot not ready'));
+    p.catch(() => {});
+    return p;
+  })();  private activeDisplayId: number | null = null;
   private mainWindow: BrowserWindow | null = null;
 
   private constructor() {
@@ -212,8 +218,10 @@ export class ScreenshotManager {
    * - Ref: https://www.electronjs.org/docs/latest/api/desktop-capturer
    */
   private async captureAllDisplays(displays: Electron.Display[]) {
-    const maxWidth = Math.max(...displays.map(d => d.size.width * d.scaleFactor));
-    const maxHeight = Math.max(...displays.map(d => d.size.height * d.scaleFactor));
+    const maxWidth = Math.round(Math.max(...displays.map(d => d.size.width * d.scaleFactor)));
+    const maxHeight = Math.round(Math.max(...displays.map(d => d.size.height * d.scaleFactor)));
+
+    logger.info(`[ScreenshotManager] captureAllDisplays thumbnailSize=${maxWidth}x${maxHeight}, displays=${displays.map(d => `${d.id}:${d.size.width}x${d.size.height}@${d.scaleFactor}`).join(', ')}`);
 
     const maxRetries = 3;
     const retryDelay = 500; // ms — macOS 15 needs more initialization time
