@@ -119,6 +119,22 @@ export default function(ctx: Context) {
     }
   });
 
+  // Create a directory (recursive by default)
+  ipcMain.handle('fs:mkdir', async (_event, dirPath: string) => {
+    try {
+      if (fs.existsSync(dirPath)) {
+        return { success: true, exists: true };
+      }
+      fs.mkdirSync(dirPath, { recursive: true });
+      return { success: true };
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      };
+    }
+  });
+
   ipcMain.handle('fs:readFile', async (event, filePath: string, encoding?: BufferEncoding | 'base64') => {
     try {
       const stats = fs.statSync(filePath);
