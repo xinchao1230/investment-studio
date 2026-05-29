@@ -162,7 +162,12 @@ export function useEditableTextFile(opts: {
     setIsSaving(true);
     setSaveError(null);
     try {
-      await window.electronAPI?.fs?.writeFile?.(fp, content, 'utf-8');
+      const result = await window.electronAPI?.fs?.writeFile?.(fp, content, 'utf-8', { conflictResolution: 'replace' });
+      if (result && !result.success) {
+        const msg = result.error ?? 'Write failed';
+        setSaveError(msg);
+        return { ok: false, error: msg };
+      }
       diskContentRef.current = content;
       setIsDirty(false);
       return { ok: true };
