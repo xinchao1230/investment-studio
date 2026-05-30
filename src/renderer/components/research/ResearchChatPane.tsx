@@ -344,34 +344,6 @@ export const ResearchChatPane: React.FC<ResearchChatPaneProps> = ({
         className="relative flex items-center h-10 px-3 gap-2"
         style={{ background: 'var(--rw-bg-chat-header)' }}
       >
-        <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex items-baseline justify-center gap-2 max-w-[70%]">
-          {/* While the welcome screen is up, its headline already shows the
-              company name + ticker badge — suppress the header copy to avoid
-              printing the same name twice. Once the chat has content, restore
-              the header so the bound target stays visible as the user scrolls. */}
-          {isEmpty ? null : targetName ? (
-            <>
-              <span className="text-[12px] font-medium text-[var(--rw-accent-strong)] truncate">
-                {targetName}
-              </span>
-              {targetCode && (
-                targetCode === targetName ? (
-                  // Unlisted target: stock_code === name. Show an "Unlisted" pill
-                  // instead of duplicating the company name on the right.
-                  <span className="px-1 rounded bg-gray-100 text-gray-500 text-[10px] flex-shrink-0">
-                    Unlisted
-                  </span>
-                ) : (
-                  <span className="text-[11px] text-[var(--si-gold)] flex-shrink-0">
-                    {targetCode}
-                  </span>
-                )
-              )}
-            </>
-          ) : (
-            <span className="text-[11px] text-[var(--rw-text-3)]">No target selected</span>
-          )}
-        </div>
         {onToggleCollapsed && (
           <button
             type="button"

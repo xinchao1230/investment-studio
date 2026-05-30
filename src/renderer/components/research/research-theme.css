@@ -244,26 +244,69 @@
   font-weight: 600;
   color: var(--rw-text);
 }
+/* Claude-style compact segmented control: a slim warm-grey track with a single
+ * white "thumb" that SLIDES between tabs via transform (driven by data-active).
+ * Colors/treatment hard-coded to match Claude desktop exactly; pixel values are
+ * scaled to the sidebar's 13px font (Claude's spec is at 2x screenshot scale)
+ * while preserving Claude's height ratios, thin border, and subtle shadow. */
+[data-theme="research"] .rw-side-tabs {
+  position: relative;
+  display: inline-grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 10px;
+  background: #f3f2ef;
+}
+/* The sliding thumb (the selected segment). Sits over the left cell by default;
+ * data-active="stella" slides it one cell (+ gap) to the right.
+ * Geometry: track padding 3px + grid gap 2px → each cell = 50% - 4px,
+ * thumb offset = 3px, slide distance = cell width (100%) + gap (2px). */
+[data-theme="research"] .rw-side-tabs::before {
+  content: "";
+  position: absolute;
+  top: 3px;
+  bottom: 3px;
+  left: 3px;
+  width: calc(50% - 4px);
+  border-radius: 8px;
+  background: #ffffff;
+  border: 1px solid #cccccc;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+  transform: translateX(0);
+  transition: transform 0.24s cubic-bezier(0.4, 0, 0.2, 1);
+  pointer-events: none;
+}
+[data-theme="research"] .rw-side-tabs[data-active="stella"]::before {
+  transform: translateX(calc(100% + 2px));
+}
 [data-theme="research"] .rw-side-tab {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  text-align: center;
   font-size: 13px;
   font-weight: 500;
-  color: var(--rw-text-3);
-  padding: 4px 2px;
-  border-bottom: 2px solid transparent;
+  line-height: 1;
+  color: #8f8f8f;
+  padding: 6px 16px;
+  border: 0;
+  border-radius: 8px;
   background: transparent;
-  border-left: 0;
-  border-right: 0;
-  border-top: 0;
   cursor: pointer;
   white-space: nowrap;
-  transition: color 0.15s ease, border-color 0.15s ease;
+  transition: color 0.18s ease, font-weight 0.18s ease;
 }
-[data-theme="research"] .rw-side-tab:hover {
-  color: var(--rw-text);
+[data-theme="research"] .rw-side-tab:hover:not(.is-active) {
+  color: #6f6f6f;
 }
 [data-theme="research"] .rw-side-tab.is-active {
-  color: var(--rw-text);
-  border-bottom-color: var(--rw-accent);
+  color: #1f1f1f;
+  font-weight: 600;
 }
 [data-theme="research"] .rw-side-icon-btn {
   display: inline-flex;

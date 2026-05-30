@@ -765,20 +765,26 @@ export const TargetListSidebar: React.FC<TargetListSidebarProps> = ({
         className="flex items-center px-3 pb-2 rw-divider gap-3"
         style={{ paddingTop: tabRowPaddingTop }}
       >
-        <button
-          type="button"
-          className={`rw-side-tab ${activeMode === 'workspace' ? 'is-active' : ''}`}
-          onClick={() => onModeChange('workspace')}
-        >
-          Workspace
-        </button>
-        <button
-          type="button"
-          className={`rw-side-tab ${activeMode === 'stella' ? 'is-active' : ''}`}
-          onClick={() => onModeChange('stella')}
-        >
-          Chat
-        </button>
+        <div className="rw-side-tabs" role="tablist" data-active={activeMode}>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeMode === 'workspace'}
+            className={`rw-side-tab ${activeMode === 'workspace' ? 'is-active' : ''}`}
+            onClick={() => onModeChange('workspace')}
+          >
+            Workspace
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeMode === 'stella'}
+            className={`rw-side-tab ${activeMode === 'stella' ? 'is-active' : ''}`}
+            onClick={() => onModeChange('stella')}
+          >
+            Chat
+          </button>
+        </div>
         <div className="flex-1" />
         <div className="flex items-center gap-1">
           {activeMode === 'workspace' && (
