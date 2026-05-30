@@ -14,6 +14,7 @@ import {
   Pencil,
   Settings,
   PanelLeftClose,
+  LayoutGrid,
 } from 'lucide-react';
 import type { TargetFile, MoveResult } from './usePortfolio';
 import type { ResearchChatSessionMeta } from './researchChatIpc';
@@ -745,6 +746,13 @@ export const TargetListSidebar: React.FC<TargetListSidebarProps> = ({
     window.electronAPI?.platform === 'darwin';
   const tabRowPaddingTop = isMac ? 40 : 8;
 
+  // The Workspace/Chat segmented control is an equal-width 2-column grid, so
+  // both columns size to the longest label ("Workspace"). At 13px that control
+  // needs ~205px; add the row's px-3 padding (24px), the gap, and the trailing
+  // icon button(s) and it stops fitting once the sidebar drops below ~248px.
+  // Below the threshold, present the tabs icon-only (labels -> aria-label/title).
+  const compactTabs = width < 248;
+
   // Open Settings — prefer a dedicated settings window when the host exposes
   // one, else navigate in-app (stashing the current path so the back arrow
   // returns here). Shared by the bottom-left footer button.
@@ -765,24 +773,32 @@ export const TargetListSidebar: React.FC<TargetListSidebarProps> = ({
         className="flex items-center px-3 pb-2 rw-divider gap-3"
         style={{ paddingTop: tabRowPaddingTop }}
       >
-        <div className="rw-side-tabs" role="tablist" data-active={activeMode}>
+        <div
+          className={`rw-side-tabs${compactTabs ? ' rw-side-tabs--compact' : ''}`}
+          role="tablist"
+          data-active={activeMode}
+        >
           <button
             type="button"
             role="tab"
             aria-selected={activeMode === 'workspace'}
+            aria-label="Workspace"
+            title={compactTabs ? 'Workspace' : undefined}
             className={`rw-side-tab ${activeMode === 'workspace' ? 'is-active' : ''}`}
             onClick={() => onModeChange('workspace')}
           >
-            Workspace
+            {compactTabs ? <LayoutGrid size={15} aria-hidden="true" /> : 'Workspace'}
           </button>
           <button
             type="button"
             role="tab"
             aria-selected={activeMode === 'stella'}
+            aria-label="Chat"
+            title={compactTabs ? 'Chat' : undefined}
             className={`rw-side-tab ${activeMode === 'stella' ? 'is-active' : ''}`}
             onClick={() => onModeChange('stella')}
           >
-            Chat
+            {compactTabs ? <MessageSquare size={15} aria-hidden="true" /> : 'Chat'}
           </button>
         </div>
         <div className="flex-1" />

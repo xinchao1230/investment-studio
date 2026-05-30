@@ -308,6 +308,12 @@
   color: #1f1f1f;
   font-weight: 600;
 }
+/* Compact (icon-only) tabs — shown when the sidebar is too narrow for both
+   full labels. Tighter horizontal padding so the two icon cells + sliding
+   thumb fit comfortably; the thumb's 50%-4px geometry is unchanged. */
+[data-theme="research"] .rw-side-tabs--compact .rw-side-tab {
+  padding: 6px 12px;
+}
 [data-theme="research"] .rw-side-icon-btn {
   display: inline-flex;
   align-items: center;
