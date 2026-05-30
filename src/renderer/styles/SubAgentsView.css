@@ -60,12 +60,12 @@
 }
 
 .sub-agent-card-wrapper:not(.selected):hover {
-  background: #F8F4F1;
+  background: var(--si-code-bg);
   border: 1px solid rgba(0, 0, 0, 0.12);
 }
 
 .sub-agent-card-wrapper.selected {
-  background: #F8F4F1;
+  background: var(--si-code-bg);
   border: 1px solid rgba(0, 0, 0, 0.12);
 }
 
@@ -84,7 +84,7 @@
 .sub-agent-card-name {
   font-size: 14px;
   font-weight: 650;
-  color: #272320;
+  color: var(--si-ink);
   flex: 1;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -98,12 +98,12 @@
   justify-content: center;
   padding: 4px 8px;
   gap: 4px;
-  background: rgba(224, 158, 102, 0.3);
+  background: var(--si-pill-bg);
   border-radius: 8px;
   font-weight: 600;
   font-size: 12px;
   line-height: 16px;
-  color: #6B3900;
+  color: var(--si-pill-fg);
   font-variation-settings: 'opsz' 10.5;
   flex-shrink: 0;
   white-space: nowrap;
@@ -254,16 +254,16 @@
 }
 
 .sub-agents-empty-btn-primary {
-  background: #272320;
+  background: var(--si-gold);
   color: #FFFFFF;
-  border-color: #272320;
+  border-color: var(--si-gold);
   font-weight: 600;
   padding: 12px 24px;
 }
 
 .sub-agents-empty-btn-primary:hover {
-  background: #3d3935;
-  border-color: #3d3935;
+  background: var(--si-accent-strong);
+  border-color: var(--si-accent-strong);
 }
 
 .sub-agents-empty-btn-primary:active {
@@ -273,13 +273,13 @@
 
 .sub-agents-empty-btn-secondary {
   background: #FFFFFF;
-  color: #272320;
+  color: var(--si-ink);
   border-color: rgba(0, 0, 0, 0.12);
   font-weight: 600;
 }
 
 .sub-agents-empty-btn-secondary:hover {
-  background: #F8F4F1;
+  background: var(--si-code-bg);
   border-color: rgba(0, 0, 0, 0.2);
 }
 
@@ -498,7 +498,7 @@
 }
 
 .sub-agent-inherit-toggle input[type="checkbox"] {
-  accent-color: #3b82f6;
+  accent-color: var(--si-gold);
 }
 
 .sub-agent-inherit-hint {
@@ -538,7 +538,7 @@
 }
 
 .sub-agent-capability-item input[type="checkbox"] {
-  accent-color: #3b82f6;
+  accent-color: var(--si-gold);
 }
 
 .sub-agent-capability-item.inherited {

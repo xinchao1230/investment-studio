@@ -131,7 +131,34 @@ interface TargetListSidebarProps {
   targetPillLookup?: (targetCode: string) => string;
 }
 
+// The standard target subcategories. These strings are the *on-disk*
+// directory names AND a protocol contract: the stock-analyze family of
+// skills write reports to literal paths like `研报/stock-analyze/{date}/`.
+// They MUST stay Chinese — do not rename them. Display-only English labels
+// live in SUBCATEGORY_LABELS and are applied solely when rendering a folder
+// row; every path / drag-drop / context-menu code path keeps using the raw
+// Chinese `cat` value.
 const SUBCATEGORIES = ['纪要', '专家交流', '公司交流', '研报', '模型', '公告', '其它'];
+
+/** Render-only English labels for the standard subcategory folders. */
+const SUBCATEGORY_LABELS: Record<string, string> = {
+  '纪要': 'Meeting Notes',
+  '专家交流': 'Expert Calls',
+  '公司交流': 'Management Meetings',
+  '研报': 'Research',
+  '模型': 'Models',
+  '公告': 'Filings & Announcements',
+  '其它': 'Other',
+};
+
+/**
+ * Display label for a folder-row category. Standard subcategories map to a
+ * fixed English label; user-created folders (the `extras`) fall back to their
+ * raw on-disk name unchanged.
+ */
+function subcategoryLabel(cat: string): string {
+  return SUBCATEGORY_LABELS[cat] ?? cat;
+}
 
 function fileIcon(relPath: string) {
   if (/\.(md|yaml|txt)$/i.test(relPath)) return FileText;
@@ -503,11 +530,11 @@ export const TargetListSidebar: React.FC<TargetListSidebarProps> = ({
         source,
         destDirAbs,
         fromTargetName: fromTarget?.name ?? source.ownerCode,
-        toTargetName: `${destTarget.name} / ${cat}`,
+        toTargetName: `${destTarget.name} / ${subcategoryLabel(cat)}`,
       });
       return;
     }
-    await tryMove(source, destDirAbs, `${destTarget.name} / ${cat}`);
+    await tryMove(source, destDirAbs, `${destTarget.name} / ${subcategoryLabel(cat)}`);
   }, [findFileByAbsPath, targets, tryMove]);
 
   const confirmCrossTargetMove = useCallback(async () => {
@@ -718,6 +745,19 @@ export const TargetListSidebar: React.FC<TargetListSidebarProps> = ({
     window.electronAPI?.platform === 'darwin';
   const tabRowPaddingTop = isMac ? 40 : 8;
 
+  // Open Settings — prefer a dedicated settings window when the host exposes
+  // one, else navigate in-app (stashing the current path so the back arrow
+  // returns here). Shared by the bottom-left footer button.
+  const handleOpenSettings = useCallback(() => {
+    const settingsApi = (window as any).electronAPI?.settingsWindow;
+    if (settingsApi?.open) {
+      settingsApi.open();
+      return;
+    }
+    sessionStorage.setItem('previousPath', window.location.hash.replace(/^#/, '') || '/research');
+    navigate('/settings');
+  }, [navigate]);
+
   return (
     <div className="rw-pane-left flex flex-col h-full" style={{ width }}>
       {/* Tab row with mode tabs + action buttons */}
@@ -762,23 +802,6 @@ export const TargetListSidebar: React.FC<TargetListSidebarProps> = ({
               <Plus size={14} />
             </button>
           )}
-          <button
-            type="button"
-            className="rw-side-icon-btn"
-            title="Settings"
-            aria-label="Open Settings"
-            onClick={() => {
-              const settingsApi = (window as any).electronAPI?.settingsWindow;
-              if (settingsApi?.open) {
-                settingsApi.open();
-                return;
-              }
-              sessionStorage.setItem('previousPath', window.location.hash.replace(/^#/, '') || '/research');
-              navigate('/settings');
-            }}
-          >
-            <Settings size={14} />
-          </button>
           {onCollapse && (
             <button
               type="button"
@@ -856,7 +879,7 @@ export const TargetListSidebar: React.FC<TargetListSidebarProps> = ({
                       {pill}
                     </span>
                   )}
-                  <span className="truncate flex-1">{chat.title === 'New Chat' ? '新对话' : chat.title || 'Untitled'}</span>
+                  <span className="truncate flex-1">{chat.title || 'Untitled'}</span>
                   {(useUnified ? onRenameAnyChat : onRenameStellaChat) && (
                     <button
                       type="button"
@@ -1033,7 +1056,7 @@ export const TargetListSidebar: React.FC<TargetListSidebarProps> = ({
                         >
                           <span style={{ width: 13 }} className="flex-shrink-0" />
                           <MessageSquare size={12} className="flex-shrink-0 mr-1 text-[var(--rw-text-3)]" />
-                          <span className="truncate flex-1">{chat.title === 'New Chat' ? '新对话' : chat.title || 'Untitled'}</span>
+                          <span className="truncate flex-1">{chat.title || 'Untitled'}</span>
                           {onRenameChat && (
                             <button
                               type="button"
@@ -1145,13 +1168,13 @@ export const TargetListSidebar: React.FC<TargetListSidebarProps> = ({
                             className={`rw-tree-row ${!hasFiles ? 'is-disabled' : ''} ${dropHover === catKey ? 'rw-tree-row-drop' : ''}`}
                             style={{ paddingLeft: 12 }}
                             onClick={hasFiles ? () => onToggleCat(catKey) : undefined}
-                            onContextMenu={(e) => openFolderContextMenu(e, catDirAbs, `${target.name} / ${cat}`, code)}
+                            onContextMenu={(e) => openFolderContextMenu(e, catDirAbs, `${target.name} / ${subcategoryLabel(cat)}`, code)}
                           >
                             {hasFiles
                               ? (isCatExpanded ? <ChevronDown size={13} /> : <ChevronRight size={13} />)
                               : <span style={{ width: 13 }} />}
                             <Folder size={13} className="flex-shrink-0 mr-1" />
-                            <span className="truncate" style={{ color: 'var(--rw-text)' }}>{cat}</span>
+                            <span className="truncate" style={{ color: 'var(--rw-text)' }}>{subcategoryLabel(cat)}</span>
                           </div>
 
                           {hasFiles && isCatExpanded && (() => {
@@ -1278,6 +1301,20 @@ export const TargetListSidebar: React.FC<TargetListSidebarProps> = ({
         })}
       </div>
       )}
+
+      {/* Bottom-left footer — Settings lives here (mt-auto pins it to the
+          bottom; both mode bodies above are flex-1 so this never overlaps). */}
+      <div className="mt-auto flex items-center px-3 py-2 rw-divider-top">
+        <button
+          type="button"
+          className="rw-side-icon-btn"
+          title="Settings"
+          aria-label="Open Settings"
+          onClick={handleOpenSettings}
+        >
+          <Settings size={14} />
+        </button>
+      </div>
 
       {/* Delete-chat confirm dialog (in-app to avoid Electron focus bug). */}
       <Dialog open={!!pendingDeleteChat} onOpenChange={(open) => { if (!open) setPendingDeleteChat(null); }}>

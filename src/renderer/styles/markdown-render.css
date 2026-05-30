@@ -4,7 +4,7 @@
  *
  * Design Specification:
  * - Font: Segoe Sans (body text), Cascadia Code (code)
- * - Primary colors: #322D29 (dark text), #F8F4F1 (light background)
+ * - Primary colors: var(--si-ink) (dark text), var(--si-code-bg) (light background)
  * - Spacing system: 8px (paragraph), 16px (block), 28px (section)
  */
 
@@ -282,7 +282,7 @@
 /* --- CSS Variable Definitions --- */
 :root {
   /* Inline code colors - light mode */
-  --inline-code-bg: #EDD5C4;
+  --inline-code-bg: var(--si-warm-surface-2);
   --inline-code-text: #322D29;
 
   /* Inline code colors - dark mode */
@@ -609,8 +609,8 @@
   padding: 12px 16px;
   padding-left: 20px;
 
-  background: #F8F4F1;
-  border-left: 4px solid #DAC6B7;
+  background: var(--si-code-bg);
+  border-left: 4px solid var(--si-border-strong);
   border-radius: 0 12px 12px 0;
 
   /* First blockquote does not need top spacing */
@@ -634,7 +634,7 @@
   border-collapse: separate;
   border-spacing: 0;
 
-  border: 1px solid #DAC6B7;
+  border: 1px solid var(--si-border-strong);
   border-radius: 12px;
   overflow: hidden;
 
@@ -660,7 +660,7 @@
   margin: 8px 0 0 0;
 
   /* Table container border styles */
-  border: 1px solid #DAC6B7;
+  border: 1px solid var(--si-border-strong);
   border-radius: 12px;
 
   /* First table container does not need top spacing */
@@ -685,7 +685,7 @@
 
 /* Table header */
 .markdown-body thead {
-  background: #F6E8DD;
+  background: var(--si-warm-surface);
 }
 
 /* Table header cells */
@@ -699,13 +699,13 @@
   text-align: left;
 
   /* Table header cell background */
-  background: #F6E8DD;
+  background: var(--si-warm-surface);
 
   /* Border styles: right and bottom borders (0 1px 1px 0) */
   border-top: 0;
   border-left: 0;
-  border-bottom: 1px solid #EBDBCE;
-  border-right: 1px solid #EBDBCE;
+  border-bottom: 1px solid var(--si-warm-border);
+  border-right: 1px solid var(--si-warm-border);
 
   /* 🔥 Cell no-wrap, long content displayed via table horizontal scrollbar */
   white-space: nowrap;
@@ -731,8 +731,8 @@
   /* Border styles: right and bottom borders (0 1px 1px 0) */
   border-top: 0;
   border-left: 0;
-  border-bottom: 1px solid #EBDBCE;
-  border-right: 1px solid #EBDBCE;
+  border-bottom: 1px solid var(--si-warm-border);
+  border-right: 1px solid var(--si-warm-border);
 
   /* 🔥 Allow long text to wrap to prevent table from breaking container */
   white-space: normal;
@@ -831,12 +831,12 @@
   -webkit-appearance: none;
 
   background: #FFFFFF;
-  border: 2px solid #DAC6B7;
+  border: 2px solid var(--si-border-strong);
   border-radius: 9999px;
 
   &:checked {
-    background: #272320;
-    border-color: #272320;
+    background: var(--si-gold);
+    border-color: var(--si-gold);
 
     /* Checkmark icon */
     &::after {
@@ -866,7 +866,7 @@
   display: inline-block;
   padding: 16px 20px;
 
-  background: #F8F4F1;
+  background: #f0f0f0;
   border-radius: 20px;
 
   max-width: 100%;
@@ -876,7 +876,7 @@
   font-size: 14px;
   line-height: 20px;
   font-weight: 410;
-  color: #272320;
+  color: var(--si-ink, #1a1a1a);
 }
 
 /* ============================================
@@ -917,7 +917,7 @@
   width: 20px;
   height: 20px;
 
-  background: #272320;
+  background: var(--si-gold);
   border-radius: 9999px;
 
   display: flex;
@@ -939,7 +939,7 @@
   display: inline-block;
   padding: 4px 8px;
 
-  background: #F8F4F1;
+  background: var(--si-code-bg);
   border-radius: 12px;
 
   font-size: 15px;
@@ -1142,9 +1142,9 @@
 }
 
 .mermaid-toolbar-btn-active {
-  background: #eff6ff;
-  color: #2563eb;
-  border-color: #bfdbfe;
+  background: var(--si-accent-soft);
+  color: var(--si-gold);
+  border-color: var(--si-accent-hover);
 }
 
 .mermaid-toolbar-zoom-label {
@@ -1157,8 +1157,8 @@
 }
 
 .mermaid-toolbar-btn-active:hover {
-  background: #dbeafe;
-  color: #1d4ed8;
+  background: var(--si-accent-hover);
+  color: var(--si-accent-strong);
 }
 
 .mermaid-fullscreen-close-btn {

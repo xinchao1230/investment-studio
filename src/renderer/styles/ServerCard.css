@@ -11,7 +11,7 @@
   width: 288px;
   min-height: 88px;
   height: auto;
-  background: #FFFFFF;
+  background: var(--si-card);
   border: 1px solid rgba(0, 0, 0, 0.12);
   border-radius: 12px;
   flex: none;
@@ -24,13 +24,13 @@
 
 /* Hover state - hovering when not selected */
 .server-card-wrapper:not(.selected):hover {
-  background: #F8F4F1;
+  background: var(--si-code-bg);
   border: 1px solid rgba(0, 0, 0, 0.12);
 }
 
 /* Selected state - maintain light brown when selected */
 .server-card-wrapper.selected {
-  background: #F8F4F1;
+  background: var(--si-code-bg);
   border: 1px solid rgba(0, 0, 0, 0.12);
 }
 
@@ -90,7 +90,7 @@
   font-size: 14px;
   line-height: 20px;
   /* identical to box height, or 143% */
-  color: #272320;
+  color: var(--si-ink);
   font-variation-settings: 'opsz' 10.5;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -120,13 +120,13 @@
   justify-content: center;
   padding: 4px 8px;
   gap: 4px;
-  background: rgba(224, 158, 102, 0.3);
+  background: var(--si-pill-bg);
   border-radius: 8px;
   font-style: normal;
   font-weight: 600;
   font-size: 12px;
   line-height: 16px;
-  color: #6B3900;
+  color: var(--si-pill-fg);
   font-variation-settings: 'opsz' 10.5;
   flex: none;
   align-self: flex-start;
@@ -141,13 +141,13 @@
   justify-content: center;
   padding: 4px 8px;
   gap: 4px;
-  background: rgba(224, 158, 102, 0.3);
+  background: var(--si-pill-bg);
   border-radius: 8px;
   font-style: normal;
   font-weight: 600;
   font-size: 12px;
   line-height: 16px;
-  color: #6B3900;
+  color: var(--si-pill-fg);
   font-variation-settings: 'opsz' 10.5;
   flex: none;
   align-self: flex-start;
@@ -220,14 +220,14 @@
   padding: 4px 8px;
   gap: 4px;
 
-  background: rgba(224, 158, 102, 0.3);
+  background: var(--si-pill-bg);
   border-radius: 8px;
 
   font-style: normal;
   font-weight: 600;
   font-size: 12px;
   line-height: 16px;
-  color: #6B3900;
+  color: var(--si-pill-fg);
   font-variation-settings: 'opsz' 10.5;
 
   flex: none;
@@ -300,7 +300,7 @@
   background: none;
   cursor: pointer;
   font-size: 16px;
-  color: #6b7280;
+  color: var(--si-muted);
   transition: opacity 0.2s ease, transform 0.2s ease;
   width: 20px;
   height: 20px;

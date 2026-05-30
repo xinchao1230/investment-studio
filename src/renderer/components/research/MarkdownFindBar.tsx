@@ -39,8 +39,8 @@ interface MarkdownFindBarProps {
 
 const MARK_ATTR = 'data-md-find-mark';
 const CURRENT_ATTR = 'data-md-find-current';
-const HIGHLIGHT_BG = '#fde68a'; // amber-200
-const CURRENT_BG = '#f97316'; // orange-500
+const HIGHLIGHT_BG = '#fde68a'; // amber-200 — non-current matches (kept distinct from the themed current match)
+const CURRENT_BG = 'var(--si-gold)'; // current match — follows the brand accent token
 const CURRENT_FG = 'white';
 
 /** Remove every <mark> wrapper we previously injected and merge the

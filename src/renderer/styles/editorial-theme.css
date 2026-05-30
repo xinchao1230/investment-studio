@@ -1,0 +1,53 @@
+/* ============================================================
+   Design tokens — shared app-wide.
+   Single source of truth consumed by sign-in, research workspace
+   ([data-theme="research"] via --rw-* aliases), settings, agent,
+   and chat. Palette inspired by Claude: white sidebars, warm-grey
+   content, neutral text, ONE brand accent (--si-gold + soft ramp).
+
+   To re-theme the whole app, change ONLY the accent tokens below.
+   Everything brand-accent resolves through them. Warm-neutral
+   surfaces (markdown tables, dividers-at-rest) use --si-warm-* and
+   do NOT follow the accent, by design.
+   ============================================================ */
+:root {
+  --si-paper: #fdfdfc;        /* Claude's exact content bg (RGB 253,253,252) */
+  --si-card: #ffffff;          /* white surface (sidebars, cards) */
+  --si-ink: #1a1a1a;           /* near-black primary text */
+  --si-ink-hover: #111111;
+  --si-border: #ebebeb;        /* neutral border */
+  --si-border-strong: #d9d9d9;
+  --si-muted: #8c8c8c;         /* secondary text */
+  --si-faint: #acacac;         /* tertiary / disabled text */
+  --si-code-bg: #f0efed;       /* slightly darker for hover/highlight */
+  --si-serif: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+
+  /* ---- BRAND ACCENT (the single source — change these to re-theme) ----
+     Soft hazy blue, RGB(122,150,193) = #7a96c1. This is the one place the
+     brand accent value lives; every accent surface across the app resolves
+     through these five tokens (verified 2026-05-30 by an audit that swapped
+     them to a loud magenta and confirmed full coverage). The strong step is
+     noticeably darker so white text on filled CTAs stays legible (the base
+     hue is mid-light); soft/hover/active are pale tints of the same hue. */
+  --si-gold: #7a96c1;          /* primary accent: text/icon/border/filled CTA */
+  --si-accent-strong: #4f70a3; /* deeper accent — filled hover, strong fills, white-on-fill */
+  --si-accent-soft: #eaeff7;   /* accent fill @ rest (hue mixed with white) */
+  --si-accent-hover: #d8e1ef;  /* accent fill @ hover */
+  --si-accent-active: #c0cee5; /* accent fill @ active */
+
+  /* Metric / info pills (e.g. "total servers: 1", "tools: 40").
+     Per explicit instruction (2026-05-30) these follow the brand accent as a
+     soft tint rather than staying greyscale. Derived from --si-gold via
+     color-mix so they track any future re-theme. Fill is a pale tint; text
+     uses the deep accent step for legible contrast on that tint. */
+  --si-pill-bg: color-mix(in srgb, var(--si-gold) 14%, white); /* soft brand-tint chip fill */
+  --si-pill-fg: var(--si-accent-strong);                       /* deep accent chip text */
+
+  /* Warm surfaces — markdown table headers/borders, inline-code chips, quiet
+     dividers. Per explicit instruction these ALSO follow the brand accent
+     (audit 2026-05-30), so they are derived from --si-gold via color-mix
+     rather than being independent warm-neutrals. */
+  --si-warm-surface: color-mix(in srgb, var(--si-gold) 12%, white);   /* table-header / chip background */
+  --si-warm-surface-2: color-mix(in srgb, var(--si-gold) 18%, white); /* slightly deeper chip background */
+  --si-warm-border: color-mix(in srgb, var(--si-gold) 25%, white);    /* table / cell border */
+}

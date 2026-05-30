@@ -2,15 +2,51 @@
    SignInPage component styles
    =========================== */
 
+/* ===========================
+   Sign-in page layout (editorial tokens come from editorial-theme.css :root)
+   =========================== */
 .signin-page {
-  height: 100%; /* Changed from min-height: 100vh to work with WindowsTitleBar */
+  height: 100%;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #FFFBF8 0%, #FFFFFF 50%, #F8F4F1 100%);
+  background: var(--si-paper);
   padding: 24px;
   position: relative;
   overflow: hidden;
+}
+
+/* Removed: decorative hairline frame (clashed with neutral palette) */
+
+/* ===========================
+   Animated dot-grid backdrop
+   =========================== */
+
+/* Full-bleed canvas behind everything. The card sits at z-index:1, so this
+   stays at the default stacking level (z-0) within the relative .signin-page. */
+.signin-dotgrid {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Radial paper wash centered on the viewport. Fully opaque --si-paper at the
+   center (where the card sits) fading to transparent toward the edges, so the
+   dots melt away behind the card and stay vivid at the screen margins. */
+.signin-dotgrid-dim {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background: radial-gradient(
+    ellipse 520px 440px at 50% 50%,
+    var(--si-paper) 0%,
+    var(--si-paper) 30%,
+    rgba(253, 253, 252, 0) 75%
+  );
 }
 
 /* ===========================
@@ -27,87 +63,186 @@
 
 .signin-card {
   width: 100%;
-  max-width: 448px;
-  border-radius: 20px;
+  max-width: 420px;
+  border-radius: 16px;
+  background: var(--si-card);
+  border: none;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+  position: relative;
+  z-index: 1;
 }
 
-/* ===========================
-   Card header
-   =========================== */
-
-.signin-card-header {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+/* Top rule — hidden (no longer fits neutral palette) */
+.si-rule {
+  display: none;
 }
 
-.signin-icon-container {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin-bottom: 24px;
-}
-
-.signin-icon-wrapper {
-  width: 48px;
-  height: 48px;
-  background: rgba(255, 255, 255, 0.95);
-  backdrop-filter: blur(8px);
-  border: 1px solid rgba(0, 0, 0, 0.1);
-  border-radius: 12px;
+/* Serif "IS" monogram */
+.si-monogram {
+  width: 46px;
+  height: 46px;
+  margin: 0 auto 14px;
+  border: 1.5px solid var(--si-gold);
+  border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
+  color: var(--si-gold);
+  font-family: var(--si-serif);
+  font-weight: 700;
+  font-size: 18px;
 }
 
-.signin-icon {
-  width: 32px;
-  height: 32px;
-  color: #0ea5e9;
-}
-
-.signin-card-title {
-  font-size: 24px;
+.si-title {
+  color: var(--si-ink);
+  font-family: var(--si-serif);
+  font-size: 22px;
+  font-weight: 600;
   text-align: center;
+  letter-spacing: 0.2px;
+}
+
+.si-tagline {
+  color: var(--si-muted);
+  font-family: var(--si-serif);
+  font-style: italic;
+  font-size: 13px;
+  text-align: center;
+  margin-top: 4px;
+}
+
+.si-instruction {
+  color: var(--si-muted);
+  font-size: 13px;
+  text-align: center;
+  line-height: 1.5;
+}
+
+/* !important overrides the Button primitive's Tailwind bg/border utilities (e.g. bg-blue-600) */
+.si-btn-primary {
+  width: 100%;
+  background: var(--si-gold) !important;
+  color: #fff !important;
+  border-radius: 4px !important;
+  border: 1px solid var(--si-gold) !important;
+}
+.si-btn-primary:hover {
+  background: var(--si-accent-strong) !important;
+}
+
+.si-btn-secondary {
+  width: 100%;
+  background: transparent !important;
+  color: var(--si-ink, #1a1a1a) !important;
+  border: 1px solid var(--si-border, #e8e5df) !important;
+  border-radius: 4px !important;
+}
+.si-btn-secondary:hover {
+  background: rgba(0, 0, 0, 0.02) !important;
+}
+
+.si-divider {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 16px 0;
+}
+.si-divider::before,
+.si-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--si-border);
+}
+.si-divider span {
+  color: var(--si-muted);
+  font-size: 9px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
+.si-footnote {
+  color: var(--si-muted);
+  font-size: 11px;
+  text-align: center;
+  margin-top: 12px;
+  line-height: 1.4;
+}
+
+.si-code-label {
+  color: var(--si-faint);
+  font-size: 9px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  text-align: center;
+  margin-bottom: 6px;
+}
+.si-code-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-bottom: 18px;
+}
+.si-code-chip {
+  font-family: var(--font-mono, 'SF Mono', Consolas, monospace);
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: 3px;
+  color: var(--si-ink);
+  background: var(--si-code-bg);
+  border: 1px solid var(--si-border);
+  border-radius: 4px;
+  padding: 8px 14px;
+}
+
+.si-status {
+  color: var(--si-faint);
+  font-size: 11px;
+  text-align: center;
+  margin-top: 14px;
+}
+.si-status--urgent {
+  color: #b3261e;
+}
+
+.si-cancel {
+  display: block;
+  margin: 10px auto 0;
+  color: var(--si-muted);
+  font-size: 11px;
+  text-decoration: underline;
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+.si-profile-row {
+  padding: 14px;
+  border: 1px solid var(--si-border);
+  background: var(--si-card);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: border-color 0.2s, background 0.2s;
+}
+.si-profile-row:hover {
+  border-color: var(--si-border-strong);
+  background: #f5f4f2;
+}
+.si-tag-verified {
+  color: var(--si-gold);
+  font-size: 11px;
   font-weight: 600;
 }
-
-.signin-card-description {
-  text-align: center;
-  color: #6b7280;
+.si-tag-expired {
+  color: #9a6b00;
+  font-size: 11px;
+  font-weight: 600;
 }
-
-/* ===========================
-   Loading state (Generating Code)
-   =========================== */
-
-.signin-loading-icon {
-  width: 32px;
-  height: 32px;
-  color: #0ea5e9;
-  animation: spin 1s linear infinite;
-}
-
-/* ===========================
-   Animations
-   =========================== */
-
-@keyframes spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-@keyframes pulse {
-  0%, 100% {
-    opacity: 1;
-    transform: scale(1);
-  }
-  50% {
-    opacity: 0.7;
-    transform: scale(1.1);
-  }
+.si-section-label {
+  color: var(--si-muted);
+  font-size: 12px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
 }

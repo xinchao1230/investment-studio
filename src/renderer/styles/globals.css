@@ -1,4 +1,6 @@
 @import "tailwindcss";
+@import "./editorial-theme.css";
+@import "./SettingsBorderless.css";
 @config "../../../tailwind.config.js";
 /* Restore the `prose` utility classes used by ContentTabs markdown preview
    (and any other ReactMarkdown surface). Original investment-studio (v3)
@@ -31,6 +33,13 @@
    =========================== */
 
 :root {
+  /* Native form controls (checkbox / radio / range / progress) follow the
+     brand accent token by default, instead of the browser's default blue.
+     `accent-color` is inherited, so this covers every native control unless a
+     component overrides it locally. (Audit 2026-05-30: ~50 native checkboxes
+     had no accent-color and rendered system blue.) */
+  accent-color: var(--si-gold);
+
   /* ===========================
      Unified Font System
      =========================== */
@@ -462,7 +471,7 @@
   /* height: 100vh; - Removed to allow flex: 1 to work correctly with custom title bar */
   /* Ensure user dropdown menu can span across child components */
   position: relative;
-  background: #FFFBF8;
+  background: var(--si-paper);
   padding-right: 8px;
   padding-bottom: 8px;
 }
@@ -478,7 +487,7 @@
   -webkit-app-region: drag;
   /* Traffic lights are at x:12. Three lights ~54px wide. Button starts after. */
   padding-left: calc(72px / var(--mac-zoom-factor, 1));
-  background: #FFFBF8;
+  background: var(--si-paper);
 }
 
 /* In macOS fullscreen the native traffic lights are hidden, remove the padding */
@@ -1244,7 +1253,7 @@
 
 .resizable-divider:hover,
 .resizable-divider.dragging {
-  background: rgba(14, 165, 233, 0.3);
+  background: color-mix(in srgb, var(--si-gold) 30%, transparent);
 }
 
 .divider-handle {
@@ -1259,7 +1268,17 @@
 
 .resizable-divider:hover .divider-handle,
 .resizable-divider.dragging .divider-handle {
-  background: rgba(14, 165, 233, 0.5);
+  background: color-mix(in srgb, var(--si-gold) 50%, transparent);
+}
+
+/* Settings page: stop the nav/content divider short of the bottom "Sign In /
+   Sign Out" row so the line doesn't visually collide with that button. The
+   nav's bottom zone is 12px nav padding + 40px NavItem + 16px section gap =
+   68px; a 60px bottom margin lands the divider's end inside that top gap,
+   leaving a small breathing space above the button. Scoped to Settings only
+   (Research / AppLayout dividers stay full-height). */
+.resizable-divider.settings-nav-divider {
+  margin-bottom: 60px;
 }
 
 .agent-chat-divider {
@@ -1268,7 +1287,7 @@
 
 .agent-chat-divider:hover,
 .agent-chat-divider.dragging {
-  background: rgba(14, 165, 233, 0.5);
+  background: color-mix(in srgb, var(--si-gold) 50%, transparent);
 }
 
 /* Chat Area in New Layout */

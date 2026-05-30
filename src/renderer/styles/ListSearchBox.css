@@ -26,7 +26,7 @@
   outline: none;
   background: transparent;
   font-size: 13px;
-  color: var(--text-primary, #272320);
+  color: var(--text-primary, var(--si-ink));
   line-height: 1.4;
 }
 

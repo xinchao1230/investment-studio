@@ -247,8 +247,8 @@ const ShortcutRecorder: React.FC<ShortcutRecorderProps> = ({
             flex-1 px-3 py-2 rounded-lg border transition-all duration-200 focus:outline-hidden
             ${
               isRecording
-                ? 'bg-[#272320]/5 border-[#272320] ring-2 ring-[#272320]/20'
-                : 'bg-white border-gray-200 hover:border-gray-300 focus:border-[#272320]'
+                ? 'bg-[var(--si-gold)]/5 border-[var(--si-gold)] ring-2 ring-[var(--si-gold)]/20'
+                : 'bg-white border-gray-200 hover:border-gray-300 focus:border-[var(--si-gold)]'
             }
             ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
           `}
@@ -270,7 +270,7 @@ const ShortcutRecorder: React.FC<ShortcutRecorderProps> = ({
                   <>
                     {currentKeys.map((key, index) => (
                       <span key={index} className="flex items-center gap-1">
-                        <kbd className="px-2 py-1 text-xs bg-[#272320] rounded border border-[#272320] text-white">
+                        <kbd className="px-2 py-1 text-xs bg-[var(--si-gold)] rounded border border-[var(--si-gold)] text-white">
                           {key}
                         </kbd>
                         {index < currentKeys.length - 1 && (
@@ -280,7 +280,7 @@ const ShortcutRecorder: React.FC<ShortcutRecorderProps> = ({
                     ))}
                   </>
                 ) : (
-                  <span className="text-[#272320] text-sm animate-pulse">
+                  <span className="text-[var(--si-ink)] text-sm animate-pulse">
                     Press key combination...
                   </span>
                 )}
@@ -291,7 +291,7 @@ const ShortcutRecorder: React.FC<ShortcutRecorderProps> = ({
                   <div className="flex items-center gap-1">
                     {recordedShortcut.split('+').map((key, index, array) => (
                       <span key={index} className="flex items-center gap-1">
-                        <kbd className="px-2 py-1 text-xs bg-[#272320] rounded border border-[#272320] text-white">
+                        <kbd className="px-2 py-1 text-xs bg-[var(--si-gold)] rounded border border-[var(--si-gold)] text-white">
                           {key}
                         </kbd>
                         {index < array.length - 1 && (
@@ -328,7 +328,7 @@ const ShortcutRecorder: React.FC<ShortcutRecorderProps> = ({
               <button
                 onClick={handleSave}
                 disabled={disabled || !recordedShortcut}
-                className="px-3 py-2 bg-[#272320] hover:bg-[#3d3935] disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg transition-colors flex items-center gap-1"
+                className="px-3 py-2 bg-[var(--si-gold)] hover:bg-[var(--si-accent-strong)] disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg transition-colors flex items-center gap-1"
                 title="Save shortcut"
               >
                 <Check className="w-4 h-4" />
@@ -353,9 +353,9 @@ const ShortcutRecorder: React.FC<ShortcutRecorderProps> = ({
 
       {/* Recording Status */}
       {isRecording && (
-        <div className="mt-2 text-xs text-[#272320]">
+        <div className="mt-2 text-xs text-[var(--si-ink)]">
           <div className="flex items-center gap-2">
-            <div className="w-2 h-2 bg-[#272320] rounded-full animate-pulse"></div>
+            <div className="w-2 h-2 bg-[var(--si-ink)] rounded-full animate-pulse"></div>
             Recording shortcut... Press any key combination or click elsewhere
             to stop.
           </div>

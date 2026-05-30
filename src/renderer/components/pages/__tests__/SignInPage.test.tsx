@@ -40,6 +40,7 @@ vi.mock('../../styles/SignInPage.css', () => ({}));
 
 vi.mock('@shared/constants/branding', () => ({
   APP_NAME: 'Test App',
+  BRAND_NAME: 'investment-studio',
 }));
 
 const mockSetCurrentAuth = vi.fn();
@@ -50,6 +51,23 @@ vi.mock('../../../lib/auth/authManagerProxy', () => ({
     this.setCurrentAuth = mockSetCurrentAuth;
     this.refreshCopilotToken = mockRefreshCopilotToken;
   }),
+}));
+
+const mockNavigate = vi.fn();
+vi.mock('react-router-dom', () => ({
+  useNavigate: () => mockNavigate,
+}));
+
+// Controllable profile-data gate. Tests mutate mockIsInitialized.mockReturnValue(...)
+const mockIsInitialized = vi.fn(() => false);
+vi.mock('../../userData/userDataProvider', () => ({
+  useProfileData: () => ({ isInitialized: mockIsInitialized() }),
+}));
+
+// Controllable auth gate. Tests mutate mockIsAuthenticated.mockReturnValue(...)
+const mockIsAuthenticated = vi.fn(() => false);
+vi.mock('../../auth/AuthProvider', () => ({
+  useAuthContext: () => ({ isAuthenticated: mockIsAuthenticated() }),
 }));
 
 // ---------------------------------------------------------------------------
@@ -68,8 +86,16 @@ function setupElectronAPI() {
     authOps: {
       clearAuthData: vi.fn().mockResolvedValue({ success: true }),
     },
+    provider: {
+      // data: true => a provider is already configured, so skip-login proceeds
+      // straight to setCurrentAuth instead of opening the setup dialog.
+      hasApiKeyProvider: vi.fn().mockResolvedValue({ success: true, data: true }),
+    },
   };
 }
+
+// Mirror of GATE_TIMEOUT_MS in SignInPage.tsx (16s) for the timeout test.
+const GATE_TIMEOUT_MS_TEST = 16000;
 
 // ---------------------------------------------------------------------------
 // Import the component under test after mocks are set up
@@ -85,6 +111,8 @@ describe('SignInPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     setupElectronAPI();
+    mockIsInitialized.mockReturnValue(false);
+    mockIsAuthenticated.mockReturnValue(false);
   });
 
   describe('initial render — no startupResult', () => {
@@ -284,6 +312,128 @@ describe('SignInPage', () => {
       expect(mockShowError).toHaveBeenCalledWith(
         expect.stringContaining('Token rejected')
       );
+    });
+
+    it('renders the simplified authorization card with device code as hero', async () => {
+      vi.useFakeTimers();
+      Object.defineProperty(navigator, 'clipboard', {
+        configurable: true,
+        value: { writeText: vi.fn().mockResolvedValue(undefined) },
+      });
+      render(<SignInPage />);
+      try {
+        await act(async () => {
+          window.dispatchEvent(
+            new CustomEvent('ghc:deviceCode', {
+              detail: { user_code: 'AB7C-92KD', verification_uri: 'https://github.com/login/device', expires_in: 900 },
+            })
+          );
+          await vi.advanceTimersByTimeAsync(900);
+        });
+        expect(screen.getByText('AB7C-92KD')).toBeTruthy();
+        expect(screen.getByText(/Authorize on GitHub/i)).toBeTruthy();
+        expect(screen.getByText(/active GitHub Copilot subscription/i)).toBeTruthy();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+  });
+
+  describe('in-button sign-in gate', () => {
+    const BRAND_DEST = '/research'; // investment-studio brand destination
+
+    // The skip-login button ("Use your own API key") is the synchronous gate
+    // path: setCurrentAuth resolves, then setPendingNav(true) directly. (The
+    // GitHub button gates inside an onDeviceFlowSuccess callback that the
+    // electronAPI mock never fires, so we drive the gate via skip-login.)
+    it('navigates to the brand destination when the gate is already open', async () => {
+      mockSetCurrentAuth.mockResolvedValue(undefined);
+      mockIsAuthenticated.mockReturnValue(true);
+      mockIsInitialized.mockReturnValue(true);
+
+      render(<SignInPage />);
+
+      const btn = await screen.findByText(/Use your own API key/i);
+      await act(async () => {
+        fireEvent.click(btn);
+      });
+
+      await waitFor(() => {
+        expect(mockNavigate).toHaveBeenCalledWith(BRAND_DEST);
+      });
+    });
+
+    it('does NOT navigate while the gate is closed (isInitialized false)', async () => {
+      mockSetCurrentAuth.mockResolvedValue(undefined);
+      mockIsAuthenticated.mockReturnValue(true);
+      mockIsInitialized.mockReturnValue(false);
+
+      render(<SignInPage />);
+
+      const btn = await screen.findByText(/Use your own API key/i);
+      await act(async () => {
+        fireEvent.click(btn);
+      });
+
+      // Give effects a tick; navigation must not happen.
+      await act(async () => { await Promise.resolve(); });
+      expect(mockNavigate).not.toHaveBeenCalled();
+    });
+
+    it('navigates once the gate opens after the click (rerender)', async () => {
+      mockSetCurrentAuth.mockResolvedValue(undefined);
+      mockIsAuthenticated.mockReturnValue(true);
+      mockIsInitialized.mockReturnValue(false); // closed at click time
+
+      const { rerender } = render(<SignInPage />);
+
+      const btn = await screen.findByText(/Use your own API key/i);
+      await act(async () => {
+        fireEvent.click(btn);
+      });
+      expect(mockNavigate).not.toHaveBeenCalled();
+
+      // Gate opens; re-render so the watcher effect re-runs with the new value.
+      mockIsInitialized.mockReturnValue(true);
+      await act(async () => {
+        rerender(<SignInPage />);
+      });
+
+      await waitFor(() => {
+        expect(mockNavigate).toHaveBeenCalledWith('/research');
+      });
+    });
+
+    it('restores the button and shows a toast after the gate timeout', async () => {
+      mockSetCurrentAuth.mockResolvedValue(undefined);
+      mockIsAuthenticated.mockReturnValue(true);
+      mockIsInitialized.mockReturnValue(false);
+
+      render(<SignInPage />);
+
+      // Find the button + click under real timers (findByText polls in real time).
+      const btn = await screen.findByText(/Use your own API key/i);
+
+      // Now install fake timers so the watcher's setTimeout is scheduled on the
+      // fake clock, then flush the click's promise chain and advance past the
+      // timeout — all on the same clock.
+      vi.useFakeTimers();
+      try {
+        await act(async () => {
+          fireEvent.click(btn);
+          await vi.advanceTimersByTimeAsync(0); // flush skip-login promises -> setPendingNav
+        });
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(GATE_TIMEOUT_MS_TEST);
+        });
+      } finally {
+        vi.useRealTimers();
+      }
+
+      expect(mockShowError).toHaveBeenCalledWith(
+        expect.stringContaining('timed out')
+      );
+      expect(mockNavigate).not.toHaveBeenCalled();
     });
   });
 });

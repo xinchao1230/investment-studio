@@ -39,7 +39,10 @@
 .chat-message-flow-reverse {
   display: flex;
   flex-direction: column-reverse;
-  justify-content: flex-start;
+  /* In a column-reverse flow the main-axis start is visually the bottom.
+     Using flex-end pins short conversations to the visual top (like Claude Code),
+     while longer conversations still overflow and scroll to the latest message. */
+  justify-content: flex-end;
   min-height: 100%;
 }
 

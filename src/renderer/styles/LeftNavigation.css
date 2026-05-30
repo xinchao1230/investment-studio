@@ -26,7 +26,7 @@
   top: 0px;
   gap: 32px;
   padding: 12px;
-  background: #FFFBF8;
+  background: var(--si-card);
   border-right: none; /* border moved away; divider handles the visual separator */
   opacity: 1;
 }
@@ -60,4 +60,18 @@
 /* Collapsed state */
 .left-navigation.collapsed {
   /* Optional: add collapsed state styles */
+}
+/* Settings header back button — only the arrow is interactive; "Settings"
+   beside it is a plain label. Square-ish icon button with a neutral hover
+   fill, matching the rounded-pill language of the nav rows below it. */
+.settings-back-btn {
+  background: none;
+  transition: background 0.15s ease;
+}
+.settings-back-btn:hover {
+  background: var(--si-code-bg);
+}
+.settings-back-btn:focus-visible {
+  outline: 2px solid var(--si-border-strong);
+  outline-offset: 1px;
 }

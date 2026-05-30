@@ -148,7 +148,7 @@ const LoadingIcon = () => (
   >
     <g clipPath="url(#clip0_390_2677)">
       <circle cx="10" cy="10" r="9" stroke="black" strokeOpacity="0.15" strokeWidth="2"/>
-      <path d="M19 10C19 12.3869 18.0518 14.6761 16.364 16.364C14.6761 18.0518 12.387 19 10 19" stroke="#272320" strokeWidth="2" strokeLinecap="round"/>
+      <path d="M19 10C19 12.3869 18.0518 14.6761 16.364 16.364C14.6761 18.0518 12.387 19 10 19" stroke="var(--si-ink)" strokeWidth="2" strokeLinecap="round"/>
     </g>
     <defs>
       <clipPath id="clip0_390_2677">
@@ -1502,7 +1502,7 @@ const AgentList: React.FC<AgentListProps> = ({
       width: '100%'
     }}>
       {showSearch && (
-        <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '8px', position: 'sticky', top: 0, zIndex: 10, backgroundColor: '#FFFBF8', paddingBottom: '8px' }}>
+        <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '8px', position: 'sticky', top: 0, zIndex: 10, backgroundColor: 'var(--si-paper)', paddingBottom: '8px' }}>
           <div
             style={{
               display: 'flex',
@@ -1511,7 +1511,7 @@ const AgentList: React.FC<AgentListProps> = ({
               padding: '10px 12px',
               borderRadius: '14px',
               backgroundColor: '#F3F1ED',
-              border: isSearchMode ? '1px solid #272320' : '1px solid transparent',
+              border: isSearchMode ? '1px solid var(--si-gold)' : '1px solid transparent',
             }}
           >
             <Search size={16} color="#6C6C70" />
@@ -1531,7 +1531,7 @@ const AgentList: React.FC<AgentListProps> = ({
                 background: 'transparent',
                 flex: 1,
                 fontSize: '14px',
-                color: '#272320',
+                color: 'var(--si-ink)',
               }}
             />
             {searchQuery.length > 0 && (
@@ -1572,7 +1572,7 @@ const AgentList: React.FC<AgentListProps> = ({
                   maxWidth: '100%',
                   borderRadius: '999px',
                   backgroundColor: '#F4E7D3',
-                  color: '#272320',
+                  color: 'var(--si-ink)',
                   padding: '6px 10px',
                   fontSize: '12px',
                   fontWeight: 600,
@@ -1679,7 +1679,7 @@ const AgentList: React.FC<AgentListProps> = ({
                       version={option.agentVersion}
                     />
                     <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
-                      <span style={{ fontSize: '14px', fontWeight: 600, color: '#272320' }}>{option.agentName}</span>
+                      <span style={{ fontSize: '14px', fontWeight: 600, color: 'var(--si-ink)' }}>{option.agentName}</span>
                       <span style={{ fontSize: '12px', color: '#6C6C70' }}>Filter conversations for this agent</span>
                     </div>
                   </button>
@@ -1708,7 +1708,7 @@ const AgentList: React.FC<AgentListProps> = ({
                 lineHeight: 1.5,
               }}
             >
-              <div style={{ color: '#272320', fontWeight: 600, marginBottom: '4px' }}>
+              <div style={{ color: 'var(--si-ink)', fontWeight: 600, marginBottom: '4px' }}>
                 {searchLoadingChatIds.size > 0 ? 'Indexing conversations...' : 'No conversations found'}
               </div>
               <div>
@@ -1731,7 +1731,7 @@ const AgentList: React.FC<AgentListProps> = ({
                     onMouseEnter={() => setActiveSearchIndex(index)}
                     onClick={() => openSearchResult(result)}
                     style={{
-                      border: isActiveResult ? '1px solid #272320' : '1px solid transparent',
+                      border: isActiveResult ? '1px solid var(--si-gold)' : '1px solid transparent',
                       background: isCurrentSession ? '#ECE8E0' : isActiveResult ? '#F6F0E7' : '#F8F6F2',
                       borderRadius: '16px',
                       padding: '12px',
@@ -1748,7 +1748,7 @@ const AgentList: React.FC<AgentListProps> = ({
                         style={{
                           fontSize: '14px',
                           fontWeight: isUnread ? 700 : 600,
-                          color: '#272320',
+                          color: 'var(--si-ink)',
                           overflow: 'hidden',
                           textOverflow: 'ellipsis',
                           whiteSpace: 'nowrap',
@@ -1840,7 +1840,7 @@ const AgentList: React.FC<AgentListProps> = ({
               {starredSessions.map((session: StarredChatSessionIndexItem) => {
                 const isActiveSession = currentChatSessionId === session.chatSessionId;
                 const isUnreadSession = session.readStatus !== 'read' && !isActiveSession;
-                const sessionTitleColor = isUnreadSession ? '#272320' : '#6C6C70';
+                const sessionTitleColor = isUnreadSession ? 'var(--si-ink)' : '#6C6C70';
                 const sessionTitleFontWeight = isUnreadSession ? 600 : 410;
 
                 return (
@@ -2108,7 +2108,7 @@ const AgentList: React.FC<AgentListProps> = ({
                     .map((session) => {
                       const isActiveSession = currentChatSessionId === session.chatSession_id;
                       const isUnreadSession = session.readStatus !== 'read' && !isActiveSession;
-                      const sessionTitleColor = isUnreadSession ? '#272320' : '#6C6C70';
+                      const sessionTitleColor = isUnreadSession ? 'var(--si-ink)' : '#6C6C70';
                       const sessionTitleFontWeight = isUnreadSession ? 600 : 410;
                       const sessionRefKey = getSessionItemRefKey(chat.chat_id, session.chatSession_id);
 

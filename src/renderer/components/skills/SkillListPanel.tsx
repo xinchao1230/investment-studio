@@ -27,7 +27,7 @@ const LoadingSpinner = () => (
       style={{ animation: 'spin 1s linear infinite' }}
     >
       <circle cx="12" cy="12" r="10" stroke="#e0e0e0" strokeWidth="2"/>
-      <path d="M22 12C22 17.5228 17.5228 22 12 22" stroke="#272320" strokeWidth="2" strokeLinecap="round"/>
+      <path d="M22 12C22 17.5228 17.5228 22 12 22" stroke="var(--si-ink)" strokeWidth="2" strokeLinecap="round"/>
     </svg>
   </div>
 )

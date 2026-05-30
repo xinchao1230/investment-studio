@@ -24,7 +24,7 @@ const PlusIcon = () => (
       />
     </mask>
     <g mask="url(#mask0_322_2677)">
-      <rect width="24" height="24" fill="#272320" />
+      <rect width="24" height="24" fill="var(--si-ink)" />
     </g>
   </svg>
 );

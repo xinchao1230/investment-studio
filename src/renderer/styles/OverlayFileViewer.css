@@ -548,7 +548,7 @@
 .file-viewer-frontmatter-table td {
   padding: 10px 16px;
   font-size: 14px;
-  color: #272320;
+  color: var(--si-ink);
   border-bottom: 1px solid rgba(0, 0, 0, 0.04);
 }
 

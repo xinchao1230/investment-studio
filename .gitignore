@@ -312,3 +312,6 @@ GEMINI.md
 tests/e2e/report/
 tests/e2e/test-results/
 pr648-*.json
+
+# Superpowers local working files (brainstorm/plan artifacts, not source)
+.superpowers/

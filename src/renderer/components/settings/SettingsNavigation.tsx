@@ -1,7 +1,8 @@
 import React, { useCallback, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Camera, Terminal, Archive, Key, Cpu, LogOut, LogIn, ChevronLeft } from 'lucide-react';
+import { Camera, Terminal, Archive, Key, Cpu, LogOut, Loader2, ChevronLeft } from 'lucide-react';
 import NavItem from '../ui/navigation/NavItem';
+import { GitHubIcon } from '../ui/icons/ProviderIcons';
 import '../../styles/LeftNavigation.css';
 import { APP_NAME, BRAND_NAME, BRAND_CONFIG } from '@shared/constants/branding';
 import { useFeatureFlag } from '../../lib/featureFlags';
@@ -149,7 +150,7 @@ const SettingsNavigation: React.FC<SettingsNavigationProps> = ({ onBack }) => {
         headerGap: '8px',
         headerHeight: '36px',
         headerPaddingBottom: '6px',
-        titleFontSize: '14px',
+        titleFontSize: '13px',
         itemGap: '2px',
       }
     : {
@@ -161,12 +162,10 @@ const SettingsNavigation: React.FC<SettingsNavigationProps> = ({ onBack }) => {
         itemGap: '8px',
       };
 
-  const dividerStyle = (position: 'top' | 'bottom'): React.CSSProperties => ({
-    backgroundImage: 'linear-gradient(to right, rgba(0, 0, 0, 0.1) 0%, rgba(0, 0, 0, 0.1) 75%, rgba(0, 0, 0, 0) 100%)',
-    backgroundRepeat: 'no-repeat',
-    backgroundSize: '100% 1px',
-    backgroundPosition: position,
-  });
+  // Divider hairlines removed (borderless Claude-style chrome). Kept as a
+  // no-op so the two spread call sites (header bottom-rule, sign-in section
+  // top-rule) stay valid without restructuring their inline style objects.
+  const dividerStyle = (_position: 'top' | 'bottom'): React.CSSProperties => ({});
 
   return (
     <nav
@@ -187,9 +186,10 @@ const SettingsNavigation: React.FC<SettingsNavigationProps> = ({ onBack }) => {
           height: '100%',
         }}
       >
-        {/* Header with Settings title */}
+        {/* Header — only the back arrow is interactive; "Settings" is a
+            plain label. The arrow is a real <button> with a scoped hover
+            background (see .settings-back-btn in LeftNavigation.css). */}
         <div
-          onClick={handleBack}
           style={{
             display: 'flex',
             alignItems: 'center',
@@ -197,35 +197,37 @@ const SettingsNavigation: React.FC<SettingsNavigationProps> = ({ onBack }) => {
             width: '100%',
             height: layout.headerHeight,
             paddingBottom: layout.headerPaddingBottom,
-            cursor: 'pointer',
             ...dividerStyle('bottom'),
           }}
         >
-          <span
+          <button
+            type="button"
+            onClick={handleBack}
             aria-label="Go Back"
+            className="settings-back-btn"
             style={{
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              background: 'none',
               border: 'none',
-              padding: '4px',
-              borderRadius: '6px',
-              color: '#111827',
+              padding: '6px',
+              borderRadius: '8px',
+              color: 'var(--si-ink)',
               flexShrink: 0,
+              cursor: 'pointer',
             }}
           >
             <ChevronLeft size={20} />
-          </span>
+          </button>
           <h2
             style={{
               fontSize: layout.titleFontSize,
               fontWeight: '600',
-              color: '#111827',
+              color: 'var(--si-ink)',
               margin: 0,
             }}
           >
-            Investment Studio Panel
+            Settings
           </h2>
         </div>
 
@@ -371,30 +373,41 @@ const SettingsNavigation: React.FC<SettingsNavigationProps> = ({ onBack }) => {
           />
         </div>
 
-        {/* Bottom: Logout + Back */}
+        {/* Bottom: sign in / sign out — icon-only (tooltip carries the label).
+            Signed out → GitHub Copilot brand mark (invites sign-in).
+            Signed in  → sign-out glyph. While signing out → spinner glyph. */}
         <div
+          className="settings-auth-footer"
           style={{
             width: '100%',
             paddingTop: '16px',
             display: 'flex',
-            flexDirection: 'column',
-            gap: layout.itemGap,
             ...dividerStyle('top'),
           }}
         >
           <NavItem
-            icon={isCopilotUser ? <LogOut size={20} /> : <LogIn size={20} />}
-            label={
-              isSigningOut
-                ? 'Signing out...'
-                : isCopilotUser
-                  ? 'Sign Out GitHub Copilot'
-                  : 'Sign In GitHub Copilot'
+            icon={
+              isSigningOut ? (
+                <Loader2 size={18} className="animate-spin" />
+              ) : isCopilotUser ? (
+                <LogOut size={18} />
+              ) : (
+                <GitHubIcon size={18} />
+              )
             }
             isActive={false}
-            onClick={isCopilotUser ? handleSignOut : () => {
-              handleSignOut(); // sign out skip-login first, then redirect to login
-            }}
+            disabled={isSigningOut}
+            title={
+              isSigningOut
+                ? 'Signing out…'
+                : isCopilotUser
+                  ? 'Sign out of GitHub Copilot'
+                  : 'Sign in with GitHub Copilot'
+            }
+            // Both states call handleSignOut: when signed out via skip-login we
+            // still sign out first to clear it, then the redirect to the login
+            // screen follows.
+            onClick={handleSignOut}
             ariaLabel={isCopilotUser ? 'Sign out of GitHub Copilot' : 'Sign in with GitHub Copilot'}
           />
         </div>

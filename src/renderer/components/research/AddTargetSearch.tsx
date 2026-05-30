@@ -25,11 +25,11 @@ interface AddTargetSearchProps {
 }
 
 const MARKET_LABEL: Record<StockSuggestion['market'], string> = {
-  SH: '沪',
-  SZ: '深',
-  BJ: '京',
-  HK: '港',
-  US: '美',
+  SH: 'SH',
+  SZ: 'SZ',
+  BJ: 'BJ',
+  HK: 'HK',
+  US: 'US',
   OTHER: '',
 };
 
