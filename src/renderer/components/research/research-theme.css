@@ -393,6 +393,13 @@
   align-items: stretch;
   padding: 26px 20px 14px 20px;
   user-select: none;
+  /* Match the 740px conversation/composer column from ContentView.css and
+     center it. Without this the overlay stretches edge-to-edge in fill mode
+     (stella) while the composer beneath stays pinned to 740px, so the cards
+     looked wider than the input box. */
+  width: 100%;
+  max-width: 740px;
+  margin: 0 auto;
   /* The overlay container has overflow:hidden — if the pane is shorter than
      the card grid, let the welcome itself scroll instead of clipping. */
   max-height: 100%;
@@ -457,7 +464,10 @@
   line-height: 1.5;
   color: var(--si-muted);
   margin: 9px 0 0 0;
-  max-width: 30em;
+  /* No narrow cap — the welcome column is 740px (stella) so the 30em cap was
+     forcing an early wrap that orphaned "research." onto its own line. Let the
+     full column width govern; the sentence then fits without an orphan. */
+  max-width: none;
 }
 
 [data-theme="research"] .rw-welcome-cards {
@@ -703,11 +713,15 @@
 }
 
 /* Pin chat input to the bottom even when message list is empty
-   (default .empty-chat centers it vertically, which looks wrong in a narrow pane). */
+   (default .empty-chat centers it vertically, which looks wrong in a narrow pane).
+   Keep the same 8px bottom/horizontal gutter as the non-empty .chat-content
+   below — otherwise the composer sits 8px closer to the bottom in the zero
+   state, so it visibly jumps when the first message flips the state. Top stays
+   0 because justify-content: flex-end already anchors the input to the bottom. */
 [data-theme="research"] .chat-view--compact .chat-content-wrapper .chat-content.empty-chat {
   justify-content: flex-end;
   align-items: stretch;
-  padding: 0;
+  padding: 0 8px 8px 8px;
 }
 
 /* Tighten chat-content padding to fit a 380px pane */
@@ -750,7 +764,36 @@
   z-index: 20;
 }
 
-/* Trim the chat textarea height in compact pane (default 72px is too tall) */
+/* Stella (global) mode renders the pane at full width (fill), so the flush
+   full-width composer above no longer matches the 740px-centered welcome
+   overlay. Restore the app-wide 740px centered column for the composer in
+   stella mode only — workspace mode stays at the narrow 380px flush layout.
+   `data-research-mode` lives on .rw-pane-right (set from the `mode` prop). */
+[data-theme="research"] [data-research-mode="stella"] .chat-view--compact .chat-content-wrapper .chat-content.empty-chat,
+[data-theme="research"] [data-research-mode="stella"] .chat-view--compact .chat-content-wrapper .chat-content {
+  align-items: center;
+}
+[data-theme="research"] [data-research-mode="stella"] .chat-view--compact .chat-content-wrapper .chat-content.empty-chat .chat-input-container,
+[data-theme="research"] [data-research-mode="stella"] .chat-view--compact .chat-content-wrapper .chat-content .chat-input-container {
+  max-width: 740px;
+  width: 100%;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* Center the jump-to-latest floating button above the chatbox. The base
+   ChatContainer.css pins it to `right: 24px` (right edge of the conversation
+   column); in the research pane it should sit centered over the composer
+   instead. Use the left:0/right:0 + margin:auto centering trick rather than
+   transform:translateX(-50%) — the button already uses transform on :hover,
+   and the two would conflict. The element has a fixed 32px width, so auto
+   margins resolve to a true horizontal center within the 740px column. */
+[data-theme="research"] .chat-view--compact .chat-jump-to-latest-button {
+  left: 0;
+  right: 0;
+  margin-left: auto;
+  margin-right: auto;
+}
 [data-theme="research"] .chat-view--compact .chat-textarea {
   height: 56px;
   font-size: 13px;

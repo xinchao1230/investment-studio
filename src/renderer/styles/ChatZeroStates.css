@@ -10,8 +10,10 @@
   align-items: flex-start; /* align left */
   gap: 20px;
   width: 100%;
+  max-width: 740px; /* Match conversation column width */
   padding: 0 24px; /* 24px left/right padding */
   margin-bottom: 20px; /* spacing between ChatInput */
+  box-sizing: border-box;
 }
 
 /* Greeting */

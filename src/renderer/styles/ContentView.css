@@ -24,6 +24,7 @@
   flex: 1;
   display: flex;
   flex-direction: column;
+  align-items: center; /* Center conversation column horizontally */
   padding: 24px 12px;
   overflow: hidden;
   min-width: 0; /* Prevent flex child overflow */
@@ -31,13 +32,25 @@
 
 /* Main content area max-width constraint: fits exactly 5 cards, side margins adapt to window/sidepane
  * Calculation: 5×240px(card) + 4×20px(gap) + 2×24px(chat-zero-states padding) = 1328px */
-.chat-content-wrapper .chat-content .chat-container-reverse,
-.chat-content-wrapper .chat-content .chat-session-transition-state,
-.chat-content-wrapper .chat-content .chat-input-container {
+.chat-content-wrapper .chat-content .chat-session-transition-state {
   max-width: 1328px;
   width: 100%;
   margin-left: auto;
   margin-right: auto;
+}
+
+/* Conversation column: narrower centered layout (like Claude) for comfortable reading.
+ * 740px keeps message bubbles and the composer in a focused center column on wide screens. */
+.chat-content-wrapper .chat-content .chat-container-with-overlay {
+  max-width: 740px !important;
+  width: 100% !important;
+  flex: 1;
+  min-height: 0;
+}
+
+.chat-content-wrapper .chat-content > .chat-input-container {
+  max-width: 740px !important;
+  width: 100% !important;
 }
 
 .chat-content-wrapper .chat-content .chat-session-transition-state {
@@ -59,12 +72,6 @@
   box-shadow: 0 10px 30px rgba(15, 23, 42, 0.06);
 }
 
-/* Zero States container syncs max-width */
-.chat-content-wrapper .chat-content.with-zero-states .chat-zero-states {
-  max-width: 1328px;
-  margin-left: auto;
-  margin-right: auto;
-}
 
 /* Empty state layout - ChatInput vertically centered */
 .chat-content-wrapper .chat-content.empty-chat {
@@ -75,7 +82,7 @@
 /* Empty state layout with Zero States */
 .chat-content-wrapper .chat-content.empty-chat.with-zero-states {
   justify-content: flex-end; /* content anchored to bottom */
-  align-items: stretch; /* allow children to center via margin:auto */
+  align-items: center; /* keep children centered, same as non-zero-states */
   padding-bottom: 24px;
 }
 
@@ -84,16 +91,16 @@
   display: none;
 }
 
-/* In empty state (no Zero States), ChatInput maintains a smaller width */
+/* In empty state (no Zero States), ChatInput maintains the conversation column width */
 .chat-content-wrapper .chat-content.empty-chat .chat-input-container {
-  max-width: 800px;
+  max-width: 740px !important;
   padding: 16px;
 }
 
-/* In empty state with Zero States, ChatInput restores full width and original padding, consistent with non-empty state and aligned to sidepane bottom */
+/* In empty state with Zero States, ChatInput uses the same conversation column width */
 .chat-content-wrapper .chat-content.empty-chat.with-zero-states .chat-input-container {
-  max-width: 1328px;
-  padding: 16px 24px 0 24px; /* Overrides .empty-chat's padding: 16px, restores ChatInput.css original value */
+  max-width: 740px !important;
+  padding: 16px 24px 0 24px;
 }
 
 /* McpContentView */
