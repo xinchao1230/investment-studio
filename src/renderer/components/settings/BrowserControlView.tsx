@@ -507,7 +507,7 @@ const BrowserControlView: React.FC = () => {
             </DialogDescription>
           </DialogHeader>
           <div className="py-4">
-            <p className="text-sm text-gray-600 dark:text-gray-400">
+            <p className="text-sm text-[var(--si-muted)] dark:text-gray-400">
               Would you like to automatically download and install {browserInstallConfirm.browserName}?
             </p>
           </div>
@@ -535,7 +535,7 @@ const BrowserControlView: React.FC = () => {
             </DialogDescription>
           </DialogHeader>
           <div className="py-4">
-            <p className="text-sm text-gray-600 dark:text-gray-400">
+            <p className="text-sm text-[var(--si-muted)] dark:text-gray-400">
               Would you like to download the Native Server component now?
             </p>
           </div>
@@ -563,7 +563,7 @@ const BrowserControlView: React.FC = () => {
             </DialogDescription>
           </DialogHeader>
           <div className="py-4">
-            <p className="text-sm text-gray-600 dark:text-gray-400">
+            <p className="text-sm text-[var(--si-muted)] dark:text-gray-400">
               {browserRestartConfirm.browserName} is currently running. Would you like to close and restart it now?
             </p>
           </div>
@@ -593,10 +593,10 @@ const BrowserControlView: React.FC = () => {
               display: 'flex',
               alignItems: 'center',
               gap: '8px',
-              backgroundColor: '#f3f4f6',
+              backgroundColor: 'var(--si-code-bg)',
               borderRadius: '6px',
               padding: '10px 12px',
-              border: '1px solid #e5e7eb',
+              border: '1px solid var(--si-border)',
             }}>
               <code style={{
                 flex: 1,
@@ -613,7 +613,7 @@ const BrowserControlView: React.FC = () => {
                 style={{
                   padding: '4px 10px',
                   borderRadius: '4px',
-                  border: '1px solid #d1d5db',
+                  border: '1px solid var(--si-border)',
                   backgroundColor: 'white',
                   color: '#374151',
                   cursor: 'pointer',
@@ -670,10 +670,10 @@ const BrowserControlView: React.FC = () => {
               display: 'flex',
               alignItems: 'center',
               gap: '8px',
-              backgroundColor: '#f3f4f6',
+              backgroundColor: 'var(--si-code-bg)',
               borderRadius: '6px',
               padding: '10px 12px',
-              border: '1px solid #e5e7eb',
+              border: '1px solid var(--si-border)',
             }}>
               <code style={{
                 flex: 1,
@@ -690,7 +690,7 @@ const BrowserControlView: React.FC = () => {
                 style={{
                   padding: '4px 10px',
                   borderRadius: '4px',
-                  border: '1px solid #d1d5db',
+                  border: '1px solid var(--si-border)',
                   backgroundColor: 'white',
                   color: '#374151',
                   cursor: 'pointer',

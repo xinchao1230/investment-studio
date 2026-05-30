@@ -3,20 +3,35 @@
    rest of the app. */
 
 [data-theme="research"] {
-  --rw-bg: #ffffff;
-  --rw-bg-soft: #f6f7f9;
-  --rw-bg-chat-header: #f7f8fa;
-  --rw-border: #ececf0;
-  --rw-text: #1f2328;
-  --rw-text-2: #57606a;
-  --rw-text-3: #8c959f;
-  --rw-accent: #3b5bdb;
-  --rw-accent-soft: #eef1f7;
-  --rw-suggest-icon: #f08c00;
-  /* Editor tab top stripe — kept distinct from --rw-accent so it doesn't
-     blend into the dark navy titlebar above the tabs. */
-  --rw-tab-active-bar: #f59e0b;
+  /* Palette: white sidebars, grey content, terracotta accent (Claude-style). */
+  --rw-bg: var(--si-paper);              /* warm grey center content */
+  --rw-bg-soft: var(--si-card);          /* white (left tree, right pane) */
+  --rw-bg-chat-header: var(--si-card);   /* white header strip */
+  --rw-border: var(--si-border);
+  --rw-text: var(--si-ink);              /* near-black text */
+  --rw-text-1: var(--si-ink);
+  --rw-text-2: var(--si-muted);
+  --rw-text-3: var(--si-faint);
+  --rw-accent: var(--si-ink);            /* dark accent */
+  --rw-accent-soft: var(--si-accent-soft); /* subtle brand-tint highlight (selected rows, drop target, search highlight) */
+  --rw-suggest-icon: var(--si-gold);     /* terracotta */
 
+  /* Strong terracotta accent for filled selected states (active pill tab,
+     active toolbar button, inline-code chip, focused composer border, divider
+     highlight). Single source: the app-wide --si-gold / --si-accent-soft
+     tokens. Previously these were hardcoded as #b35a36 / #f7e9e1 — a slightly
+     darker, token-less second terracotta — duplicated across 8 sites; now
+     they all resolve through these two aliases. */
+  --rw-accent-strong: var(--si-accent-strong);  /* fg: text / border / icon */
+  --rw-accent-strong-bg: var(--si-accent-soft); /* bg: filled chip surface */
+
+  /* Welcome-card surfaces. */
+  --rw-bg-card: var(--si-card);
+  --rw-bg-card-hover: #f5f4f2;
+  --rw-border-1: var(--si-border);
+  --rw-border-2: var(--si-border-strong);
+
+  /* Status pills — semantic, intentionally unchanged. */
   --rw-status-good-bg: #e6f4ea;
   --rw-status-good-fg: #1e8e3e;
   --rw-status-warn-bg: #fef7e0;
@@ -32,31 +47,133 @@
 
 [data-theme="research"] .rw-pane-left {
   background: var(--rw-bg-soft);
-  border-right: 1px solid var(--rw-border);
+  /* No hard border: the seam stays flush at rest. The resizable divider's
+     hover/drag accent (see .rw-resizable-divider) is the only visual cue. */
 }
 [data-theme="research"] .rw-pane-right {
-  border-left: 1px solid var(--rw-border);
-  background: var(--rw-bg);
+  background: var(--rw-bg-soft);
+  /* No hard border — see .rw-pane-left. */
 }
 [data-theme="research"] .rw-divider {
   border-bottom: 1px solid var(--rw-border);
 }
+/* Top hairline — used by the sidebar's bottom-left footer to separate it
+   from the scrollable body above. */
+[data-theme="research"] .rw-divider-top {
+  border-top: 1px solid var(--rw-border);
+}
 
-/* Expand the drag hit area of the 1px inter-pane separator without making
-   the visible line any thicker. The inline style on .rw-resizable-divider
-   draws a 1px border-color line; this pseudo-element extends the clickable
-   area ±3px outward so users don't need pixel-perfect aim. */
+/* Inter-pane seam. Invisible at rest (the element itself is a 1px transparent
+   flex item, so the L/M/R panes read as flush). Two pseudo-elements layer on
+   top:
+     ::before — a ±5px transparent strip that widens the drag hit area so the
+                user never needs pixel-perfect aim on a 1px target.
+     ::after  — a 2px terracotta accent bar, centered on the seam, that fades
+                in on hover and while dragging. This is the only visible cue,
+                and only when the user is interacting with the seam. */
 [data-theme="research"] .rw-resizable-divider::before {
   content: '';
   position: absolute;
   top: 0;
   bottom: 0;
-  left: -3px;
-  right: -3px;
+  left: -5px;
+  right: -5px;
   cursor: col-resize;
 }
-[data-theme="research"] .rw-tab-active-bar {
-  box-shadow: inset 0 2px 0 0 var(--rw-tab-active-bar);
+[data-theme="research"] .rw-resizable-divider::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  /* 2px bar centered on the 1px element (-0.5px keeps it visually centered). */
+  left: -0.5px;
+  width: 2px;
+  background: var(--rw-accent-strong);
+  opacity: 0;
+  transition: opacity 120ms ease;
+  pointer-events: none;
+}
+[data-theme="research"] .rw-resizable-divider:hover::after {
+  opacity: 0.5;
+}
+[data-theme="research"] .rw-resizable-divider.is-dragging::after {
+  opacity: 1;
+}
+
+/* ===========================================================
+   Scrollbars. Two behaviors, chosen by platform via the `data-os`
+   attr on the research root (set in ResearchPage.tsx):
+
+   - DEFAULT (Windows / Linux / unknown): a persistent faint thumb
+     that darkens on hover and while scrolling. Windows users expect
+     an always-visible, click-draggable scrollbar.
+   - macOS (`[data-os="darwin"]`): native overlay behavior — the thumb
+     is transparent at rest and appears only while actively scrolling
+     (the `rw-scrolling` class ResearchPage toggles during scroll). The
+     active thumb is a clear dark grey (not a faint tint) so the reveal
+     is unmistakable.
+
+   The global rule in globals.css paints the thumb permanently with
+   !important and kills transitions, so we re-declare here (also
+   !important). We animate the thumb's BACKGROUND color, not opacity
+   — WebKit does not reliably transition opacity on scrollbar
+   pseudo-elements. Track/width stay constant so layout never shifts.
+   The darwin selector is more specific than the base, so on macOS it
+   wins the !important tie and restores the overlay look.
+   =========================================================== */
+/* Research panes use a slightly wider bar than the app-global 6px so the
+   thumb is easy to see and grab inside the document/chat panes. */
+[data-theme="research"] ::-webkit-scrollbar {
+  width: 8px !important;
+  height: 8px !important;
+}
+/* Base (Windows / Linux / unknown): always-visible faint thumb. */
+[data-theme="research"] ::-webkit-scrollbar-thumb {
+  background: rgba(160, 160, 158, 0.38) !important;
+  border-radius: 4px;
+  transition: background-color 220ms ease !important;
+}
+[data-theme="research"] ::-webkit-scrollbar-thumb:hover {
+  background: rgba(120, 120, 118, 0.6) !important;
+}
+/* Active scroll: darken ONLY the scrolled element's own thumb. The
+   `rw-scrolling` class is added to the actual scrolled element (e.target),
+   so `.rw-scrolling::-webkit-scrollbar-thumb` (no space — pseudo-element on
+   the element itself) targets just that pane, not its siblings. */
+[data-theme="research"] .rw-scrolling::-webkit-scrollbar-thumb {
+  background: rgba(160, 160, 158, 0.6) !important;
+}
+/* Firefox / standards: thin, always-visible faint bar. */
+[data-theme="research"] * {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(160, 160, 158, 0.45) transparent;
+}
+
+/* macOS: native overlay behavior — every thumb is transparent at rest and
+   appears only while ITS element is actively scrolling. The `rw-scrolling`
+   class is toggled on the scrolled element itself (not the root) by
+   ResearchPage's callback-ref scroll listener, so each pane (center doc,
+   right chat, left tree) reveals only its OWN scrollbar — they no longer
+   flash together. The active thumb is a clear dark grey so the reveal is
+   unmistakable, then fades back out ~400ms after scrolling stops.
+
+   NOTE on specificity: the rest-state darwin rule below is 0,2,1, while the
+   per-element reveal adds a `.rw-scrolling` class -> 0,3,1, so the reveal
+   reliably out-ranks the transparent rest state on macOS. (The 363af2f
+   regression was the inverse: a root-level reveal at lower specificity that
+   the rest-state transparent rule silently beat, leaving the thumb invisible
+   even while scrolling.) */
+[data-theme="research"][data-os="darwin"] ::-webkit-scrollbar-thumb {
+  background: transparent !important;
+}
+[data-theme="research"][data-os="darwin"] .rw-scrolling::-webkit-scrollbar-thumb {
+  background: rgba(110, 110, 108, 0.85) !important;
+}
+[data-theme="research"][data-os="darwin"] * {
+  scrollbar-color: transparent transparent;
+}
+[data-theme="research"][data-os="darwin"] .rw-scrolling {
+  scrollbar-color: rgba(110, 110, 108, 0.85) transparent;
 }
 [data-theme="research"] .rw-status-pill {
   display: inline-block;
@@ -77,6 +194,9 @@
 }
 [data-theme="research"] .rw-tree-row {
   font-size: 13px;
+  /* Match the Settings nav rail's row weight (.nav-item-label is 500) so the
+     two side panes read identically. Was 400 (inherited from body). */
+  font-weight: 500;
   color: var(--rw-text);
   height: 28px;
   display: flex;
@@ -85,19 +205,25 @@
   cursor: pointer;
   user-select: none;
   position: relative;
+  /* Rounded-pill selected/hover state to match the Settings nav rail.
+     8px reads right on a 28px row (Settings uses 12px on a 40px row);
+     the 6px horizontal margin insets the pill from the pane edges so it
+     floats like Settings' padded nav items. Inline paddingLeft on each
+     row (12 + depth*12 in TargetListSidebar.tsx) stays inside the row
+     box, so the margin just shifts every row uniformly — indentation
+     and depth alignment are preserved. */
+  border-radius: 8px;
+  margin: 0 6px;
 }
-[data-theme="research"] .rw-tree-row:hover { background: rgba(0,0,0,0.035); }
+[data-theme="research"] .rw-tree-row:hover { background: rgba(11, 46, 79, 0.05); }
 [data-theme="research"] .rw-tree-row.is-active {
   background: var(--rw-accent-soft);
   color: var(--rw-text);
 }
+/* Left accent bar removed — the rounded-pill fill alone signals the
+   active row now, matching the Settings nav's pill (no left bar). */
 [data-theme="research"] .rw-tree-row.is-active::before {
-  content: '';
-  position: absolute;
-  left: 0; top: 4px; bottom: 4px;
-  width: 2px;
-  background: var(--rw-accent);
-  border-radius: 0 2px 2px 0;
+  display: none;
 }
 [data-theme="research"] .rw-tree-row.is-disabled { color: var(--rw-text-3); cursor: default; }
 
@@ -121,26 +247,75 @@
   font-weight: 600;
   color: var(--rw-text);
 }
+/* Claude-style compact segmented control: a slim warm-grey track with a single
+ * white "thumb" that SLIDES between tabs via transform (driven by data-active).
+ * Colors/treatment hard-coded to match Claude desktop exactly; pixel values are
+ * scaled to the sidebar's 13px font (Claude's spec is at 2x screenshot scale)
+ * while preserving Claude's height ratios, thin border, and subtle shadow. */
+[data-theme="research"] .rw-side-tabs {
+  position: relative;
+  display: inline-grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 10px;
+  background: #f3f2ef;
+}
+/* The sliding thumb (the selected segment). Sits over the left cell by default;
+ * data-active="stella" slides it one cell (+ gap) to the right.
+ * Geometry: track padding 3px + grid gap 2px → each cell = 50% - 4px,
+ * thumb offset = 3px, slide distance = cell width (100%) + gap (2px). */
+[data-theme="research"] .rw-side-tabs::before {
+  content: "";
+  position: absolute;
+  top: 3px;
+  bottom: 3px;
+  left: 3px;
+  width: calc(50% - 4px);
+  border-radius: 8px;
+  background: #ffffff;
+  border: 1px solid #cccccc;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+  transform: translateX(0);
+  transition: transform 0.24s cubic-bezier(0.4, 0, 0.2, 1);
+  pointer-events: none;
+}
+[data-theme="research"] .rw-side-tabs[data-active="stella"]::before {
+  transform: translateX(calc(100% + 2px));
+}
 [data-theme="research"] .rw-side-tab {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  text-align: center;
   font-size: 13px;
   font-weight: 500;
-  color: var(--rw-text-3);
-  padding: 4px 2px;
-  border-bottom: 2px solid transparent;
+  line-height: 1;
+  color: #8f8f8f;
+  padding: 6px 16px;
+  border: 0;
+  border-radius: 8px;
   background: transparent;
-  border-left: 0;
-  border-right: 0;
-  border-top: 0;
   cursor: pointer;
   white-space: nowrap;
-  transition: color 0.15s ease, border-color 0.15s ease;
+  transition: color 0.18s ease, font-weight 0.18s ease;
 }
-[data-theme="research"] .rw-side-tab:hover {
-  color: var(--rw-text);
+[data-theme="research"] .rw-side-tab:hover:not(.is-active) {
+  color: #6f6f6f;
 }
 [data-theme="research"] .rw-side-tab.is-active {
-  color: var(--rw-text);
-  border-bottom-color: var(--rw-accent);
+  color: #1f1f1f;
+  font-weight: 600;
+}
+/* Compact (icon-only) tabs — shown when the sidebar is too narrow for both
+   full labels. Tighter horizontal padding so the two icon cells + sliding
+   thumb fit comfortably; the thumb's 50%-4px geometry is unchanged. */
+[data-theme="research"] .rw-side-tabs--compact .rw-side-tab {
+  padding: 6px 12px;
 }
 [data-theme="research"] .rw-side-icon-btn {
   display: inline-flex;
@@ -156,141 +331,225 @@
   color: var(--rw-text);
 }
 
-/* NOTE: legacy .rw-suggest-* styles removed — the workspace-mode "今天一起
- * 研究什么?" text rows have been replaced by the unified ResearchWelcome
- * card grid (shared with Stella mode). See .rw-stella-welcome-* below. */
+/* Footer Settings gear — aligned to the Settings side-pane's back button
+   (.settings-back-btn): 6px padding / 8px radius / near-black ink / 20px
+   glyph, with the same neutral hover fill. Kept separate from the toolbar
+   .rw-side-icon-btn (22px / 4px / faint) so the top-bar tool buttons are
+   unaffected. */
+[data-theme="research"] .rw-side-footer-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px;
+  border: none;
+  background: none;
+  border-radius: 8px;
+  color: var(--si-ink);
+  flex-shrink: 0;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+[data-theme="research"] .rw-side-footer-btn:hover {
+  background: var(--si-code-bg);
+}
+[data-theme="research"] .rw-side-footer-btn:focus-visible {
+  outline: 2px solid var(--si-border-strong);
+  outline-offset: 1px;
+}
+
+/* NOTE: legacy .rw-suggest-* styles removed — the workspace-mode prompt-row
+ * text has been replaced by the unified ResearchWelcome card grid (shared
+ * across both modes). See .rw-welcome-* below. */
 
 [data-theme="research"] .rw-pane-right :where(input, textarea) { font-size: 13px; }
 [data-theme="research"] .rw-pane-right:not(.rw-pane-right--collapsed) { min-width: 400px; }
 
 /* ───────────── Empty-state UX contract ─────────────
- * - Workspace mode (target picked): show the local hardcoded
- *   EmptySuggestions overlay; hide the agent's ChatZeroStates so the two
- *   don't stack.
- * - Stella mode (global Ask Stella): hide the local overlay (handled in
- *   ResearchChatPane.tsx) and let ChatZeroStates be the welcome screen,
- *   topped by a small "Ask Stella" landing header (.rw-stella-welcome-header).
+ * - Workspace mode (target picked): show the local ResearchWelcome overlay;
+ *   hide the agent's ChatZeroStates so the two don't stack.
+ * - Global ('stella') mode (no target): hide the local overlay (handled in
+ *   ResearchChatPane.tsx) and let ResearchWelcome be the welcome surface.
  */
 [data-theme="research"] .rw-pane-right[data-research-mode="workspace"] .chat-zero-states {
   display: none !important;
 }
 
-/* Stella mode: hide the agent profile's ChatZeroStates so it can't stack on
- * top of the self-contained StellaWelcome. This is defensive — current
- * profiles lack zero_states, but if one is added later we still want a
- * single welcome surface. */
+/* Hide the agent profile's ChatZeroStates in global ('stella') mode so it
+ * can't stack on top of the self-contained ResearchWelcome. Defensive —
+ * current profiles lack zero_states, but if one is added later we still want
+ * a single welcome surface. */
 [data-theme="research"] .rw-pane-right[data-research-mode="stella"] .chat-zero-states {
   display: none !important;
 }
 
-/* "Ask Stella" landing screen rendered above ChatView in Stella mode.
- * Self-contained (does not depend on the persisted agent's zero_states),
- * because legacy profiles may lack that field. */
-[data-theme="research"] .rw-stella-welcome {
+/* ───────────── ResearchWelcome — empty-state landing ─────────────
+ * Editorial financial-brief aesthetic: an uppercase letter-spaced eyebrow,
+ * a quiet serif headline, a monospace ticker badge (data-terminal trust
+ * signal), and a 2-col grid of icon-led starting points. Persona-neutral —
+ * no assistant mascot, no greeting. Tokens come from editorial-theme.css. */
+[data-theme="research"] .rw-welcome {
   display: flex;
   flex-direction: column;
   align-items: stretch;
-  padding: 24px 20px 12px 20px;
+  padding: 26px 20px 14px 20px;
   user-select: none;
+  /* Match the 740px conversation/composer column from ContentView.css and
+     center it. Without this the overlay stretches edge-to-edge in fill mode
+     (stella) while the composer beneath stays pinned to 740px, so the cards
+     looked wider than the input box. */
+  width: 100%;
+  max-width: 740px;
+  margin: 0 auto;
   /* The overlay container has overflow:hidden — if the pane is shorter than
-     the welcome card grid (e.g. small window or many cards), let the welcome
-     itself scroll instead of clipping the bottom cards. */
+     the card grid, let the welcome itself scroll instead of clipping. */
   max-height: 100%;
   overflow-y: auto;
 }
-[data-theme="research"] .rw-stella-welcome-header {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  margin-bottom: 12px;
+
+[data-theme="research"] .rw-welcome-head {
+  margin-bottom: 18px;
 }
-[data-theme="research"] .rw-stella-welcome-emoji {
-  font-size: 28px;
-  line-height: 1;
-}
-[data-theme="research"] .rw-stella-welcome-logo {
-  width: 28px;
-  height: 28px;
-  border-radius: 6px;
-  display: block;
-  flex-shrink: 0;
-  object-fit: contain;
-}
-[data-theme="research"] .rw-stella-welcome-title {
-  font-size: 18px;
+[data-theme="research"] .rw-welcome-eyebrow {
+  font-size: 10.5px;
   font-weight: 600;
-  color: var(--rw-text-1);
-  letter-spacing: 0.2px;
+  letter-spacing: 1.4px;
+  text-transform: uppercase;
+  color: var(--si-gold);
+  margin-bottom: 7px;
 }
-[data-theme="research"] .rw-stella-welcome-greeting {
-  font-size: 13px;
-  line-height: 1.55;
-  color: var(--rw-text-2);
-  text-align: center;
-  padding: 0 8px;
-  margin-bottom: 16px;
+[data-theme="research"] .rw-welcome-headline-row {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px;
 }
-[data-theme="research"] .rw-stella-welcome-cards {
+[data-theme="research"] .rw-welcome-headline {
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 1.25;
+  color: var(--si-ink);
+  letter-spacing: -0.2px;
+  margin: 0;
+}
+/* Monospace ticker badge — terminal/data trust cue. Replaces the old
+ * duplicated stock-code subtitle. */
+[data-theme="research"] .rw-welcome-ticker {
+  display: inline-flex;
+  align-items: center;
+  font-family: ui-monospace, 'SF Mono', 'Menlo', monospace;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  color: var(--si-gold);
+  padding: 2px 7px;
+  border: 1px solid var(--si-accent-active);
+  border-radius: 5px;
+  background: var(--si-accent-soft);
+  white-space: nowrap;
+}
+[data-theme="research"] .rw-welcome-tag {
+  display: inline-flex;
+  align-items: center;
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.3px;
+  color: var(--si-muted);
+  padding: 2px 7px;
+  border-radius: 5px;
+  background: var(--si-pill-bg, rgba(127, 127, 127, 0.12));
+  white-space: nowrap;
+}
+[data-theme="research"] .rw-welcome-sub {
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--si-muted);
+  margin: 9px 0 0 0;
+  /* No narrow cap — the welcome column is 740px (stella) so the 30em cap was
+     forcing an early wrap that orphaned "research." onto its own line. Let the
+     full column width govern; the sentence then fits without an orphan. */
+  max-width: none;
+}
+
+[data-theme="research"] .rw-welcome-cards {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 8px;
 }
-[data-theme="research"] .rw-stella-welcome-card {
+[data-theme="research"] .rw-welcome-card {
   display: flex;
-  flex-direction: column;
   align-items: flex-start;
-  gap: 2px;
-  padding: 10px 12px;
-  border-radius: 12px;
-  background: var(--rw-bg-card, rgba(127, 127, 127, 0.06));
-  border: 1px solid var(--rw-border-1, rgba(127, 127, 127, 0.15));
+  gap: 10px;
+  padding: 12px 12px;
+  border-radius: 10px;
+  background: var(--si-card, #fff);
+  border: 1px solid var(--si-border, #ebebeb);
   text-align: left;
   cursor: pointer;
-  transition: background 0.15s ease, border-color 0.15s ease;
+  position: relative;
+  transition: border-color 0.16s ease, box-shadow 0.16s ease,
+    transform 0.16s ease;
   min-width: 0;
   overflow: hidden;
 }
-[data-theme="research"] .rw-stella-welcome-card:hover {
-  background: var(--rw-bg-card-hover, rgba(127, 127, 127, 0.12));
-  border-color: var(--rw-border-2, rgba(127, 127, 127, 0.25));
+[data-theme="research"] .rw-welcome-card:hover {
+  border-color: var(--si-gold);
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.02), 0 4px 14px color-mix(in srgb, var(--si-gold) 10%, transparent);
+  transform: translateY(-1px);
 }
-[data-theme="research"] .rw-stella-welcome-card-title {
+[data-theme="research"] .rw-welcome-card:active {
+  transform: translateY(0);
+}
+/* Icon tile — quiet neutral by default, terracotta-tinted on hover. */
+[data-theme="research"] .rw-welcome-card-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  border-radius: 7px;
+  background: var(--si-code-bg, #f0efed);
+  color: var(--si-muted);
+  transition: background 0.16s ease, color 0.16s ease;
+}
+[data-theme="research"] .rw-welcome-card:hover .rw-welcome-card-icon {
+  background: var(--si-accent-soft);
+  color: var(--si-gold);
+}
+[data-theme="research"] .rw-welcome-card-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+[data-theme="research"] .rw-welcome-card-title {
   font-size: 13px;
   font-weight: 600;
-  color: var(--rw-text-1);
-  line-height: 18px;
+  color: var(--si-ink);
+  line-height: 17px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   max-width: 100%;
 }
-[data-theme="research"] .rw-stella-welcome-card-desc {
-  font-size: 12px;
-  color: var(--rw-text-3);
-  line-height: 16px;
+[data-theme="research"] .rw-welcome-card-desc {
+  font-size: 11.5px;
+  color: var(--si-muted);
+  line-height: 15px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   max-width: 100%;
 }
-
-/* "未上市" pill rendered inline next to the workspace-mode header title
- * (only when targetCode === targetName, i.e. synthetic unlisted target). */
-[data-theme="research"] .rw-stella-welcome-pill {
-  display: inline-flex;
-  align-items: center;
-  font-size: 10px;
-  line-height: 1;
-  padding: 3px 6px;
-  border-radius: 4px;
-  background: rgba(127, 127, 127, 0.12);
-  color: var(--rw-text-3);
-  margin-left: 4px;
-  flex-shrink: 0;
+/* Intro ("Capabilities") card spans the full row and reads as a primer:
+ * subtly accented left edge so it leads the eye without shouting. */
+[data-theme="research"] .rw-welcome-card--intro {
+  grid-column: 1 / -1;
 }
-
-/* Target-attribution pill prefixed to a chat row in the Ask tab's unified
+[data-theme="research"] .rw-welcome-card--intro .rw-welcome-card-icon {
+  background: var(--si-accent-soft);
+  color: var(--si-gold);
+}
  * chat list. Compact and color-muted so it does not steal attention from
  * the chat title. */
 [data-theme="research"] .rw-chat-row-pill {
@@ -301,8 +560,9 @@
   padding: 2px 5px;
   margin-right: 5px;
   border-radius: 3px;
-  background: rgba(99, 102, 241, 0.10);
-  color: rgba(67, 56, 202, 0.95);
+  /* Accent-tinted to follow the brand palette. */
+  background: color-mix(in srgb, var(--si-gold) 10%, transparent);
+  color: var(--si-ink);
   max-width: 84px;
   white-space: nowrap;
   overflow: hidden;
@@ -310,21 +570,6 @@
   flex-shrink: 0;
   user-select: none;
 }
-
-/* Subtitle under the header — used in workspace mode to show the stock code
- * below the target name (when not unlisted). */
-[data-theme="research"] .rw-stella-welcome-subtitle {
-  font-size: 12px;
-  color: var(--rw-text-3);
-  text-align: center;
-  margin: -8px 0 14px 0;
-  letter-spacing: 0.3px;
-}
-
-/* Intro card variant — visually identical to task cards (no accent
- * highlight, no icon, per design). Click behavior still differs:
- * intro auto-submits, task cards fill the input. Class kept so future
- * tweaks have a hook. */
 
 /* Chat message bubble typography — research workspace uses a denser scale
    than the standalone /agent window (default 15px). Drop body text to 13px
@@ -431,7 +676,8 @@
   padding: 40px 0 10px;
   gap: 12px;
   background: var(--rw-bg-soft);
-  border-right: 1px solid var(--rw-border);
+  /* Flush seam: the soft background tint separates the icon strip from the
+     center pane without a hard border. */
   cursor: pointer;
 }
 [data-theme="research"] .rw-pane-left--collapsed:hover {
@@ -447,16 +693,11 @@
   padding: 10px 0;
   gap: 12px;
   background: var(--rw-bg-soft);
-  border-left: 1px solid var(--rw-border);
+  /* Flush seam: soft background tint separates the icon strip; no hard line. */
   cursor: pointer;
 }
 [data-theme="research"] .rw-pane-right--collapsed:hover {
   background: rgba(0, 0, 0, 0.03);
-}
-[data-theme="research"] .rw-pane-right--collapsed-emoji {
-  font-size: 18px;
-  line-height: 1;
-  user-select: none;
 }
 
 /* Research-pane compact ChatView overrides.
@@ -472,16 +713,40 @@
 }
 
 /* Pin chat input to the bottom even when message list is empty
-   (default .empty-chat centers it vertically, which looks wrong in a narrow pane). */
+   (default .empty-chat centers it vertically, which looks wrong in a narrow pane).
+   Keep the same 8px bottom/horizontal gutter as the non-empty .chat-content
+   below — otherwise the composer sits 8px closer to the bottom in the zero
+   state, so it visibly jumps when the first message flips the state. Top stays
+   0 because justify-content: flex-end already anchors the input to the bottom. */
 [data-theme="research"] .chat-view--compact .chat-content-wrapper .chat-content.empty-chat {
   justify-content: flex-end;
   align-items: stretch;
-  padding: 0;
+  padding: 0 8px 8px 8px;
 }
 
 /* Tighten chat-content padding to fit a 380px pane */
 [data-theme="research"] .chat-view--compact .chat-content-wrapper .chat-content {
   padding: 8px;
+}
+
+/* Chat pane background — pure white. The shared ContentView.css paints
+   .chat-content-wrapper with --si-paper (#fdfdfc, warm off-white) for the
+   full /agent page, but the research right pane (.rw-pane-right) is white,
+   so the wrapper's warm tint sat on top of it. Repaint it white here so the
+   conversation area matches its white pane. Scoped to the research theme —
+   the /agent page keeps its paper background. */
+[data-theme="research"] .chat-view--compact .chat-content-wrapper {
+  background: #ffffff;
+}
+
+/* Align the message column gutters with the composer below it.
+   The default .chat-container-reverse uses 24px side padding while the
+   compact .chat-input-container uses 8px — that 16px mismatch makes the
+   right-aligned user bubble and left-aligned assistant text look offset
+   from the input box. Match the composer's 8px horizontal gutter so all
+   three line up on both edges. Vertical padding stays comfortable. */
+[data-theme="research"] .chat-view--compact .chat-container-reverse {
+  padding: 16px 8px;
 }
 
 /* Default .input-area has min-width:380px which overflows the 380px pane.
@@ -499,7 +764,36 @@
   z-index: 20;
 }
 
-/* Trim the chat textarea height in compact pane (default 72px is too tall) */
+/* Stella (global) mode renders the pane at full width (fill), so the flush
+   full-width composer above no longer matches the 740px-centered welcome
+   overlay. Restore the app-wide 740px centered column for the composer in
+   stella mode only — workspace mode stays at the narrow 380px flush layout.
+   `data-research-mode` lives on .rw-pane-right (set from the `mode` prop). */
+[data-theme="research"] [data-research-mode="stella"] .chat-view--compact .chat-content-wrapper .chat-content.empty-chat,
+[data-theme="research"] [data-research-mode="stella"] .chat-view--compact .chat-content-wrapper .chat-content {
+  align-items: center;
+}
+[data-theme="research"] [data-research-mode="stella"] .chat-view--compact .chat-content-wrapper .chat-content.empty-chat .chat-input-container,
+[data-theme="research"] [data-research-mode="stella"] .chat-view--compact .chat-content-wrapper .chat-content .chat-input-container {
+  max-width: 740px;
+  width: 100%;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* Center the jump-to-latest floating button above the chatbox. The base
+   ChatContainer.css pins it to `right: 24px` (right edge of the conversation
+   column); in the research pane it should sit centered over the composer
+   instead. Use the left:0/right:0 + margin:auto centering trick rather than
+   transform:translateX(-50%) — the button already uses transform on :hover,
+   and the two would conflict. The element has a fixed 32px width, so auto
+   margins resolve to a true horizontal center within the 740px column. */
+[data-theme="research"] .chat-view--compact .chat-jump-to-latest-button {
+  left: 0;
+  right: 0;
+  margin-left: auto;
+  margin-right: auto;
+}
 [data-theme="research"] .chat-view--compact .chat-textarea {
   height: 56px;
   font-size: 13px;
@@ -623,11 +917,20 @@
   padding: 8px 10px 10px 10px;
 }
 
-/* Input area: smaller radius + lighter shadow + tighter min-width. */
+/* Input area: rounded, with a slightly more pronounced border + shadow so the
+   composer reads as a distinct, liftable surface against the warm pane. */
 [data-theme="research"] .chat-view--compact .input-area {
   border-radius: 12px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  border: 1px solid rgba(0, 0, 0, 0.14);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.10);
   min-width: 0;
+}
+/* Focused composer: keep it neutral (no tint ring) — the composer is already
+   the focal surface, so a subtle border darkening + soft shadow is enough,
+   matching Claude's tint-free composer. */
+[data-theme="research"] .chat-view--compact .input-area:focus-within {
+  border-color: rgba(0, 0, 0, 0.18);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.10);
 }
 
 /* Textarea: smaller font / padding / margin. Match the button-area's
@@ -641,7 +944,7 @@
   margin-top: 0;
 }
 [data-theme="research"] .chat-view--compact .chat-textarea {
-  height: 52px;
+  height: 68px;
   font-size: 13px;
   line-height: 1.5;
   padding: 0 8px;
@@ -774,9 +1077,181 @@
 [data-theme="research"] .rw-pane-right .message.user-message {
   padding: 8px 12px;
   border-radius: 12px;
+  /* Base .user-message sets min-width: 100px to keep one-word bubbles from
+     looking cramped on the full /agent page (15px font). In this denser
+     13px pane a 2-char message ("你好" ≈ 25px) leaves ~50px of dead space
+     on the right of the pill, so the text reads as left-of-center. Drop the
+     floor so the bubble hugs its text (width: fit-content is already set). */
+  min-width: 0;
 }
 [data-theme="research"] .rw-pane-right .message.user-message p,
 [data-theme="research"] .rw-pane-right .message.user-message {
   font-size: 13px;
   line-height: 1.5;
+}
+
+/* ===========================================================
+   Table delta coloring (market-aware).
+   Applied by StatusCell to percent-change text inside table cells.
+   Class names are semantic (up/down); the US variants flip the
+   color so the same numeric direction reads correctly per market.
+   =========================================================== */
+[data-theme="research"] .rw-delta-up,
+[data-theme="research"] .rw-delta-down,
+[data-theme="research"] .rw-delta-up-us,
+[data-theme="research"] .rw-delta-down-us {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+/* CN convention: up = red, down = green */
+[data-theme="research"] .rw-delta-up    { color: #dc2626; }
+[data-theme="research"] .rw-delta-down  { color: #16a34a; }
+/* US convention: up = green, down = red */
+[data-theme="research"] .rw-delta-up-us   { color: #16a34a; }
+[data-theme="research"] .rw-delta-down-us { color: #dc2626; }
+
+/* ===========================================================
+   Document body — tightened editorial-to-professional typography.
+   Scoped to out-specify Tailwind prose defaults on .rw-doc-body.
+   =========================================================== */
+[data-theme="research"] .rw-doc-body h1 {
+  font-size: 17px;
+  font-weight: 650;
+  letter-spacing: -0.2px;
+  color: var(--si-ink);
+  margin: 0 0 4px;
+}
+[data-theme="research"] .rw-doc-body h2 {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--si-ink);
+  margin: 22px 0 8px;
+}
+/* Inline code used as a ticker chip.
+   Pinned to the original brand-accent values (NOT --si-accent-*), because the
+   app-level tint color (Settings > Application > Accent color) overrides the
+   --si-accent-* ramp at runtime. Document body content must not follow the
+   tint, so the inline-code chip uses fixed brand values here. */
+[data-theme="research"] .rw-doc-body code {
+  font-size: 11px;
+  font-weight: 600;
+  color: #4f70a3;
+  background: #eaeff7;
+  padding: 2px 7px;
+  border-radius: 5px;
+  font-family: ui-monospace, 'SF Mono', monospace;
+}
+/* Lede / quote — drop the heavy warm border + italic blog look. */
+[data-theme="research"] .rw-doc-body blockquote {
+  margin: 0 0 18px;
+  padding-left: 11px;
+  border-left: 2px solid var(--si-border);
+  background: none;
+  font-style: normal;
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--si-muted);
+}
+/* Prose adds quote-mark pseudo-elements on blockquote paragraphs; strip them. */
+[data-theme="research"] .rw-doc-body blockquote p::before,
+[data-theme="research"] .rw-doc-body blockquote p::after { content: none; }
+/* Tables — tighten, align numbers, quiet uppercase headers. */
+[data-theme="research"] .rw-doc-body table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 8px 0 18px;
+}
+[data-theme="research"] .rw-doc-body th {
+  text-align: left;
+  font-weight: 500;
+  color: var(--si-faint);
+  font-size: 10.5px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 0 11px 8px;
+  border-bottom: 1px solid var(--si-border-strong);
+  white-space: nowrap;
+}
+[data-theme="research"] .rw-doc-body td {
+  color: #3a3a3a;
+  vertical-align: top;
+  line-height: 1.5;
+  font-size: 12.5px;
+  padding: 13px 11px;
+  border-bottom: 1px solid #f3f2f0;
+  font-variant-numeric: tabular-nums;
+}
+[data-theme="research"] .rw-doc-body td b,
+[data-theme="research"] .rw-doc-body td strong {
+  color: var(--si-ink);
+  font-weight: 600;
+}
+
+/* ===========================================================
+   Pill tabs — active tab is a filled terracotta rounded chip.
+   =========================================================== */
+[data-theme="research"] .rw-tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  font-size: 12.5px;
+  color: var(--si-muted);
+  border-radius: 7px;
+  cursor: pointer;
+  border: none;
+  background: transparent;
+}
+[data-theme="research"] .rw-tab:hover {
+  background: #f5f5f4;
+  color: #555;
+}
+[data-theme="research"] .rw-tab.is-active {
+  background: var(--rw-accent-strong-bg);
+  color: var(--rw-accent-strong);
+  font-weight: 600;
+}
+[data-theme="research"] .rw-tab-dirty {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--si-gold);
+}
+
+/* ===========================================================
+   Segmented toolbar — icons grouped into bordered rounded pods.
+   =========================================================== */
+[data-theme="research"] .rw-toolgroup {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--si-border-strong);
+  border-radius: 8px;
+  background: var(--si-card);
+  overflow: hidden;
+}
+[data-theme="research"] .rw-toolgroup + .rw-toolgroup {
+  margin-left: 8px;
+}
+[data-theme="research"] .rw-toolbtn {
+  width: 30px;
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  color: #7a7a78;
+  cursor: pointer;
+}
+[data-theme="research"] .rw-toolbtn + .rw-toolbtn {
+  border-left: 1px solid #f0efed;
+}
+[data-theme="research"] .rw-toolbtn:hover {
+  background: #f5f4f2;
+  color: #2a2a28;
+}
+[data-theme="research"] .rw-toolbtn.is-active {
+  background: var(--rw-accent-strong-bg);
+  color: var(--rw-accent-strong);
+  border-left-color: transparent;
 }

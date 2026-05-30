@@ -286,7 +286,7 @@
 /* Left navigation - consistent with LeftNavigation */
 .modal-left-navigation {
   width: 190px;
-  background: #FFFBF8;
+  background: var(--si-paper);
   border-right: 1px solid rgba(0, 0, 0, 0.1);
   padding: 12px;
   display: flex;
@@ -327,7 +327,7 @@
   font-weight: 410;
   font-size: 14px;
   line-height: 20px;
-  color: #272320;
+  color: var(--si-ink);
   font-variation-settings: 'opsz' 10.5;
 
   /* Text alignment and overflow handling */

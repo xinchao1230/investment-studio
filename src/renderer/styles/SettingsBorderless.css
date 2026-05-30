@@ -1,0 +1,125 @@
+/* ============================================================
+   Settings — Borderless (Claude-inspired) overrides.
+
+   ALL rules in this file are scoped under `.settings-root` (set on
+   the Settings shell in SettingsPage.tsx). This is a hard isolation
+   boundary: the shared base components (.unified-header, ServerCard,
+   .unified-badge-normal, .tool-item, .skill-card-wrapper) keep their
+   original look everywhere else in the app (chat, agent editor,
+   sub-agents, plugins). They only go borderless inside Settings.
+
+   Direction (validated via mockup):
+   - Drop redundant page CHROME (outer frame handled in TSX; header
+     bottom-rule + white bar dropped here).
+   - KEEP content boxes + count pills (user wanted these), just
+     soften them: lighter border, subtle lift, pill-shaped chips.
+   ============================================================ */
+
+/* --- Rule 2: borderless headers ---------------------------------
+   The shared .unified-header sits on a white bar with a bottom rule.
+   Inside Settings we remove both and add breathing room above. */
+.settings-root .unified-header {
+  background: transparent;
+  border-bottom: none;
+  height: auto;
+  padding: 22px 24px 14px;
+}
+
+/* --- Rule 3: count chips -> neutral rounded pills ----------------
+   .unified-badge-normal is already neutral grey; here we make it
+   pill-shaped (Claude-style) only within Settings. */
+.settings-root .unified-badge-normal {
+  border-radius: 999px;
+  padding: 3px 10px;
+}
+
+/* --- Rule 4: soften content boxes -------------------------------
+   Hard 1px rgba(0,0,0,.12) outlines -> lighter token border + a
+   subtle 1px lift. Boxes stay (scannable), just lighter. Applies to
+   MCP server cards, MCP tool rows, and Skills cards. */
+.settings-root .server-card-wrapper,
+.settings-root .tool-item,
+.settings-root .skill-card-wrapper {
+  border-color: var(--si-border);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+}
+
+.settings-root .server-card-wrapper:not(.selected):hover,
+.settings-root .tool-item:hover,
+.settings-root .skill-card-wrapper:not(.selected):hover {
+  border-color: var(--si-border-strong);
+}
+
+/* Selected state keeps a slightly stronger (but still soft) border. */
+.settings-root .server-card-wrapper.selected,
+.settings-root .tool-item.selected,
+.settings-root .skill-card-wrapper.selected {
+  border-color: var(--si-border-strong);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+}
+
+/* --- Rule 5: remove redundant section chrome --------------------
+   The Skills detail header is a white bar with a bottom rule — the
+   same "capped section" chrome we drop from page headers. Make it
+   borderless and transparent inside Settings. (Markdown h1/hr rules,
+   dark code-block headers, table-cell and list-item hairlines are
+   genuine content separators and are intentionally left untouched.) */
+.settings-root .skill-detail-header {
+  background-color: transparent;
+  border-bottom: none;
+}
+
+/* --- Rule 6: tighten nav rows to research-tree density (scoped) ----
+   The shared NavItem.css sizes rows at 40px for the openkosmos visual
+   refresh. Inside Settings we converge on the research file-tree's
+   denser 28px row so the two left rails read as one component language
+   (same height, label weight, icon scale). NavItem.css hard-codes the
+   40px on the row AND its inner content/label boxes, so all three need
+   an override. Scoped to .settings-root — the chat AgentList and the
+   main-app LeftNavigation (both also use NavItem) are untouched.
+
+   Also retire the stale navy hover/active tint: NavItem.css uses
+   rgba(11,46,79,*), a leftover from the pre-pivot navy/gold palette.
+   Replace it with the neutral --si-code-bg fill that the research tree
+   already uses for its active row, keeping NavItem's 12px pill radius. */
+.settings-root .nav-item {
+  height: 28px;
+  min-height: 28px;
+}
+.settings-root .nav-item-content {
+  height: 28px;
+}
+.settings-root .nav-item-label {
+  height: 28px;
+  padding: 4px 8px 4px 2px;
+  font-weight: 400;
+}
+/* CSS width/height beats the inline width/height attrs on the lucide and
+   custom SVGs, normalizing every icon to 16px to match the denser row. */
+.settings-root .nav-item-icon svg {
+  width: 16px;
+  height: 16px;
+}
+.settings-root .nav-item:hover:not(:disabled) {
+  background: var(--si-code-bg);
+}
+.settings-root .nav-item.active {
+  background: var(--si-accent-soft);
+}
+
+/* --- Rule 7: icon-only sign in / sign out footer button ----------
+   The bottom auth button shows only an icon (GitHub mark when signed
+   out, sign-out glyph when signed in) — the label is dropped, so the
+   button must hug its icon instead of stretching the full rail width
+   like the labelled nav rows. Keep it square and left-aligned. */
+.settings-root .settings-auth-footer .nav-item {
+  width: auto;
+  min-width: 0;
+  align-self: flex-start;
+  padding: 0 8px;
+  gap: 0;
+}
+.settings-root .settings-auth-footer .nav-item-content {
+  justify-content: center;
+}
+

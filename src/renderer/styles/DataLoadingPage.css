@@ -1,12 +1,13 @@
 /* ===========================
    DataLoadingPage Component Styles
+   Uses shared editorial tokens from editorial-theme.css
    =========================== */
 
 .data-loading-page {
   height: 100%; /* Changed from 100vh to work with WindowsTitleBar */
   display: flex;
   flex-direction: column;
-  background: linear-gradient(135deg, #FFFBF8 0%, #FFFFFF 50%, #F8F4F1 100%);
+  background: var(--si-paper);
 }
 
 /* ===========================
@@ -22,14 +23,13 @@
 
 .data-loading-card {
   text-align: center;
-  background: rgba(255, 255, 255, 0.95);
-  backdrop-filter: blur(16px);
-  border: 1px solid rgba(0, 0, 0, 0.1);
-  border-radius: 20px;
+  background: var(--si-card);
+  border: none;
+  border-radius: 16px;
   padding: 48px;
   max-width: 512px;
   margin: 0 auto;
-  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
 }
 
 /* ===========================
@@ -44,7 +44,7 @@
   width: 80px;
   height: 80px;
   margin: 0 auto 16px;
-  background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%);
+  background: var(--si-ink);
   border-radius: 50%;
   display: flex;
   align-items: center;
@@ -66,12 +66,12 @@
 .data-loading-welcome {
   font-size: 24px;
   font-weight: 700;
-  color: #1f2937;
+  color: var(--si-ink);
   margin-bottom: 8px;
 }
 
 .data-loading-subtitle {
-  color: #6b7280;
+  color: var(--si-muted);
   font-size: 16px;
 }
 
@@ -85,15 +85,15 @@
 
 .data-loading-progress-bar {
   width: 100%;
-  background: rgba(203, 213, 225, 0.3);
+  background: var(--si-border);
   border-radius: 999px;
-  height: 12px;
+  height: 6px;
   margin-bottom: 16px;
 }
 
 .data-loading-progress-fill {
-  background: linear-gradient(90deg, #0ea5e9 0%, #0284c7 100%);
-  height: 12px;
+  background: var(--si-ink);
+  height: 6px;
   border-radius: 999px;
   transition: width 0.3s ease-out;
 }
@@ -103,15 +103,15 @@
 }
 
 .data-loading-progress-title {
-  font-size: 18px;
+  font-size: 16px;
   font-weight: 500;
-  color: #374151;
+  color: var(--si-ink);
   margin-bottom: 8px;
 }
 
 .data-loading-progress-message {
-  font-size: 14px;
-  color: #9ca3af;
+  font-size: 13px;
+  color: var(--si-muted);
 }
 
 /* ===========================
@@ -132,15 +132,15 @@
 }
 
 .data-loading-detail-indicator {
-  width: 12px;
-  height: 12px;
+  width: 10px;
+  height: 10px;
   border-radius: 50%;
   transition: background 0.3s ease;
   flex-shrink: 0;
 }
 
 .data-loading-detail-indicator.loading {
-  background: #0ea5e9;
+  background: var(--si-muted);
   animation: pulse 2s ease-in-out infinite;
 }
 
@@ -149,12 +149,12 @@
 }
 
 .data-loading-detail-text {
-  font-size: 14px;
+  font-size: 13px;
   transition: color 0.3s ease;
 }
 
 .data-loading-detail-text.loading {
-  color: #6b7280;
+  color: var(--si-muted);
 }
 
 .data-loading-detail-text.completed {
@@ -168,12 +168,12 @@
 .data-loading-time-section {
   margin-top: 32px;
   padding-top: 24px;
-  border-top: 1px solid rgba(203, 213, 225, 0.3);
+  border-top: 1px solid var(--si-border);
 }
 
 .data-loading-time-text {
   font-size: 12px;
-  color: #9ca3af;
+  color: var(--si-faint);
 }
 
 /* ===========================

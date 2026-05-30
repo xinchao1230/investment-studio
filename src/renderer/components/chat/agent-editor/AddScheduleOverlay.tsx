@@ -237,7 +237,7 @@ const sectionTitleStyle: React.CSSProperties = {
 const radioCardStyle = (active: boolean): React.CSSProperties => ({
   flex: 1,
   minWidth: 0,
-  border: `1px solid ${active ? '#272320' : '#D1D5DB'}`,
+  border: `1px solid ${active ? 'var(--si-gold)' : '#D1D5DB'}`,
   background: active ? '#F9FAFB' : '#FFFFFF',
   borderRadius: '10px',
   padding: '12px 14px',

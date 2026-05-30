@@ -119,7 +119,7 @@
   margin: 0 0 8px 0;
   font-size: 14px;
   font-weight: 600;
-  color: #272320;
+  color: var(--si-ink);
 }
 
 .vscode-importer-content .help-message ul {
@@ -144,7 +144,7 @@
   font-weight: 600;
   font-size: 14px;
   line-height: 20px;
-  color: #272320;
+  color: var(--si-ink);
 }
 
 .vscode-importer-content .import-options h3 {
@@ -152,7 +152,7 @@
   font-weight: 600;
   font-size: 14px;
   line-height: 20px;
-  color: #272320;
+  color: var(--si-ink);
 }
 
 .vscode-importer-content .selection-controls {
@@ -189,7 +189,7 @@
 
 .vscode-importer-content .server-item.selected {
   background: rgba(255, 251, 248, 0.8);
-  border-left: 3px solid #FFFBF8;
+  border-left: 3px solid var(--si-paper);
 }
 
 .vscode-importer-content .server-item.conflict {
@@ -225,7 +225,7 @@
   font-weight: 500;
   font-size: 14px;
   line-height: 20px;
-  color: #272320;
+  color: var(--si-ink);
 }
 
 .vscode-importer-content .server-transport {
@@ -328,7 +328,7 @@
   gap: 8px;
   font-size: 14px;
   line-height: 20px;
-  color: #272320;
+  color: var(--si-ink);
   cursor: pointer;
   padding: 4px 0;
 }
@@ -344,7 +344,7 @@
   gap: 8px;
   font-size: 14px;
   line-height: 20px;
-  color: #272320;
+  color: var(--si-ink);
   cursor: pointer;
   padding: 8px 0;
 }
@@ -359,7 +359,7 @@
   margin: 0 0 8px 0;
   font-size: 16px;
   font-weight: 600;
-  color: #272320;
+  color: var(--si-ink);
 }
 
 .vscode-importer-content .status-section p {
@@ -387,7 +387,7 @@
   font-size: 14px;
   line-height: 20px;
   color: #FFFFFF;
-  background: #000000;
+  background: var(--si-gold);
   border: none;
   border-radius: 8px;
   cursor: pointer;
@@ -398,11 +398,11 @@
 }
 
 .vscode-importer-content .btn-primary:hover:not(:disabled) {
-  background: rgba(0, 0, 0, 0.8);
+  background: var(--si-accent-strong);
 }
 
 .vscode-importer-content .btn-primary:active:not(:disabled) {
-  background: rgba(0, 0, 0, 0.9);
+  background: var(--si-accent-strong);
   transform: translateY(1px);
 }
 
@@ -420,9 +420,9 @@
   font-weight: 600;
   font-size: 13px;
   line-height: 18px;
-  color: #272320;
+  color: var(--si-ink);
   background: #FFFFFF;
-  border: 1px solid #272320;
+  border: 1px solid var(--si-ink);
   border-radius: 6px;
   cursor: pointer;
   transition: all 0.2s ease;
@@ -432,13 +432,13 @@
 }
 
 .vscode-importer-content .btn-secondary:hover:not(:disabled) {
-  background: rgba(39, 35, 32, 0.05) !important;
-  border-color: #272320 !important;
-  color: #272320 !important;
+  background: color-mix(in srgb, var(--si-gold) 5%, transparent) !important;
+  border-color: var(--si-ink) !important;
+  color: var(--si-ink) !important;
 }
 
 .vscode-importer-content .btn-secondary:active:not(:disabled) {
-  background: rgba(39, 35, 32, 0.1);
+  background: color-mix(in srgb, var(--si-gold) 10%, transparent);
   transform: translateY(1px);
 }
 

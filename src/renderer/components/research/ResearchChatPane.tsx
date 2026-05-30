@@ -1,26 +1,26 @@
 import React, { useCallback } from 'react';
-import { PanelRightClose, PanelRightOpen } from 'lucide-react';
+import {
+  PanelRightClose,
+  PanelRightOpen,
+  Compass,
+  ScanSearch,
+  FileText,
+  Activity,
+  Scale,
+  Target,
+  FileBarChart,
+  BarChart3,
+  SlidersHorizontal,
+  type LucideIcon,
+} from 'lucide-react';
 import ChatView from '../chat/ChatView';
 import { useMessages } from '../../lib/chat/agentChatSessionCacheManager';
-import { BRAND_NAME } from '../../../shared/constants/branding';
-
-// Brand-scoped Stella logo (PNG); webpack asset/resource pipeline emits as URL.
-let stellaLogoUrl: string | null = null;
-try {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const mod = require(`../../assets/${BRAND_NAME}/stella.png`);
-  stellaLogoUrl = typeof mod === 'string' ? mod : mod?.default ?? null;
-} catch {
-  stellaLogoUrl = null;
-}
 
 interface ResearchChatPaneProps {
   activeFileAbsPath: string | null;
   /** Currently-selected research target (null = no target / global). */
   targetName?: string | null;
   targetCode?: string | null;
-  /** Title of the active chat session, shown next to target name. */
-  chatTitle?: string | null;
   /** Width in pixels when expanded. Caller is responsible for clamping. */
   width?: number;
   /** When true, pane fills its parent (flex: 1) instead of using fixed width. */
@@ -31,11 +31,12 @@ interface ResearchChatPaneProps {
   onToggleCollapsed?: () => void;
   /**
    * Active research mode. Drives empty-state UX:
-   * - 'workspace' (target picked): render the local hardcoded EmptySuggestions
-   *   overlay; the agent ChatZeroStates is hidden via CSS.
-   * - 'stella' (global Ask Stella): hide the local overlay; the agent
-   *   ChatZeroStates (Stella greeting + quick_starts) is the welcome screen,
-   *   topped by a small "Ask Stella" landing header.
+   * - 'workspace' (target picked): the welcome screen is bound to the target
+   *   company (headline = name, ticker badge = code).
+   * - 'stella' (global, no target): the welcome screen shows a neutral
+   *   "Investment Research" landing with sample starting points. (The literal
+   *   'stella' is an internal mode key only — it drives `data-research-mode`
+   *   CSS hooks and is never shown to the user.)
    */
   mode?: 'workspace' | 'stella';
 }
@@ -45,19 +46,26 @@ interface QuickStartCard {
   title: string;
   description: string;
   prompt: string;
+  /** Lucide glyph rendered in the card's accent tile. */
+  icon: LucideIcon;
   /** 'intro' cards auto-submit on click; 'task' cards fill the input. */
   kind: QuickStartKind;
 }
 
 /**
- * "了解 Stella" intro card — shared by both modes. Decoupled from any
- * target so the prompt is identical in Stella mode and workspace mode.
- * Auto-submits on click (editing "请介绍你自己" before sending adds no value).
+ * Intro card — shared by both modes. Decoupled from any target so the prompt
+ * is identical in both modes. Auto-submits on click (editing the prompt
+ * before sending adds no value).
+ *
+ * The prompt is persona-neutral: it asks the agent to describe its own
+ * capabilities without naming an assistant persona, so nothing the user sees
+ * (input box or sent message) references a mascot name.
  */
 const INTRO_CARD: QuickStartCard = {
-  title: '了解 Stella',
-  description: '新手必看：核心能力 + 工作流',
-  prompt: '请介绍你（Stella）的核心能力、典型工作流，以及推荐我作为投研用户的入门路径。',
+  title: 'Capabilities',
+  description: 'Core skills & research workflow',
+  prompt: '请介绍你的核心能力、典型工作流，以及推荐我作为投研用户的入门路径。',
+  icon: Compass,
   kind: 'intro',
 };
 
@@ -82,72 +90,78 @@ function buildWorkspaceCards(
     INTRO_CARD,
     {
       kind: 'task',
-      title: '深度分析',
-      description: '全面基本面分析',
+      icon: ScanSearch,
+      title: 'Deep Analysis',
+      description: 'Full fundamental analysis',
       prompt: `请对 ${label} 做一份深度基本面分析报告（公司概况、业务结构、财务、估值、风险）。`,
     },
     {
       kind: 'task',
-      title: '财报点评',
-      description: '解读最新财报',
+      icon: FileText,
+      title: 'Earnings Review',
+      description: 'Review latest earnings',
       prompt: `请点评 ${label} 最新一期财报，重点关注收入结构、利润率与现金流变化。`,
     },
     {
       kind: 'task',
-      title: '边际跟踪',
-      description: '跟踪关键变化',
+      icon: Activity,
+      title: 'Marginal Tracking',
+      description: 'Track key changes',
       prompt: `请跟踪 ${label} 的最新边际变化（业绩、行业、估值），整理到 tracking.md。`,
     },
     {
       kind: 'task',
-      title: '同业对比',
-      description: '同业横向比较',
+      icon: Scale,
+      title: 'Peer Comparison',
+      description: 'Compare against peers',
       prompt: `请为 ${label} 选 4 家可比公司，对比关键财务和估值指标。`,
     },
     {
       kind: 'task',
-      title: '投资逻辑',
-      description: '建立投资框架',
+      icon: Target,
+      title: 'Investment Thesis',
+      description: 'Build an investment framework',
       prompt: `/key-drivers ${label}`,
     },
   ];
 }
 
 /**
- * Stella mode (no target) cards. Hardcoded sample companies — independent
+ * Global mode (no target) cards. Hardcoded sample companies — independent
  * of any persisted agent zero_states so the experience is consistent
  * regardless of legacy profile shape.
  */
-const STELLA_CARDS: QuickStartCard[] = [
+const GLOBAL_CARDS: QuickStartCard[] = [
   INTRO_CARD,
   {
     kind: 'task',
-    title: '投资逻辑',
-    description: '建立投资框架（短期/长期 + 跟踪变量）',
+    icon: Target,
+    title: 'Investment Thesis',
+    description: 'Short / long-term drivers + tracking variables',
     prompt: '/key-drivers 600036 招商银行',
   },
   {
     kind: 'task',
-    title: '深度研报',
-    description: '体验 6-phase 自动化流水线',
+    icon: FileBarChart,
+    title: 'Deep Report',
+    description: '6-phase automated research pipeline',
     prompt: '请用 600036 招商银行 跑一次 /stock-analyze 完整流程，生成一份自动化深度研报。',
   },
   {
     kind: 'task',
-    title: '行业对比',
-    description: '对比同行业多家公司的关键指标',
+    icon: BarChart3,
+    title: 'Industry Comparison',
+    description: 'Key metrics across industry peers',
     prompt: '请对比白酒行业 TOP5（贵州茅台、五粮液、洋河、泸州老窖、山西汾酒）的营收增速、毛利率、ROE 与估值。',
   },
   {
     kind: 'task',
-    title: '量化初筛',
-    description: '按多因子条件筛选股票池',
+    icon: SlidersHorizontal,
+    title: 'Quant Screening',
+    description: 'Filter the universe by multi-factor criteria',
     prompt: '在 A 股全市场筛选：PE(TTM) < 20、ROE(近 3 年均值) > 15%、营收近 3 年复合增速 > 10%。给出名单与关键指标。',
   },
 ];
-
-const STELLA_GREETING =
-  '你好，我是 Stella 📊 — 你的 AI 投资研究助手。可以帮你做深度分析、行业对比、财报点评、量化初筛。';
 
 interface ResearchWelcomeProps {
   mode: 'workspace' | 'stella';
@@ -160,9 +174,10 @@ interface ResearchWelcomeProps {
 }
 
 /**
- * Unified welcome screen for both Stella mode (global Ask Stella) and
- * workspace mode (target bound). Same card grid; header text and card
- * source differ by mode.
+ * Unified welcome screen for both global mode (no target) and workspace mode
+ * (target bound). Same card grid; the eyebrow/title and card source differ by
+ * mode. Persona-neutral by design — this is a financial research surface, not
+ * a chatbot greeting.
  */
 const ResearchWelcome: React.FC<ResearchWelcomeProps> = ({
   mode,
@@ -173,57 +188,66 @@ const ResearchWelcome: React.FC<ResearchWelcomeProps> = ({
 }) => {
   // Workspace mode without a selected target = empty state. The 6 target-
   // scoped cards would render with an empty `${label}` (broken prompts), so
-  // fall back to the Stella sample cards. Stella herself can guide the user
-  // through `portfolio_init_target` if they want to start a research target.
+  // fall back to the global sample cards.
   const hasActiveTarget = !!(targetName || targetCode);
   const cards = React.useMemo(
     () =>
       mode === 'workspace' && hasActiveTarget
         ? buildWorkspaceCards(targetName, targetCode)
-        : STELLA_CARDS,
+        : GLOBAL_CARDS,
     [mode, hasActiveTarget, targetName, targetCode],
   );
 
   const isUnlisted = !!targetName && !!targetCode && targetName === targetCode;
-  const showCodeSub = mode === 'workspace' && !!targetCode && !isUnlisted;
+  const showTicker = mode === 'workspace' && !!targetCode && !isUnlisted;
+  const inWorkspace = mode === 'workspace' && hasActiveTarget;
+
+  // Eyebrow + headline adapt to context. Workspace = the bound company;
+  // global = a neutral "Research Desk" framing.
+  const eyebrow = inWorkspace ? 'Research Workspace' : 'Investment Research';
+  const headline = inWorkspace
+    ? (targetName || (targetCode as string))
+    : 'Where would you like to begin?';
 
   return (
-    <div className="rw-stella-welcome">
-      <div className="rw-stella-welcome-header">
-        {stellaLogoUrl ? (
-          <img
-            src={stellaLogoUrl}
-            alt=""
-            className="rw-stella-welcome-logo"
-            aria-hidden
-          />
-        ) : (
-          <span className="rw-stella-welcome-emoji" aria-hidden>📊</span>
-        )}
-        <span className="rw-stella-welcome-title">Ask Stella</span>
-        {mode === 'workspace' && isUnlisted && (
-          <span className="rw-stella-welcome-pill">未上市</span>
+    <div className="rw-welcome">
+      <div className="rw-welcome-head">
+        <div className="rw-welcome-eyebrow">{eyebrow}</div>
+        <div className="rw-welcome-headline-row">
+          <h2 className="rw-welcome-headline">{headline}</h2>
+          {showTicker && (
+            <span className="rw-welcome-ticker">{targetCode}</span>
+          )}
+          {inWorkspace && isUnlisted && (
+            <span className="rw-welcome-tag">Unlisted</span>
+          )}
+        </div>
+        {!inWorkspace && (
+          <p className="rw-welcome-sub">
+            Pick a starting point below, or describe a company, sector, or
+            screen to research.
+          </p>
         )}
       </div>
-      {showCodeSub && (
-        <div className="rw-stella-welcome-subtitle">{targetCode}</div>
-      )}
-      {mode === 'stella' && (
-        <div className="rw-stella-welcome-greeting">{STELLA_GREETING}</div>
-      )}
-      <div className="rw-stella-welcome-cards">
+      <div className="rw-welcome-cards">
         {cards.map((q) => {
           const isIntro = q.kind === 'intro';
+          const Icon = q.icon;
           return (
             <button
               key={q.title}
               type="button"
-              className={`rw-stella-welcome-card${isIntro ? ' rw-stella-welcome-card--intro' : ''}`}
+              className={`rw-welcome-card${isIntro ? ' rw-welcome-card--intro' : ''}`}
               title={q.description}
               onClick={() => (isIntro ? onPickSend(q.prompt) : onPickFill(q.prompt))}
             >
-              <div className="rw-stella-welcome-card-title">{q.title}</div>
-              <div className="rw-stella-welcome-card-desc">{q.description}</div>
+              <span className="rw-welcome-card-icon" aria-hidden>
+                <Icon size={15} strokeWidth={1.75} />
+              </span>
+              <span className="rw-welcome-card-text">
+                <span className="rw-welcome-card-title">{q.title}</span>
+                <span className="rw-welcome-card-desc">{q.description}</span>
+              </span>
             </button>
           );
         })}
@@ -248,7 +272,6 @@ export const ResearchChatPane: React.FC<ResearchChatPaneProps> = ({
   activeFileAbsPath: _activeFileAbsPath,
   targetName,
   targetCode,
-  chatTitle,
   width = 380,
   fill = false,
   collapsed = false,
@@ -304,7 +327,6 @@ export const ResearchChatPane: React.FC<ResearchChatPaneProps> = ({
         >
           <PanelRightOpen size={14} />
         </button>
-        <span className="rw-pane-right--collapsed-emoji" aria-hidden>📊</span>
       </aside>
     );
   }
@@ -319,43 +341,13 @@ export const ResearchChatPane: React.FC<ResearchChatPaneProps> = ({
       data-research-mode={mode}
     >
       <header
-        className="flex items-center justify-between h-10 px-3 rw-divider gap-2"
+        className="relative flex items-center h-10 px-3 gap-2"
         style={{ background: 'var(--rw-bg-chat-header)' }}
       >
-        <div className="flex items-baseline gap-2 min-w-0 flex-1">
-          {targetName ? (
-            <>
-              <span className="text-[12px] font-medium text-[var(--rw-text-1)] truncate">
-                {targetName}
-              </span>
-              {targetCode && (
-                targetCode === targetName ? (
-                  // Unlisted target: stock_code === name. Show a "未上市" pill
-                  // instead of duplicating the company name on the right.
-                  <span className="px-1 rounded bg-gray-100 text-gray-500 text-[10px] flex-shrink-0">
-                    未上市
-                  </span>
-                ) : (
-                  <span className="text-[11px] text-[var(--rw-text-3)] flex-shrink-0">
-                    {targetCode}
-                  </span>
-                )
-              )}
-              {chatTitle && (
-                <span className="text-[11px] text-[var(--rw-text-3)] truncate" title={chatTitle === 'New Chat' ? '新对话' : chatTitle}>
-                  · {chatTitle === 'New Chat' ? '新对话' : chatTitle}
-                </span>
-              )}
-            </>
-          ) : (
-            <span className="text-[11px] text-[var(--rw-text-3)]">未选择标的</span>
-          )}
-        </div>
-        <span className="text-[11px] text-[var(--rw-text-3)] flex-shrink-0">Research Assistant</span>
         {onToggleCollapsed && (
           <button
             type="button"
-            className="rw-side-icon-btn flex-shrink-0"
+            className="rw-side-icon-btn flex-shrink-0 ml-auto"
             title="Collapse assistant (Ctrl+/)"
             aria-label="Collapse assistant"
             onClick={onToggleCollapsed}

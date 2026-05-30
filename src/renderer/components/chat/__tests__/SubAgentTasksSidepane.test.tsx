@@ -112,15 +112,15 @@ describe('SubAgentTasksSidepane', () => {
       expect(spinSvg).toBeTruthy();
     });
 
-    it('completed → CompletedIcon: dark filled circle (fill #272320)', async () => {
+    it('completed → CompletedIcon: dark filled circle (fill var(--si-ink))', async () => {
       const task = makeTask({ taskId: 't-comp', status: 'completed' });
       setupElectronAPI([task]);
       await act(async () => { render(<SubAgentTasksSidepane />); });
 
-      // CompletedIcon contains a path with fill="#272320"
+      // CompletedIcon contains a path with fill="var(--si-ink)" (neutral palette ink token)
       const paths = document.querySelectorAll('svg path');
       const filled = Array.from(paths).find(
-        (p) => p.getAttribute('fill') === '#272320'
+        (p) => p.getAttribute('fill') === 'var(--si-ink)'
       );
       expect(filled).toBeTruthy();
     });

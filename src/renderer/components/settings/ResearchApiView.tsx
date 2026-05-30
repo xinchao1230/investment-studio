@@ -1,5 +1,8 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { Eye, EyeOff } from 'lucide-react';
+import { Eye, EyeOff, Key } from 'lucide-react';
+import '../../styles/Header.css';
+import '../../styles/ContentView.css';
+import '../../styles/RuntimeSettings.css';
 
 type Provider = 'tushare' | 'eastmoney';
 
@@ -14,13 +17,13 @@ const PROVIDERS: ProviderSpec[] = [
     id: 'tushare',
     title: 'Tushare',
     helper: (
-      <>前往 <a href="https://tushare.pro/register" target="_blank" rel="noreferrer" className="text-blue-600 hover:underline">tushare.pro</a> 注册并复制你的 token。</>
+      <>Go to <a href="https://tushare.pro/register" target="_blank" rel="noreferrer" className="text-blue-600 hover:underline">tushare.pro</a> to register and copy your token.</>
     ),
   },
   {
     id: 'eastmoney',
     title: 'Eastmoney',
-    helper: <>留空将使用应用内置 token；自定义 token 用于高频调用配额。</>,
+    helper: <>Leave empty to use the app's built-in token; a custom token is for higher-frequency call quotas.</>,
   },
 ];
 
@@ -77,7 +80,7 @@ export const ResearchApiView: React.FC = () => {
     updateCard(id, {
       saving: false,
       initial: result.ok ? value : cards[id].initial,
-      status: result.ok ? null : { ok: false, error: result.error ?? '保存失败' },
+      status: result.ok ? null : { ok: false, error: result.error ?? 'Save failed' },
     });
   }, [cards, updateCard]);
 
@@ -94,18 +97,26 @@ export const ResearchApiView: React.FC = () => {
   }, [cards, handleSave, updateCard]);
 
   return (
-    <div className="p-4">
-      <h1 className="text-base font-semibold mb-1">Research API</h1>
-      <p className="text-xs text-gray-500 mb-4">
-        投研工作流使用的数据源 API token 配置。
-      </p>
+    <div className="runtime-settings-view">
+      <div className="unified-header">
+        <div className="header-title">
+          <Key size={18} />
+          <span className="header-name">Financial Data API</span>
+        </div>
+      </div>
 
-      <div className="space-y-3">
+      <div className="content-view-container">
+        <div className="settings-form-centered">
+          <p className="text-xs text-[var(--si-muted)] mb-4">
+            Configure data access APIs to integrate with financial information, market data, news, company filings, research reports, etc.
+          </p>
+
+          <div className="space-y-3">
         {PROVIDERS.map((p) => {
           const c = cards[p.id];
           const dirty = c.draft !== c.initial;
           return (
-            <div key={p.id} className="border border-gray-200 rounded-md p-3 bg-white">
+            <div key={p.id} className="border border-[var(--si-border)] rounded-md p-3 bg-[var(--si-card)]">
               <div className="flex items-center justify-between mb-2">
                 <h2 className="text-sm font-medium">{p.title}</h2>
               </div>
@@ -117,14 +128,14 @@ export const ResearchApiView: React.FC = () => {
                     value={c.draft}
                     onChange={(e) => updateCard(p.id, { draft: e.target.value, status: null })}
                     placeholder="paste your token here"
-                    className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm pr-10 focus:outline-none focus:border-blue-500"
+                    className="w-full border border-[var(--si-border)] rounded px-3 py-1.5 text-sm pr-10 focus:outline-none focus:border-[var(--si-ink)]"
                     autoComplete="off"
                   />
                   <button
                     type="button"
                     onClick={() => updateCard(p.id, { show: !c.show })}
                     aria-label={c.show ? 'hide' : 'show'}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-[var(--si-faint)] hover:text-[var(--si-muted)]"
                   >
                     {c.show ? <EyeOff size={14} /> : <Eye size={14} />}
                   </button>
@@ -132,29 +143,31 @@ export const ResearchApiView: React.FC = () => {
                 <button
                   disabled={!dirty || c.saving}
                   onClick={() => handleSave(p.id)}
-                  className="px-3 py-1.5 text-sm rounded bg-blue-600 text-white disabled:bg-gray-300 disabled:cursor-not-allowed"
+                  className="px-3 py-1.5 text-sm rounded bg-[var(--si-gold)] text-white disabled:bg-[var(--si-border)] disabled:cursor-not-allowed hover:bg-[var(--si-accent-strong)]"
                 >
-                  {c.saving ? '保存中…' : '保存'}
+                  {c.saving ? 'Saving…' : 'Save'}
                 </button>
                 <button
                   disabled={c.testing || (!c.initial && !c.draft)}
                   onClick={() => handleTest(p.id)}
-                  className="px-3 py-1.5 text-sm rounded border border-gray-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="px-3 py-1.5 text-sm rounded border border-[var(--si-border)] disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  {c.testing ? '测试中…' : '测试连接'}
+                  {c.testing ? 'Testing…' : 'Test connection'}
                 </button>
               </div>
 
               {c.status && (
                 <div className={`mt-1.5 text-xs ${c.status.ok ? 'text-green-600' : 'text-red-600'}`}>
-                  {c.status.ok ? '✓ 连接成功' : `✗ ${c.status.error ?? '失败'}`}
+                  {c.status.ok ? '✓ Connected' : `✗ ${c.status.error ?? 'Failed'}`}
                 </div>
               )}
 
-              <p className="mt-2 text-xs text-gray-500">{p.helper}</p>
+              <p className="mt-2 text-xs text-[var(--si-muted)]">{p.helper}</p>
             </div>
           );
         })}
+          </div>
+        </div>
       </div>
     </div>
   );

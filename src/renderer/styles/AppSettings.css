@@ -1,0 +1,64 @@
+/* ============================================================
+   App settings — Appearance section.
+
+   Native settings rows: left-aligned label, right-aligned value,
+   thin dividers, compact height. No bordered cards, no heavy
+   shadows, no input-field chrome.
+   ============================================================ */
+
+.app-settings-section {
+  width: 100%;
+}
+
+.app-settings-section-title {
+  margin: 0 0 4px;
+  padding: 0 4px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--si-muted);
+}
+
+/* Row group: rows are separated by thin internal dividers only (no
+   outer card border), matching ChatGPT-style settings. */
+.app-settings-rows {
+  display: flex;
+  flex-direction: column;
+}
+
+.app-settings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 56px;
+  padding: 8px 4px;
+  gap: 16px;
+}
+
+/* Thin divider between consecutive rows (not above the first). */
+.app-settings-row + .app-settings-row {
+  border-top: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+.app-settings-row-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 15px;
+  color: var(--si-ink);
+  white-space: nowrap;
+}
+
+/* Leading row icon (palette, etc.) — muted so the label text leads. */
+.app-settings-row-icon {
+  color: var(--si-ink);
+  flex-shrink: 0;
+}
+
+.app-settings-row-value {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  min-width: 0;
+}

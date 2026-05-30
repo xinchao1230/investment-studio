@@ -70,7 +70,7 @@
 
 /* Message styles - width/height/padding/background/border unchanged */
 .user-message {
-  background: #F8F4F1;
+  background: var(--si-code-bg);
   /* User message width adapts to content, set min and max width */
   width: fit-content;
   min-width: 100px;
@@ -270,7 +270,7 @@
   border: 1px solid rgba(214, 196, 174, 0.8);
   border-radius: 14px;
   background: linear-gradient(180deg, rgba(249, 244, 238, 0.98) 0%, rgba(255, 252, 248, 0.98) 100%);
-  box-shadow: 0 8px 20px rgba(39, 35, 32, 0.06);
+  box-shadow: 0 8px 20px color-mix(in srgb, var(--si-gold) 6%, transparent);
 }
 
 .message-schedule-card-header {
@@ -294,8 +294,8 @@
   width: 34px;
   height: 34px;
   border-radius: 10px;
-  background: rgba(39, 35, 32, 0.08);
-  color: #272320;
+  background: color-mix(in srgb, var(--si-gold) 8%, transparent);
+  color: var(--si-ink);
   flex-shrink: 0;
 }
 
@@ -310,14 +310,14 @@
   line-height: 1.4;
   letter-spacing: 0.04em;
   text-transform: uppercase;
-  color: #8a6f54;
+  color: var(--si-gold);
 }
 
 .message-schedule-card-title {
   font-size: 14px;
   line-height: 1.4;
   font-weight: 600;
-  color: #272320;
+  color: var(--si-ink);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -345,13 +345,13 @@
   line-height: 1.4;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  color: #8a6f54;
+  color: var(--si-gold);
 }
 
 .message-schedule-card-row-value {
   font-size: 13px;
   line-height: 1.5;
-  color: #3d3a36;
+  color: var(--si-ink);
 }
 
 .message-schedule-card-id {
@@ -391,25 +391,25 @@
 }
 
 .message-schedule-card-button.primary {
-  background: #272320;
-  border-color: #272320;
+  background: var(--si-gold);
+  border-color: var(--si-gold);
   color: #ffffff;
 }
 
 .message-schedule-card-button.primary:hover:not(:disabled) {
-  background: #3d3a36;
-  border-color: #3d3a36;
+  background: var(--si-accent-strong);
+  border-color: var(--si-accent-strong);
 }
 
 .message-schedule-card-button.secondary {
   background: rgba(255, 255, 255, 0.9);
-  border-color: rgba(39, 35, 32, 0.14);
-  color: #272320;
+  border-color: var(--si-border-strong);
+  color: var(--si-ink);
 }
 
 .message-schedule-card-button.secondary:hover:not(:disabled) {
   background: #ffffff;
-  border-color: rgba(39, 35, 32, 0.24);
+  border-color: var(--si-gold);
 }
 
 .message-schedule-card-button:disabled {
@@ -1347,7 +1347,7 @@
   font-weight: 410;
   font-size: 14px;
   line-height: 20px;
-  color: #272320;
+  color: var(--si-ink);
   flex: 1;
   white-space: nowrap;
   overflow: hidden;
@@ -2742,7 +2742,7 @@
 
 /* Exit code */
 .terminal-exit-code {
-  background: rgba(244, 135, 113, 0.1);
+  background: color-mix(in srgb, var(--si-gold) 10%, transparent);
   border-top: 1px solid #3c3c3c;
 }
 

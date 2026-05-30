@@ -8,9 +8,9 @@ import '../../styles/RuntimeSettings.css'
 
 const MemexIcon = () => (
   <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z" stroke="#272320" strokeWidth="1.5" fill="none"/>
-    <path d="M12 6v6l4 2" stroke="#272320" strokeWidth="1.5" strokeLinecap="round"/>
-    <circle cx="12" cy="12" r="2" fill="#272320"/>
+    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z" stroke="var(--si-ink)" strokeWidth="1.5" fill="none"/>
+    <path d="M12 6v6l4 2" stroke="var(--si-ink)" strokeWidth="1.5" strokeLinecap="round"/>
+    <circle cx="12" cy="12" r="2" fill="var(--si-ink)"/>
   </svg>
 )
 

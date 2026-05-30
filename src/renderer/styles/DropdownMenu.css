@@ -170,7 +170,7 @@
   font-size: 14px;
   line-height: 20px;
 
-  color: #272320;
+  color: var(--si-ink);
   font-variation-settings: 'opsz' 10.5;
 
   /* Inside auto layout */
@@ -196,7 +196,7 @@
 }
 
 .dropdown-menu-item.disabled .dropdown-menu-item-text {
-  color: rgba(39, 35, 32, 0.5);
+  color: color-mix(in srgb, var(--si-ink) 50%, transparent);
 }
 
 /* ===== Danger Action Styles (delete, etc.) ===== */

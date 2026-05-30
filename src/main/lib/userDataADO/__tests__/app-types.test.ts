@@ -15,4 +15,16 @@ describe('app-level config defaults', () => {
   it('accepts a minimal valid AppConfig', () => {
     expect(isAppConfig(DEFAULT_APP_CONFIG)).toBe(true);
   });
+
+  it('defaults tintColor to "default"', () => {
+    expect(DEFAULT_APP_CONFIG.tintColor).toBe('default');
+  });
+
+  it('accepts a known tintColor literal', () => {
+    expect(isAppConfig({ tintColor: 'blue' })).toBe(true);
+  });
+
+  it('rejects a non-string tintColor', () => {
+    expect(isAppConfig({ tintColor: 42 })).toBe(false);
+  });
 });

@@ -101,11 +101,11 @@ const ScreenshotSettingsContentView: React.FC<ScreenshotSettingsContentViewProps
                     style={{
                       flex: 1,
                       padding: '8px 12px',
-                      backgroundColor: '#F3F4F6',
+                      backgroundColor: 'var(--si-code-bg)',
                       borderRadius: '8px',
-                      border: '1px solid #E5E7EB',
+                      border: '1px solid var(--si-border)',
                       fontSize: '14px',
-                      color: settings.savePath ? '#272320' : '#6B7280',
+                      color: settings.savePath ? 'var(--si-ink)' : 'var(--si-muted)',
                       overflow: 'hidden',
                       textOverflow: 'ellipsis',
                       whiteSpace: 'nowrap'
@@ -117,7 +117,7 @@ const ScreenshotSettingsContentView: React.FC<ScreenshotSettingsContentViewProps
                     onClick={onSelectSavePath}
                     style={{
                       padding: '8px 16px',
-                      backgroundColor: '#272320',
+                      backgroundColor: 'var(--si-gold)',
                       color: 'white',
                       borderRadius: '8px',
                       fontSize: '14px',
@@ -135,7 +135,7 @@ const ScreenshotSettingsContentView: React.FC<ScreenshotSettingsContentViewProps
                       marginTop: '8px',
                       background: 'none',
                       border: 'none',
-                      color: '#6B7280',
+                      color: 'var(--si-muted)',
                       fontSize: '12px',
                       cursor: 'pointer',
                       padding: 0,

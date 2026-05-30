@@ -76,7 +76,7 @@
   padding: 0 8px;
   gap: 8px;
   height: 32px;
-  background: #FFE6D3;
+  background: var(--si-accent-soft);
   border: none;
   border-radius: 12px;
   cursor: pointer;
@@ -89,7 +89,7 @@
 }
 
 .about-update-btn:hover {
-  background: #ffd9bf;
+  background: var(--si-accent-hover);
 }
 
 /* Copyright / legal text row */

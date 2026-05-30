@@ -56,6 +56,17 @@ function sanitizeZoomLevel(value: unknown, fallback: number = DEFAULT_ZOOM_LEVEL
   return Math.round(clamped / ZOOM_STEP) * ZOOM_STEP;
 }
 
+/**
+ * Valid `tintColor` enum literals. Kept in sync with the `TintColor` union in
+ * src/renderer/lib/theme/tintColor.ts and the field on AppConfig. The main
+ * process cannot import renderer modules, so the list is duplicated here.
+ */
+const VALID_TINT_COLORS = ['default', 'blue', 'green', 'yellow', 'pink', 'orange', 'purple', 'red'] as const;
+
+function isValidTintColor(value: unknown): value is AppConfig['tintColor'] {
+  return typeof value === 'string' && (VALID_TINT_COLORS as readonly string[]).includes(value);
+}
+
 function getElectronApp(): Electron.App {
   try {
     if ((global as any).electron?.app) {
@@ -408,6 +419,12 @@ export class AppCacheManager {
       sanitized.mainWindowMaximized = config.mainWindowMaximized;
     }
 
+    // tintColor: accept only known enum literals; otherwise leave unset so the
+    // renderer falls back to 'default' (the built-in brand accent).
+    if (isValidTintColor(config.tintColor)) {
+      sanitized.tintColor = config.tintColor;
+    }
+
     return sanitized;
   }
 
@@ -478,6 +495,8 @@ export class AppCacheManager {
         updates.mainWindowMaximized !== undefined
           ? updates.mainWindowMaximized
           : this.cache.mainWindowMaximized,
+      // tintColor: simple scalar enum, no deep-merge needed
+      tintColor: updates.tintColor !== undefined ? updates.tintColor : this.cache.tintColor,
     };
 
     const sanitized = this.appConfigSanitize(merged);

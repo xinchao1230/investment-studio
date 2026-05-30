@@ -105,8 +105,8 @@
 
 .user-input-control:focus {
   outline: none;
-  border-color: #272320;
-  box-shadow: 0 0 0 2px rgba(39, 35, 32, 0.1);
+  border-color: var(--si-gold);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--si-gold) 10%, transparent);
 }
 
 .user-input-control.error {
@@ -170,13 +170,13 @@
 }
 
 .folder-select-btn:hover {
-  background: rgba(39, 35, 32, 0.05);
+  background: color-mix(in srgb, var(--si-gold) 5%, transparent);
   border-color: rgba(0, 0, 0, 0.2);
   color: #374151;
 }
 
 .folder-select-btn:active {
-  background: rgba(39, 35, 32, 0.1);
+  background: color-mix(in srgb, var(--si-gold) 10%, transparent);
   transform: translateY(1px);
 }
 
@@ -231,12 +231,12 @@
 }
 
 .user-input-modal .btn-secondary:hover:not(:disabled) {
-  background: rgba(39, 35, 32, 0.05);
+  background: color-mix(in srgb, var(--si-gold) 5%, transparent);
   border-color: rgba(0, 0, 0, 0.2);
 }
 
 .user-input-modal .btn-secondary:active:not(:disabled) {
-  background: rgba(39, 35, 32, 0.1);
+  background: color-mix(in srgb, var(--si-gold) 10%, transparent);
   transform: translateY(1px);
 }
 
@@ -253,9 +253,9 @@
   justify-content: center;
   padding: 10px 20px;
   min-height: 40px;
-  border: 1px solid #272320;
+  border: 1px solid var(--si-gold);
   border-radius: 8px;
-  background: #272320;
+  background: var(--si-gold);
   color: #FFFFFF;
   font-size: 14px;
   font-weight: 500;
@@ -267,13 +267,13 @@
 }
 
 .user-input-modal .btn-primary:hover:not(:disabled) {
-  background: rgba(39, 35, 32, 0.8);
-  border-color: rgba(39, 35, 32, 0.8);
+  background: color-mix(in srgb, var(--si-gold) 80%, transparent);
+  border-color: color-mix(in srgb, var(--si-gold) 80%, transparent);
 }
 
 .user-input-modal .btn-primary:active:not(:disabled) {
-  background: rgba(39, 35, 32, 0.9);
-  border-color: rgba(39, 35, 32, 0.9);
+  background: color-mix(in srgb, var(--si-gold) 90%, transparent);
+  border-color: color-mix(in srgb, var(--si-gold) 90%, transparent);
   transform: translateY(1px);
 }
 
