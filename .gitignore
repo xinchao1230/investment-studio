@@ -315,3 +315,6 @@ pr648-*.json
 
 # Superpowers local working files (brainstorm/plan artifacts, not source)
 .superpowers/
+
+# Playwright MCP debug output (console logs, page snapshots, screenshots)
+.playwright-mcp/
