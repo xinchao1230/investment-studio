@@ -194,6 +194,9 @@
 }
 [data-theme="research"] .rw-tree-row {
   font-size: 13px;
+  /* Match the Settings nav rail's row weight (.nav-item-label is 500) so the
+     two side panes read identically. Was 400 (inherited from body). */
+  font-weight: 500;
   color: var(--rw-text);
   height: 28px;
   display: flex;
@@ -212,7 +215,7 @@
   border-radius: 8px;
   margin: 0 6px;
 }
-[data-theme="research"] .rw-tree-row:hover { background: rgba(0,0,0,0.035); }
+[data-theme="research"] .rw-tree-row:hover { background: rgba(11, 46, 79, 0.05); }
 [data-theme="research"] .rw-tree-row.is-active {
   background: var(--rw-accent-soft);
   color: var(--rw-text);
@@ -326,6 +329,32 @@
 [data-theme="research"] .rw-side-icon-btn:hover {
   background: rgba(0,0,0,0.05);
   color: var(--rw-text);
+}
+
+/* Footer Settings gear — aligned to the Settings side-pane's back button
+   (.settings-back-btn): 6px padding / 8px radius / near-black ink / 20px
+   glyph, with the same neutral hover fill. Kept separate from the toolbar
+   .rw-side-icon-btn (22px / 4px / faint) so the top-bar tool buttons are
+   unaffected. */
+[data-theme="research"] .rw-side-footer-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px;
+  border: none;
+  background: none;
+  border-radius: 8px;
+  color: var(--si-ink);
+  flex-shrink: 0;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+[data-theme="research"] .rw-side-footer-btn:hover {
+  background: var(--si-code-bg);
+}
+[data-theme="research"] .rw-side-footer-btn:focus-visible {
+  outline: 2px solid var(--si-border-strong);
+  outline-offset: 1px;
 }
 
 /* NOTE: legacy .rw-suggest-* styles removed — the workspace-mode prompt-row

@@ -1325,16 +1325,19 @@ export const TargetListSidebar: React.FC<TargetListSidebarProps> = ({
       )}
 
       {/* Bottom-left footer — Settings lives here (mt-auto pins it to the
-          bottom; both mode bodies above are flex-1 so this never overlaps). */}
-      <div className="mt-auto flex items-center px-3 py-2 rw-divider-top">
+          bottom; both mode bodies above are flex-1 so this never overlaps).
+          Styled to match the Settings side-pane footer: no top divider, and
+          the gear uses .rw-side-footer-btn (Settings back-button metrics:
+          6px padding / 8px radius / near-black ink / 20px glyph). */}
+      <div className="mt-auto flex items-center" style={{ padding: '12px' }}>
         <button
           type="button"
-          className="rw-side-icon-btn"
+          className="rw-side-footer-btn"
           title="Settings"
           aria-label="Open Settings"
           onClick={handleOpenSettings}
         >
-          <Settings size={14} />
+          <Settings size={20} />
         </button>
       </div>
 

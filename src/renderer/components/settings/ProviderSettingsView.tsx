@@ -1,7 +1,9 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { Eye, EyeOff, Check, AlertCircle, Loader2, Cpu } from 'lucide-react';
-import { PROVIDER_ICONS } from '../ui/icons/ProviderIcons';
+import { Eye, EyeOff, Check, AlertCircle, Loader2, Cpu, LogOut } from 'lucide-react';
+import { PROVIDER_ICONS, GitHubIcon } from '../ui/icons/ProviderIcons';
 import { Badge } from '../ui/badge';
+import { useAuthContext } from '../auth/AuthProvider';
+import { SKIP_LOGIN_ALIAS } from '@shared/constants/auth';
 import '../../styles/Header.css';
 import '../../styles/ContentView.css';
 import '../../styles/RuntimeSettings.css';
@@ -93,6 +95,23 @@ export const ProviderSettingsView: React.FC = () => {
   /** True when the user is signed in with a real GitHub account (not skip-login) */
   const [isCopilotAvailable, setIsCopilotAvailable] = useState(false);
   const [copilotUser, setCopilotUser] = useState<{ login: string; name?: string; email?: string; avatarUrl?: string; copilotPlan?: string } | null>(null);
+
+  // Sign in/out — moved here from the Settings side-pane footer. Same auth
+  // context, same three-state logic (spinner → sign-out glyph → GitHub mark),
+  // rendered as a header action button on the right (like MCP's "+").
+  const { signOut, authData } = useAuthContext();
+  const [isSigningOut, setIsSigningOut] = useState(false);
+  const isCopilotUser = authData?.ghcAuth?.alias !== SKIP_LOGIN_ALIAS;
+
+  const handleSignOut = useCallback(async () => {
+    if (isSigningOut) return;
+    setIsSigningOut(true);
+    try {
+      await signOut();
+    } finally {
+      setIsSigningOut(false);
+    }
+  }, [signOut, isSigningOut]);
 
   // Load current config from main process
   useEffect(() => {
@@ -303,6 +322,26 @@ export const ProviderSettingsView: React.FC = () => {
             )}
           </div>
         </div>
+        {/* Right-aligned header action (like MCP's "+"): GitHub Copilot
+            sign IN — only shown when signed out. Once signed in, the sign-out
+            control moves into the GitHub Copilot card's top-right corner. */}
+        {!isCopilotUser && (
+          <div className="header-actions">
+            <button
+              className="btn-action"
+              onClick={handleSignOut}
+              disabled={isSigningOut}
+              title={isSigningOut ? 'Signing out…' : 'Sign in with GitHub Copilot'}
+              aria-label="Sign in with GitHub Copilot"
+            >
+              {isSigningOut ? (
+                <Loader2 size={20} className="animate-spin" />
+              ) : (
+                <GitHubIcon size={20} />
+              )}
+            </button>
+          </div>
+        )}
       </div>
 
       <div className="content-view-container">
@@ -327,6 +366,21 @@ export const ProviderSettingsView: React.FC = () => {
                   </span>
                 )}
               </div>
+              {/* Sign out — top-right of the card (only present when signed in,
+                  which is exactly when this card renders). */}
+              <button
+                onClick={handleSignOut}
+                disabled={isSigningOut}
+                title={isSigningOut ? 'Signing out…' : 'Sign out of GitHub Copilot'}
+                aria-label="Sign out of GitHub Copilot"
+                className="flex items-center justify-center w-7 h-7 rounded text-[var(--si-muted)] hover:bg-[var(--si-code-bg)] hover:text-[var(--si-ink)] disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isSigningOut ? (
+                  <Loader2 size={16} className="animate-spin" />
+                ) : (
+                  <LogOut size={16} />
+                )}
+              </button>
             </div>
             <p className="text-xs text-[var(--si-muted)] mb-2">
               Use models from your GitHub Copilot subscription

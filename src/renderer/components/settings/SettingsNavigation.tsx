@@ -1,14 +1,11 @@
-import React, { useCallback, useState } from 'react';
+import React from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Camera, Terminal, Archive, Key, Cpu, LogOut, Loader2, ChevronLeft, SlidersHorizontal } from 'lucide-react';
+import { Camera, Terminal, Archive, Key, Cpu, LayoutGrid, SlidersHorizontal } from 'lucide-react';
 import NavItem from '../ui/navigation/NavItem';
-import { GitHubIcon } from '../ui/icons/ProviderIcons';
 import '../../styles/LeftNavigation.css';
 import { APP_NAME, BRAND_NAME, BRAND_CONFIG } from '@shared/constants/branding';
 import { useFeatureFlag } from '../../lib/featureFlags';
 import { LeftNavSizeAtom } from '@renderer/states/left-nav.atom';
-import { useAuthContext } from '../auth/AuthProvider';
-import { SKIP_LOGIN_ALIAS } from '@shared/constants/auth';
 
 // MCP icon - from McpHeaderView
 const McpIcon = () => (
@@ -78,19 +75,6 @@ interface SettingsNavigationProps {
 const SettingsNavigation: React.FC<SettingsNavigationProps> = ({ onBack }) => {
   const location = useLocation();
   const navigate = useNavigate();
-  const { signOut, authData } = useAuthContext();
-  const [isSigningOut, setIsSigningOut] = useState(false);
-  const isCopilotUser = authData?.ghcAuth?.alias !== SKIP_LOGIN_ALIAS;
-
-  const handleSignOut = useCallback(async () => {
-    if (isSigningOut) return;
-    setIsSigningOut(true);
-    try {
-      await signOut();
-    } finally {
-      setIsSigningOut(false);
-    }
-  }, [signOut, isSigningOut]);
 
   // Chrome Extension / Browser Control entry (controlled by feature flag, Dev + Windows only)
   const browserControlEnabled = useFeatureFlag('browserControl');
@@ -148,25 +132,16 @@ const SettingsNavigation: React.FC<SettingsNavigationProps> = ({ onBack }) => {
   const layout = isInvestmentStudio
     ? {
         outerGap: '8px',
-        headerGap: '8px',
         headerHeight: '36px',
         headerPaddingBottom: '6px',
-        titleFontSize: '13px',
         itemGap: '2px',
       }
     : {
         outerGap: '16px',
-        headerGap: '12px',
         headerHeight: '52px',
         headerPaddingBottom: '12px',
-        titleFontSize: '18px',
         itemGap: '8px',
       };
-
-  // Divider hairlines removed (borderless Claude-style chrome). Kept as a
-  // no-op so the two spread call sites (header bottom-rule, sign-in section
-  // top-rule) stay valid without restructuring their inline style objects.
-  const dividerStyle = (_position: 'top' | 'bottom'): React.CSSProperties => ({});
 
   return (
     <nav
@@ -187,50 +162,18 @@ const SettingsNavigation: React.FC<SettingsNavigationProps> = ({ onBack }) => {
           height: '100%',
         }}
       >
-        {/* Header — only the back arrow is interactive; "Settings" is a
-            plain label. The arrow is a real <button> with a scoped hover
-            background (see .settings-back-btn in LeftNavigation.css). */}
+        {/* Top spacer — the "Settings" title was removed; this empty header
+            keeps the original top breathing room so the list doesn't jump to
+            the very top edge. The back/workspace control lives in the footer. */}
         <div
           style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: layout.headerGap,
             width: '100%',
             height: layout.headerHeight,
             paddingBottom: layout.headerPaddingBottom,
-            ...dividerStyle('bottom'),
+            flexShrink: 0,
           }}
-        >
-          <button
-            type="button"
-            onClick={handleBack}
-            aria-label="Go Back"
-            className="settings-back-btn"
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              border: 'none',
-              padding: '6px',
-              borderRadius: '8px',
-              color: 'var(--si-ink)',
-              flexShrink: 0,
-              cursor: 'pointer',
-            }}
-          >
-            <ChevronLeft size={20} />
-          </button>
-          <h2
-            style={{
-              fontSize: layout.titleFontSize,
-              fontWeight: '600',
-              color: 'var(--si-ink)',
-              margin: 0,
-            }}
-          >
-            Settings
-          </h2>
-        </div>
+          aria-hidden="true"
+        />
 
         {/* Navigation Items */}
         <div
@@ -382,43 +325,40 @@ const SettingsNavigation: React.FC<SettingsNavigationProps> = ({ onBack }) => {
           />
         </div>
 
-        {/* Bottom: sign in / sign out — icon-only (tooltip carries the label).
-            Signed out → GitHub Copilot brand mark (invites sign-in).
-            Signed in  → sign-out glyph. While signing out → spinner glyph. */}
+        {/* Footer — back / workspace control, bottom-left. The sign in/out
+            control moved to the LLM Providers page header (right side). */}
         <div
           className="settings-auth-footer"
           style={{
             width: '100%',
             paddingTop: '16px',
             display: 'flex',
-            ...dividerStyle('top'),
+            alignItems: 'center',
           }}
         >
-          <NavItem
-            icon={
-              isSigningOut ? (
-                <Loader2 size={18} className="animate-spin" />
-              ) : isCopilotUser ? (
-                <LogOut size={18} />
-              ) : (
-                <GitHubIcon size={18} />
-              )
-            }
-            isActive={false}
-            disabled={isSigningOut}
-            title={
-              isSigningOut
-                ? 'Signing out…'
-                : isCopilotUser
-                  ? 'Sign out of GitHub Copilot'
-                  : 'Sign in with GitHub Copilot'
-            }
-            // Both states call handleSignOut: when signed out via skip-login we
-            // still sign out first to clear it, then the redirect to the login
-            // screen follows.
-            onClick={handleSignOut}
-            ariaLabel={isCopilotUser ? 'Sign out of GitHub Copilot' : 'Sign in with GitHub Copilot'}
-          />
+          {/* Bottom-left: back to the research workspace. Uses the same
+              LayoutGrid glyph as the sidebar's "Workspace" tab so the
+              destination reads clearly. */}
+          <button
+            type="button"
+            onClick={handleBack}
+            aria-label="Back to workspace"
+            title="Back to workspace"
+            className="settings-back-btn"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              border: 'none',
+              padding: '6px',
+              borderRadius: '8px',
+              color: 'var(--si-ink)',
+              flexShrink: 0,
+              cursor: 'pointer',
+            }}
+          >
+            <LayoutGrid size={20} />
+          </button>
         </div>
       </div>
     </nav>
