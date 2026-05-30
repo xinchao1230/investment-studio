@@ -23,6 +23,7 @@ import BrowserControlView from '../components/settings/BrowserControlView';
 import MemexView from '../components/settings/MemexView';
 import ArchivedAgentsView from '../components/settings/ArchivedAgentsView';
 import ResearchApiView from '../components/settings/ResearchApiView';
+import AppSettings from '../components/settings/AppSettings';
 import AgentChatEditingView from '../components/chat/agent-area/AgentChatEditingView';
 import AgentChatCreationView from '../components/chat/agent-area/AgentChatCreationView';
 import CreateCustomAgentView from '../components/chat/agent-area/CreateCustomAgentView';
@@ -196,6 +197,7 @@ export const AppRoutes: React.FC = () => {
             }
           />
           <Route path="voice-input" element={<VoiceInputSettingsView />} />
+          <Route path="app" element={<AppSettings />} />
           <Route path="providers" element={<ProviderSettingsView />} />
           <Route path="screenshot" element={<ScreenshotSettingsView />} />
           <Route path="mcp" element={<McpView />} />

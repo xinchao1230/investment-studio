@@ -1,4 +1,4 @@
-<!-- Last verified: 2026-05-17 -->
+<!-- Last verified: 2026-05-30 -->
 
 # userDataADO — Layer 2 Module Documentation
 
@@ -115,9 +115,16 @@ Model-tunable behavior owned by the active model (not the agent persona) is pers
 
 ### Adding a New App-Level Config Field
 
+`app.json` fields round-trip through a **whitelist rebuild** — `appConfigSanitize()` copies only fields it explicitly knows about onto a fresh object, so a field added only to the interface is silently dropped on every write (it survives in memory but vanishes on persist/restart). All sites below must agree:
+
 1. Add the field to `AppConfig` and its default in `types/app.ts`.
-2. Update `isAppConfig` type-guard if needed.
-3. Add a getter/setter to `AppCacheManager`; the setter must call `notifyFrontend()`.
+2. Update the `isAppConfig` type-guard (reject wrong types).
+3. In `AppCacheManager`, handle the field in **both**:
+   - `updateConfig()` merge (scalars: `field: updates.field !== undefined ? updates.field : this.cache.field`),
+   - `appConfigSanitize()` (validate + copy onto `sanitized`); add `integrityEnsure()` defaulting if the field needs a fill-in on read.
+   The setter path already calls `notifyFrontend()` / fires `app:configUpdated`.
+
+Example: the `tintColor` field (app-level accent; renderer mapping in `src/renderer/lib/theme/tintColor.ts`) added all three — interface + guard, `updateConfig` scalar merge, and an `isValidTintColor` check in `appConfigSanitize`.
 
 ### Changing Chat Session Storage
 

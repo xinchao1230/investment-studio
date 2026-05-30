@@ -1,6 +1,6 @@
 import React, { useCallback, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Camera, Terminal, Archive, Key, Cpu, LogOut, Loader2, ChevronLeft } from 'lucide-react';
+import { Camera, Terminal, Archive, Key, Cpu, LogOut, Loader2, ChevronLeft, SlidersHorizontal } from 'lucide-react';
 import NavItem from '../ui/navigation/NavItem';
 import { GitHubIcon } from '../ui/icons/ProviderIcons';
 import '../../styles/LeftNavigation.css';
@@ -136,6 +136,7 @@ const SettingsNavigation: React.FC<SettingsNavigationProps> = ({ onBack }) => {
     if (path.includes('/settings/memex')) return 'memex';
     if (path.includes('/settings/archived-agents')) return 'archived-agents';
     if (path.includes('/settings/research-api')) return 'research-api';
+    if (path.includes('/settings/app')) return 'app';
     return 'mcp'; // Default: show mcp
   };
 
@@ -246,6 +247,14 @@ const SettingsNavigation: React.FC<SettingsNavigationProps> = ({ onBack }) => {
             scrollbarWidth: 'none',
           }}
         >
+          <NavItem
+            icon={<SlidersHorizontal size={18} />}
+            label="Application"
+            isActive={activeView === 'app'}
+            onClick={() => navigate('/settings/app')}
+            ariaLabel="Application settings"
+          />
+
           {isInvestmentStudio && (
             <NavItem
               icon={<Key size={18} />}

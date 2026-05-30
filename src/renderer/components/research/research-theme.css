@@ -1049,12 +1049,16 @@
   color: var(--si-ink);
   margin: 22px 0 8px;
 }
-/* Inline code used as a ticker chip. */
+/* Inline code used as a ticker chip.
+   Pinned to the original brand-accent values (NOT --si-accent-*), because the
+   app-level tint color (Settings > Application > Accent color) overrides the
+   --si-accent-* ramp at runtime. Document body content must not follow the
+   tint, so the inline-code chip uses fixed brand values here. */
 [data-theme="research"] .rw-doc-body code {
   font-size: 11px;
   font-weight: 600;
-  color: var(--rw-accent-strong);
-  background: var(--rw-accent-strong-bg);
+  color: #4f70a3;
+  background: #eaeff7;
   padding: 2px 7px;
   border-radius: 5px;
   font-family: ui-monospace, 'SF Mono', monospace;

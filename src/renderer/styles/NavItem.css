@@ -39,10 +39,12 @@
   background: rgba(11, 46, 79, 0.05);
 }
 
-/* Active/Selected state - Menu item 6 */
+/* Active/Selected state - Menu item 6.
+   Uses the brand-accent soft tint so the selected row follows the app-level
+   tint color (overridden at runtime by applyTintColor via --si-accent-soft). */
 .nav-item.active {
   /* Only change visual effect, do not change layout */
-  background: rgba(11, 46, 79, 0.05);
+  background: var(--si-accent-soft, rgba(11, 46, 79, 0.05));
 }
 
 /* Disabled state */

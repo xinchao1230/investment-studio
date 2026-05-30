@@ -1,0 +1,185 @@
+/* ============================================================
+   TintColorPicker — accessible single-select accent color picker.
+
+   Trigger row value + popover listbox. Colors resolve through the
+   shared design tokens (editorial-theme.css) so the picker tracks
+   the active tint and any future re-theme. Platform shaping is keyed
+   off the `data-platform` attribute set by the component:
+     - mac     : soft rounded contextual popover, gentle shadow
+     - windows : squarer Fluent-like flyout, lighter border
+     - web     : clean floating panel
+   ============================================================ */
+
+.tint-picker {
+  position: relative;
+  display: inline-flex;
+}
+
+/* --- Trigger -----------------------------------------------------
+   Looks like a value on the right of a native settings row — NOT an
+   input field. No box outline at rest; a subtle hover background and
+   an accent focus ring (keyboard only). */
+.tint-picker-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 28px;
+  padding: 0 6px 0 8px;
+  border: none;
+  background: transparent;
+  border-radius: 8px;
+  cursor: pointer;
+  color: var(--si-ink);
+  font-size: 14px;
+  line-height: 1;
+  transition: background 0.15s ease;
+}
+
+.tint-picker-trigger:hover {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.tint-picker-trigger:focus-visible {
+  outline: 2px solid var(--app-focus-ring-color, var(--si-gold));
+  outline-offset: 2px;
+}
+
+.tint-picker-value {
+  color: var(--si-ink);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+/* Boxed up/down chevron affordance (ChatGPT/macOS-style) sitting at the
+   right edge of the trigger. A subtle bordered square that reads as a
+   "stepper / pick" control rather than a plain dropdown arrow. */
+.tint-picker-chevron-box {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 22px;
+  border-radius: 6px;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  background: var(--si-card, #fff);
+  box-shadow: 0 1px 1px rgba(0, 0, 0, 0.04);
+  flex-shrink: 0;
+}
+
+.tint-picker-chevron {
+  color: var(--si-muted);
+}
+
+/* --- Color dot (shared by trigger + options) --------------------
+   A ring keeps light dots (yellow) visible on a white surface and
+   keeps the swatch readable regardless of theme. */
+.tint-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.12);
+}
+
+/* --- Popover -----------------------------------------------------
+   White floating panel, light border, restrained shadow. Anchored to
+   the right edge of the trigger, opening downward. */
+.tint-picker-popover {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 1000;
+  min-width: 220px;
+  margin: 0;
+  padding: 8px;
+  list-style: none;
+  background: var(--si-card, #fff);
+  border: 1px solid rgba(0, 0, 0, 0.10);
+  border-radius: 16px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12), 0 2px 6px rgba(0, 0, 0, 0.06);
+  outline: none;
+  animation: tint-popover-in 0.12s ease-out;
+}
+
+@keyframes tint-popover-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* --- Option row -------------------------------------------------- */
+.tint-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 44px;
+  padding: 0 10px;
+  border-radius: 10px;
+  cursor: pointer;
+  color: var(--si-ink);
+  font-size: 14px;
+  user-select: none;
+}
+
+.tint-option-name {
+  flex: 1 1 auto;
+  white-space: nowrap;
+}
+
+.tint-option-check {
+  color: var(--si-accent-strong, var(--si-gold));
+  flex-shrink: 0;
+}
+
+/* Hover/keyboard-active highlight (subtle). The component mirrors
+   mouse hover into the active index, so a single `.active` rule
+   covers both pointer and keyboard. */
+.tint-option.active {
+  background: rgba(0, 0, 0, 0.05);
+}
+
+/* Selected row gets a subtle persistent background distinct from
+   hover, plus the checkmark above. */
+.tint-option.selected {
+  background: var(--si-accent-soft, rgba(0, 0, 0, 0.04));
+}
+
+.tint-option.selected.active {
+  background: var(--si-accent-hover, rgba(0, 0, 0, 0.06));
+}
+
+/* ============================================================
+   Platform shaping
+   ============================================================ */
+
+/* Windows: squarer Fluent-like flyout, lighter border, flatter
+   shadow, visible hover/selected separation, crisp focus ring. */
+.tint-picker[data-platform='windows'] .tint-picker-popover {
+  border-radius: 8px;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.14);
+}
+
+.tint-picker[data-platform='windows'] .tint-option {
+  border-radius: 4px;
+  height: 40px;
+}
+
+.tint-picker[data-platform='windows'] .tint-picker-trigger {
+  border-radius: 4px;
+}
+
+/* Web: clean panel, mid radius (between mac softness and windows). */
+.tint-picker[data-platform='web'] .tint-picker-popover {
+  border-radius: 12px;
+}
+
+/* mac keeps the base (softest) styling — explicit for clarity. */
+.tint-picker[data-platform='mac'] .tint-picker-popover {
+  border-radius: 16px;
+}
