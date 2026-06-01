@@ -723,6 +723,14 @@
      center pane without a hard border. */
   cursor: pointer;
 }
+/* On Windows/Linux the separate <WindowsTitleBar /> already provides the
+   title bar above the strip, so we don't need the 40px top reserved for
+   the macOS frameless traffic-light controls. data-os="darwin" is only
+   set when the platform is darwin (see ResearchPage), so non-darwin
+   (incl. unknown) falls into this rule and gets the tighter 8px. */
+[data-theme="research"]:not([data-os="darwin"]) .rw-pane-left--collapsed {
+  padding-top: 8px;
+}
 [data-theme="research"] .rw-pane-left--collapsed:hover {
   background: rgba(0, 0, 0, 0.03);
 }
