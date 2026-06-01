@@ -754,7 +754,14 @@ export const TargetListSidebar: React.FC<TargetListSidebarProps> = ({
   const isMac =
     typeof window !== 'undefined' &&
     window.electronAPI?.platform === 'darwin';
-  const tabRowPaddingTop = isMac ? 40 : 8;
+  // On non-mac we align this row's total height to the center pane's tab
+  // strip (ContentTabs uses h-11 = 44px), so .rw-divider sits exactly on
+  // the same Y as the document tab's bottom border. Mac keeps its
+  // padding-based layout because the 40px traffic-light clearance can't
+  // fit inside 44px.
+  const tabRowStyle: React.CSSProperties = isMac
+    ? { paddingTop: 40, paddingBottom: 8 }
+    : { height: 44 };
 
   // The Workspace/Chat segmented control is an equal-width 2-column grid, so
   // both columns size to the longest label ("Workspace"). At 13px that control
@@ -780,8 +787,8 @@ export const TargetListSidebar: React.FC<TargetListSidebarProps> = ({
     <div className="rw-pane-left flex flex-col h-full" style={{ width }}>
       {/* Tab row with mode tabs + action buttons */}
       <div
-        className="flex items-center px-3 pb-2 rw-divider gap-3"
-        style={{ paddingTop: tabRowPaddingTop }}
+        className="flex items-center px-3 rw-divider gap-3"
+        style={tabRowStyle}
       >
         <div
           className={`rw-side-tabs${compactTabs ? ' rw-side-tabs--compact' : ''}`}
