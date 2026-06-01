@@ -213,20 +213,16 @@ export function useTargetChats(): UseTargetChatsApi {
   }, []);
 
   // Refresh chat metadata (title, last_updated) when the main process
-  // notifies us of a chatSession list change — most importantly the async
-  // title generated after the first user message lands.
+  // notifies us of a metadata patch — most importantly the async title
+  // generated after the first user message lands. The previous
+  // `onChatSessionUpdated` event was never wired in preload; now we use
+  // the real `onChatSessionStoreMetadataPatched`.
   useEffect(() => {
-    const api: any = (window as any).electronAPI;
-    const off = api?.profile?.onChatSessionUpdated?.((data: { sessions: any[] }) => {
-      const incoming = data?.sessions;
-      if (!Array.isArray(incoming)) return;
-      // Build a map: chatSession_id -> latest meta (title, last_updated)
-      const byId = new Map<string, { title?: string; last_updated?: string }>();
-      for (const s of incoming) {
-        if (s && typeof s.chatSession_id === 'string') {
-          byId.set(s.chatSession_id, { title: s.title, last_updated: s.last_updated });
-        }
-      }
+    const api: any = (window as any).electronAPI?.profile;
+    if (!api?.onChatSessionStoreMetadataPatched) return;
+    const off = api.onChatSessionStoreMetadataPatched((data: { chatId?: string; chatSessionId?: string; metadata?: any }) => {
+      const meta = data?.metadata;
+      if (!meta || typeof meta.chatSession_id !== 'string') return;
       setChatsByCode((prev) => {
         let mutated = false;
         const next: typeof prev = { ...prev };
@@ -234,10 +230,9 @@ export function useTargetChats(): UseTargetChatsApi {
           if (!list) continue;
           let listChanged = false;
           const updated = list.map((c) => {
-            const fresh = byId.get(c.chatSession_id);
-            if (!fresh) return c;
-            const newTitle = fresh.title ?? c.title;
-            const newLU = fresh.last_updated ?? c.last_updated;
+            if (c.chatSession_id !== meta.chatSession_id) return c;
+            const newTitle = meta.title ?? c.title;
+            const newLU = meta.last_updated ?? c.last_updated;
             if (newTitle === c.title && newLU === c.last_updated) return c;
             listChanged = true;
             return { ...c, title: newTitle, last_updated: newLU };
@@ -250,7 +245,7 @@ export function useTargetChats(): UseTargetChatsApi {
         return mutated ? next : prev;
       });
     });
-    return () => { try { off?.(); } catch { /* ignore */ } };
+    return () => { try { off(); } catch { /* ignore */ } };
   }, []);
 
   return {

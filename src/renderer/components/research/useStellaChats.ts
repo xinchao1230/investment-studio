@@ -146,27 +146,23 @@ export function useStellaChats(): UseStellaChatsApi {
     }
   }, []);
 
-  // Mirror useTargetChats: refresh title/last_updated when main pushes updates
-  // (e.g. async-generated title after first user message).
+  // Refresh title/last_updated when main pushes metadata updates (e.g.
+  // async-generated title after first user message). The previous
+  // `onChatSessionUpdated` event was never wired in preload, so this
+  // listener never fired. Now we use the real `onChatSessionStoreMetadataPatched`.
   useEffect(() => {
-    const api: any = (window as any).electronAPI;
-    const off = api?.profile?.onChatSessionUpdated?.((data: { sessions: any[] }) => {
-      const incoming = data?.sessions;
-      if (!Array.isArray(incoming)) return;
-      const byId = new Map<string, { title?: string; last_updated?: string }>();
-      for (const s of incoming) {
-        if (s && typeof s.chatSession_id === 'string') {
-          byId.set(s.chatSession_id, { title: s.title, last_updated: s.last_updated });
-        }
-      }
+    const api: any = (window as any).electronAPI?.profile;
+    if (!api?.onChatSessionStoreMetadataPatched) return;
+    const off = api.onChatSessionStoreMetadataPatched((data: { chatId?: string; chatSessionId?: string; metadata?: any }) => {
+      const meta = data?.metadata;
+      if (!meta || typeof meta.chatSession_id !== 'string') return;
       setChats((prev) => {
         if (!prev) return prev;
         let mutated = false;
         const next = prev.map((c) => {
-          const fresh = byId.get(c.chatSession_id);
-          if (!fresh) return c;
-          const newTitle = fresh.title ?? c.title;
-          const newLU = fresh.last_updated ?? c.last_updated;
+          if (c.chatSession_id !== meta.chatSession_id) return c;
+          const newTitle = meta.title ?? c.title;
+          const newLU = meta.last_updated ?? c.last_updated;
           if (newTitle === c.title && newLU === c.last_updated) return c;
           mutated = true;
           return { ...c, title: newTitle, last_updated: newLU };
@@ -174,7 +170,7 @@ export function useStellaChats(): UseStellaChatsApi {
         return mutated ? next : prev;
       });
     });
-    return () => { try { off?.(); } catch { /* ignore */ } };
+    return () => { try { off(); } catch { /* ignore */ } };
   }, []);
 
   return { chats, active, loadChats, selectChat, createChat, deleteChat, renameChat };
