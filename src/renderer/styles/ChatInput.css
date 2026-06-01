@@ -164,26 +164,26 @@
   align-items: center;
   gap: 10px;
   padding: 8px 12px;
-  background: rgba(255, 255, 255, 0.95);
-  border: 1px solid rgba(203, 213, 225, 0.8);
+  background: transparent;
+  border: 1px solid transparent;
   border-radius: 12px;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: background 0.15s ease, color 0.15s ease;
   font-size: 14px;
   color: #374151;
-  backdrop-filter: blur(4px);
   width: 180px !important;
   min-width: 40px;
   height: 40px;
   min-height: 40px;
 }
 
-.model-button:hover:not(:disabled) {
-  background: rgba(240, 249, 255, 0.95);
-  border-color: #0ea5e9;
-  color: #0ea5e9;
-  transform: translateY(-1px);
-  box-shadow: 0 2px 8px rgba(14, 165, 233, 0.15);
+.chat-input-container .model-button:hover:not(:disabled),
+.chat-input-container .model-button:focus:not(:disabled) {
+  background: var(--si-code-bg);
+  border-color: transparent;
+  box-shadow: none;
+  color: var(--si-ink, #374151);
+  transform: none;
 }
 
 .model-button:disabled {
@@ -292,13 +292,13 @@
   gap: 12px;
 }
 
-.model-option:hover:not(:disabled) {
-  background: #f0f9ff;
+.chat-input-container .model-option:hover:not(:disabled) {
+  background: var(--si-code-bg);
 }
 
-.model-option.selected {
-  background: #f0f9ff;
-  color: #0ea5e9;
+.chat-input-container .model-option.selected {
+  background: var(--si-accent-soft);
+  color: var(--si-gold);
 }
 
 .model-option:disabled {
@@ -370,11 +370,11 @@
   color: #2563eb;
 }
 
-.check-icon {
+.chat-input-container .check-icon {
   width: 16px;
   height: 16px;
   flex-shrink: 0;
-  color: #0ea5e9;
+  color: var(--si-gold);
 }
 
 /* Attachment Button */
@@ -387,22 +387,22 @@
   height: 40px;
   min-height: 40px;
   padding: 0;
-  background: rgba(255, 255, 255, 0.95);
-  border: 1px solid rgba(203, 213, 225, 0.8);
+  background: transparent;
+  border: 1px solid transparent;
   border-radius: 12px;
   cursor: pointer;
-  transition: all 0.2s ease;
-  backdrop-filter: blur(4px);
+  transition: background 0.15s ease, color 0.15s ease;
   flex-shrink: 0;
   color: #6b7280;
 }
 
-.attachment-button:hover:not(:disabled) {
-  background: rgba(240, 249, 255, 0.95);
-  border-color: #0ea5e9;
-  color: #0ea5e9;
-  transform: translateY(-1px);
-  box-shadow: 0 2px 8px rgba(14, 165, 233, 0.15);
+.button-area .attachment-button:hover:not(:disabled),
+.button-area .attachment-button:focus:not(:disabled) {
+  background: var(--si-code-bg);
+  border-color: transparent;
+  box-shadow: none;
+  color: var(--si-ink, #374151);
+  transform: none;
 }
 
 .attachment-button:disabled {

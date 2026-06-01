@@ -38,10 +38,32 @@ export const OllamaIcon: React.FC<IconProps> = ({ size = 16 }) => (
   />
 );
 
-/** Map provider ID to icon component. Custom providers have no icon. */
+// Custom OpenAI-compatible endpoint — "AI" monogram badge.
+// Inlined (not an <img> asset) so the badge background inherits the
+// surrounding text color and follows the active accent theme.
+export const CustomProviderIcon: React.FC<IconProps> = ({ size = 16 }) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 40 40"
+    fill="none"
+    xmlns="http://www.w3.org/2000/svg"
+    aria-hidden="true"
+  >
+    <rect width="40" height="40" rx="10" fill="currentColor" />
+    <path
+      d="M10.1 27L14.95 12H17.55L22.4 27H19.75L18.62 23.3H13.8L12.68 27H10.1ZM14.45 21.05H17.95L16.22 15.35H16.12L14.45 21.05Z"
+      fill="white"
+    />
+    <path d="M25 27V12H27.55V27H25Z" fill="white" />
+  </svg>
+);
+
+/** Map provider ID to icon component. */
 export const PROVIDER_ICONS: Record<string, React.FC<IconProps>> = {
   copilot: GitHubIcon,
   openai: OpenAIIcon,
   deepseek: DeepSeekIcon,
   ollama: OllamaIcon,
+  'custom-openai': CustomProviderIcon,
 };
