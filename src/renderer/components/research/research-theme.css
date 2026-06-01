@@ -435,7 +435,10 @@
   display: flex;
   flex-direction: column;
   align-items: stretch;
-  padding: 26px 20px 14px 20px;
+  /* Top padding intentionally small: .rw-pane-right already renders a 40px
+     <header> directly above this overlay, so a large pt would stack two
+     gaps and push the eyebrow well below the header line. */
+  padding: 8px 20px 14px 20px;
   user-select: none;
   /* Match the 740px conversation/composer column from ContentView.css and
      center it. Without this the overlay stretches edge-to-edge in fill mode
