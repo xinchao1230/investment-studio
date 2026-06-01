@@ -115,10 +115,19 @@ export class AgentChatSessionService {
 
       try {
         const sessionSnapshot = JSON.parse(JSON.stringify(currentChatSession)) as ChatSessionFile;
+        // Carry brand-extension fields from the session file into metadata
+        // so listByTarget / metadata-patched events see them. Without this,
+        // investment-studio's auto-bind (post-processor sets session.targetCode
+        // after `portfolio_init_target`) persists to the file but never lands
+        // in the metadata projection — so the chat stays under "Ask Stella"
+        // and the renderer's null→non-null transition effect never fires.
+        const snap = sessionSnapshot as any;
         const sessionMetadata = {
           chatSession_id: sessionSnapshot.chatSession_id,
           last_updated: new Date().toISOString(),
           title: sessionSnapshot.title,
+          ...(snap.targetCode !== undefined ? { targetCode: snap.targetCode } : {}),
+          ...(snap.targetDir !== undefined ? { targetDir: snap.targetDir } : {}),
           ...this.deps.getSchedulerMetadata(),
         };
 
