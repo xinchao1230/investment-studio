@@ -106,14 +106,15 @@
   border-top: 1px solid var(--rw-border);
 }
 
-/* Inter-pane seam. Invisible at rest (the element itself is a 1px transparent
-   flex item, so the L/M/R panes read as flush). Two pseudo-elements layer on
-   top:
+/* Inter-pane seam. The element is a 0-width flex item so the L/M/R panes
+   read as truly flush — no paper-tinted 1px sliver between them. Two
+   pseudo-elements layer on top:
      ::before — a ±5px transparent strip that widens the drag hit area so the
-                user never needs pixel-perfect aim on a 1px target.
-     ::after  — a 2px terracotta accent bar, centered on the seam, that fades
-                in on hover and while dragging. This is the only visible cue,
-                and only when the user is interacting with the seam. */
+                user never needs pixel-perfect aim on the seam.
+     ::after  — a 2px terracotta accent bar centered on the seam that fades
+                in on hover and while dragging. Restricted to below the tab
+                strip (top: 40px) so the visible accent never collides with
+                the tab strip's own bottom border. */
 [data-theme="research"] .rw-resizable-divider::before {
   content: '';
   position: absolute;
@@ -126,10 +127,10 @@
 [data-theme="research"] .rw-resizable-divider::after {
   content: '';
   position: absolute;
-  top: 0;
+  top: 40px;
   bottom: 0;
-  /* 2px bar centered on the 1px element (-0.5px keeps it visually centered). */
-  left: -0.5px;
+  /* 2px bar centered on the 0-width seam (-1px keeps it visually centered). */
+  left: -1px;
   width: 2px;
   background: var(--rw-accent-strong);
   opacity: 0;
@@ -713,6 +714,7 @@
 
 /* Collapsed-state side panels (icon strips). */
 [data-theme="research"] .rw-pane-left--collapsed {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -722,6 +724,27 @@
   /* Flush seam: the soft background tint separates the icon strip from the
      center pane without a hard border. */
   cursor: pointer;
+}
+/* On Windows/Linux the separate <WindowsTitleBar /> already provides the
+   chrome above the strip, so we don't need the 40px reserved for the macOS
+   frameless traffic-light controls. Drop the top padding so the Expand icon
+   sits near the top of the pane, and draw a 1px hairline at y=40 (= the
+   center pane's tab-strip bottom border) so the horizontal seam reads as
+   one continuous line across the app. data-os="darwin" is only set when
+   platform is darwin (see ResearchPage), so non-darwin (incl. unknown)
+   falls into this rule. */
+[data-theme="research"]:not([data-os="darwin"]) .rw-pane-left--collapsed {
+  padding-top: 8px;
+}
+[data-theme="research"]:not([data-os="darwin"]) .rw-pane-left--collapsed::after {
+  content: "";
+  position: absolute;
+  top: 39px;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: var(--tabs-border);
+  pointer-events: none;
 }
 [data-theme="research"] .rw-pane-left--collapsed:hover {
   background: rgba(0, 0, 0, 0.03);

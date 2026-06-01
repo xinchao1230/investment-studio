@@ -851,7 +851,7 @@ export const ContentTabs: React.FC<ContentTabsProps> = ({
        * making tabs appear non-switchable and the X close button inert.
        */}
       <div
-        className="rw-tab-strip relative z-50 isolate flex h-11 items-stretch gap-1 pr-2 pt-2.5 overflow-x-auto pointer-events-auto"
+        className="rw-tab-strip relative z-50 isolate flex h-10 items-stretch gap-1 pr-2 pt-1.5 overflow-x-auto pointer-events-auto"
         style={{
           paddingLeft: tabStripPaddingLeft,
           background: 'var(--tabs-toolbar-bg)',

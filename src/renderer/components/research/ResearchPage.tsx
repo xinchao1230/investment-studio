@@ -108,10 +108,9 @@ const ResearchResizableDivider: React.FC<ResearchResizableDividerProps> = ({
     <div
       className={`rw-resizable-divider ${dragging ? 'is-dragging' : ''}`}
       style={{
-        width: 1,
+        width: 0,
         cursor: 'col-resize',
         flexShrink: 0,
-        background: 'transparent',
         position: 'relative',
         zIndex: 10,
       }}
