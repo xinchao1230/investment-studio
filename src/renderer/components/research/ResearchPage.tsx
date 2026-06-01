@@ -558,21 +558,20 @@ export const ResearchPage: React.FC = () => {
   // Critical: trigger migration only on the **null → non-null** transition.
   // If the session was already bound (e.g. user previously created target X
   // in this chat, backend will NOT rebind to a later target Y per Q1=A),
-  // every subsequent saveChatSession still fires onChatSessionUpdated with
-  // the unchanged `targetCode: X` — without the transition guard we'd
+  // every subsequent saveChatSession still fires onChatSessionStoreMetadataPatched
+  // with the unchanged `targetCode: X` — without the transition guard we'd
   // re-migrate the UI to X every time the LLM saves, even when the user
   // is exploring elsewhere.
   const sessionTargetCodeRef = useRef<Map<string, string | null>>(new Map());
   useEffect(() => {
     if (!liveChatSessionId) return;
 
-    const api: any = (window as any).electronAPI;
-    const off = api?.profile?.onChatSessionUpdated?.((data: { sessions: any[] }) => {
-      const sessions = data?.sessions;
-      if (!Array.isArray(sessions)) return;
-      const me = sessions.find((s) => s?.chatSession_id === liveChatSessionId);
-      if (!me) return;
-      const newCode: string | null = me.targetCode ?? null;
+    const api: any = (window as any).electronAPI?.profile;
+    if (!api?.onChatSessionStoreMetadataPatched) return;
+    const off = api.onChatSessionStoreMetadataPatched((data: { chatId?: string; chatSessionId?: string; metadata?: any }) => {
+      const meta = data?.metadata;
+      if (!meta || meta.chatSession_id !== liveChatSessionId) return;
+      const newCode: string | null = meta.targetCode ?? null;
       const prevCode = sessionTargetCodeRef.current.get(liveChatSessionId) ?? null;
       sessionTargetCodeRef.current.set(liveChatSessionId, newCode);
 
@@ -1523,7 +1522,7 @@ export const ResearchPage: React.FC = () => {
             stellaChats={stella.chats}
             stellaActiveSessionId={stella.active?.chatSessionId ?? null}
             onSelectStellaChat={(sid) => stella.selectChat(sid)}
-            onNewStellaChat={() => stella.createChat()}
+            onNewStellaChat={() => stella.createChat().then(() => allChats.refresh())}
             onDeleteStellaChat={(sid) => stella.deleteChat(sid)}
             onRenameStellaChat={(sid, t) => stella.renameChat(sid, t)}
             allChats={allChats.chats}

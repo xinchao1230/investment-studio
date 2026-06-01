@@ -50,58 +50,39 @@ export function useAllChats(): UseAllChatsApi {
     void refresh();
   }, [refresh]);
 
-  // Mirror useStellaChats / useTargetChats: incrementally patch in place
-  // when main process pushes session updates (title generation, rename,
-  // target rebinding, etc.). On structural changes (create/delete) we
-  // fall back to a full re-list.
+  // Re-fetch the full list whenever the chatSessionStore signals a
+  // structural or metadata change. The previous implementation listened to
+  // a `profile.onChatSessionUpdated` event that was never wired up in the
+  // preload bridge, so incremental updates never arrived. Instead we now
+  // subscribe to the three real IPC events (created / metadata-patched /
+  // deleted) and do a cheap full re-list on each — the list is small enough
+  // that a round-trip is imperceptible, and it avoids fragile incremental
+  // patching that can desync from the backend.
   useEffect(() => {
-    const api: any = (window as any).electronAPI;
-    const off = api?.profile?.onChatSessionUpdated?.((data: { chatId?: string; sessions: any[] }) => {
-      const incoming = data?.sessions;
-      if (!Array.isArray(incoming)) return;
-      // Ignore notifications for other chat configs — without this guard
-      // a sibling chat's empty-state event would wipe our list.
+    const api = (window as any).electronAPI?.profile;
+    if (!api) return;
+
+    const unsubs: Array<() => void> = [];
+
+    const onEvent = (data: { chatId?: string }) => {
+      // Ignore notifications for other chat configs.
       const activeChatId = chatIdRef.current;
       if (activeChatId && data?.chatId && data.chatId !== activeChatId) return;
+      void refresh();
+    };
 
-      setChats((prev) => {
-        // Build fresh map of incoming sessions for the active chat.
-        // The payload is the full session list for this chat config,
-        // so we can swap to it wholesale rather than patching — but
-        // we preserve our stable ascending sort by chatSession_id
-        // (oldest first, mirroring the backend's listAll ordering).
-        const sorted = [...incoming].sort((a: any, b: any) =>
-          String(a.chatSession_id || '').localeCompare(String(b.chatSession_id || '')),
-        );
+    if (api.onChatSessionStoreSessionCreated) {
+      unsubs.push(api.onChatSessionStoreSessionCreated(onEvent));
+    }
+    if (api.onChatSessionStoreMetadataPatched) {
+      unsubs.push(api.onChatSessionStoreMetadataPatched(onEvent));
+    }
+    if (api.onChatSessionStoreSessionDeleted) {
+      unsubs.push(api.onChatSessionStoreSessionDeleted(onEvent));
+    }
 
-        // No previous list (first event after mount race) — just adopt.
-        if (!prev) return sorted as ResearchChatSessionMeta[];
-
-        // Cheap no-op check: same length + same ids in order + same
-        // titles + same last_updated + same targetCode → bail early
-        // to avoid re-rendering the sidebar mid-stream.
-        if (prev.length === sorted.length) {
-          let identical = true;
-          for (let i = 0; i < prev.length; i += 1) {
-            const a = prev[i];
-            const b = sorted[i] as any;
-            if (
-              a.chatSession_id !== b.chatSession_id ||
-              a.title !== b.title ||
-              a.last_updated !== b.last_updated ||
-              (a.targetCode ?? null) !== (b.targetCode ?? null)
-            ) {
-              identical = false;
-              break;
-            }
-          }
-          if (identical) return prev;
-        }
-        return sorted as ResearchChatSessionMeta[];
-      });
-    });
-    return () => { try { off?.(); } catch { /* ignore */ } };
-  }, []);
+    return () => { unsubs.forEach((fn) => { try { fn(); } catch { /* ignore */ } }); };
+  }, [refresh]);
 
   return { chats, refresh };
 }
