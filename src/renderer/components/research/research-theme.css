@@ -475,8 +475,9 @@
   letter-spacing: -0.2px;
   margin: 0;
 }
-/* Monospace ticker badge — terminal/data trust cue. Replaces the old
- * duplicated stock-code subtitle. */
+/* Monospace ticker badge — terminal/data trust cue via the monospace
+ * face alone. Kept neutral (no accent tint) to match the sibling
+ * Unlisted tag; the equal-width digits carry the "market data" read. */
 [data-theme="research"] .rw-welcome-ticker {
   display: inline-flex;
   align-items: center;
@@ -484,11 +485,10 @@
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.4px;
-  color: var(--si-gold);
+  color: var(--si-muted);
   padding: 2px 7px;
-  border: 1px solid var(--si-accent-active);
   border-radius: 5px;
-  background: var(--si-accent-soft);
+  background: var(--si-code-bg, #f0efed);
   white-space: nowrap;
 }
 [data-theme="research"] .rw-welcome-tag {
@@ -585,14 +585,11 @@
   text-overflow: ellipsis;
   max-width: 100%;
 }
-/* Intro ("Capabilities") card spans the full row and reads as a primer:
- * subtly accented left edge so it leads the eye without shouting. */
+/* Intro ("Capabilities") card spans the full row. Its icon intentionally
+ * uses the SAME treatment as every other card — neutral at rest, tinted on
+ * hover — so no single card's icon is permanently accented. */
 [data-theme="research"] .rw-welcome-card--intro {
   grid-column: 1 / -1;
-}
-[data-theme="research"] .rw-welcome-card--intro .rw-welcome-card-icon {
-  background: var(--si-accent-soft);
-  color: var(--si-gold);
 }
  * chat list. Compact and color-muted so it does not steal attention from
  * the chat title. */

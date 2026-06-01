@@ -13,8 +13,9 @@
 // keeps the per-frame cost to alpha math + fillRect. The loop is throttled to
 // ~30fps because the fades are multi-second — extra frames would be invisible.
 //
-// Honors prefers-reduced-motion: paints one static frame and never starts the
-// animation loop.
+// The loop always runs: this is an aria-hidden decorative surface whose slow,
+// non-flashing drift carries no information, so it deliberately does not branch
+// on prefers-reduced-motion (that branch used to freeze the grid on Windows).
 
 import React, { useEffect, useRef } from 'react';
 
@@ -23,20 +24,20 @@ import React, { useEffect, useRef } from 'react';
 // ---------------------------------------------------------------------------
 const CONFIG = {
   // Grid geometry (CSS pixels)
-  spacing: 14, // distance between adjacent dots
+  spacing: 11, // distance between adjacent dots — denser grid = more dots per patch
   dotSize: 1.3, // rendered dot diameter
 
   // Brightness tiers (0..1 alpha)
-  baselineAlpha: 0.07, // resting opacity of every dot
-  peakAlpha: 0.85, // max opacity at a patch's center
+  baselineAlpha: 0.03, // resting opacity of every dot
+  peakAlpha: 0.99, // max opacity at a patch's center
 
   // Patch (light region) behavior
-  patchCount: 9, // concurrent patches on screen
-  radiusMin: 110, // patch radius range (CSS px)
-  radiusMax: 220,
-  fadeInMs: 900, // breathe timings
-  holdMs: 4200, // long hold so the patch visibly drifts while lit
-  fadeOutMs: 1100,
+  patchCount: 7, // concurrent patches on screen
+  radiusMin: 150, // patch radius range (CSS px) — larger = each patch covers more dots
+  radiusMax: 280,
+  fadeInMs: 800, // breathe timings
+  holdMs: 4100, // long hold so the patch visibly drifts while lit
+  fadeOutMs: 900,
   spawnJitterMs: 700, // random extra delay before a dead patch respawns
 
   // Drift — patches travel continuously so neighboring dots light up in
@@ -45,7 +46,7 @@ const CONFIG = {
   driftMax: 55,
 
   // Terracotta accent — the brightest core of a tinted patch warms up
-  tintProbability: 0.55, // chance a given patch is a "warm" patch
+  tintProbability: 0.65, // chance a given patch is a "warm" patch
   tintCoreFraction: 0.32, // inner fraction of radius that receives tint
   tintMaxStrength: 0.6, // 0..1 max terracotta mix at the very center
 
@@ -111,10 +112,6 @@ export const DotGridBackground: React.FC = () => {
     const ACCENT = resolveAccent();
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
-
-    const reduceMotion = window.matchMedia(
-      '(prefers-reduced-motion: reduce)'
-    ).matches;
 
     // Dot positions in CSS pixels, recomputed on resize.
     let dots: Array<{ x: number; y: number }> = [];
@@ -246,26 +243,12 @@ export const DotGridBackground: React.FC = () => {
       }
     };
 
-    // ---- Static (reduced-motion) path: one calm frame, no loop. ----
-    if (reduceMotion) {
-      setupGrid();
-      const now = 1000; // fixed clock so patches sit mid-lifecycle
-      patches = Array.from({ length: 3 }, (_, i) => {
-        const p = makePatch(now, 0);
-        // Pin them at hold-phase so intensity === 1.
-        p.startAt = now - CONFIG.fadeInMs - CONFIG.holdMs / 2;
-        return p;
-      });
-      draw(now);
-      const onResizeStatic = () => {
-        setupGrid();
-        draw(now);
-      };
-      window.addEventListener('resize', onResizeStatic);
-      return () => window.removeEventListener('resize', onResizeStatic);
-    }
-
     // ---- Animated path ----
+    // This is a purely decorative, aria-hidden background. The motion is slow,
+    // non-flashing drift that carries no information, so we intentionally do not
+    // branch on prefers-reduced-motion — the previous static branch caused the
+    // grid to freeze on Windows (where "Animation effects = Off" is a common
+    // default), with the initial dots stuck and never animating.
     setupGrid();
     const t0 = performance.now();
     patches = Array.from({ length: CONFIG.patchCount }, (_, i) =>
@@ -281,7 +264,10 @@ export const DotGridBackground: React.FC = () => {
     const loop = (now: number) => {
       rafId = requestAnimationFrame(loop);
       if (now - lastFrame < frameInterval) return; // throttle to targetFps
-      const dt = lastFrame === 0 ? 0 : (now - lastFrame) / 1000; // seconds since last drawn frame
+      // Cap dt so a long gap (window hidden/minimized/suspended, which throttles
+      // rAF) doesn't fling patches far off-screen on the first frame back.
+      const dt =
+        lastFrame === 0 ? 0 : Math.min((now - lastFrame) / 1000, 0.1); // seconds since last drawn frame
       lastFrame = now;
 
       // Advance each patch's center by its velocity, then respawn dead ones.
