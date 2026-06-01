@@ -282,7 +282,7 @@
 /* --- CSS Variable Definitions --- */
 :root {
   /* Inline code colors - light mode */
-  --inline-code-bg: var(--si-warm-surface-2);
+  --inline-code-bg: var(--si-code-bg);
   --inline-code-text: #322D29;
 
   /* Inline code colors - dark mode */
@@ -685,7 +685,7 @@
 
 /* Table header */
 .markdown-body thead {
-  background: var(--si-warm-surface);
+  background: var(--si-code-bg);
 }
 
 /* Table header cells */
@@ -699,13 +699,13 @@
   text-align: left;
 
   /* Table header cell background */
-  background: var(--si-warm-surface);
+  background: var(--si-code-bg);
 
   /* Border styles: right and bottom borders (0 1px 1px 0) */
   border-top: 0;
   border-left: 0;
-  border-bottom: 1px solid var(--si-warm-border);
-  border-right: 1px solid var(--si-warm-border);
+  border-bottom: 1px solid var(--si-border);
+  border-right: 1px solid var(--si-border);
 
   /* 🔥 Cell no-wrap, long content displayed via table horizontal scrollbar */
   white-space: nowrap;
@@ -731,8 +731,8 @@
   /* Border styles: right and bottom borders (0 1px 1px 0) */
   border-top: 0;
   border-left: 0;
-  border-bottom: 1px solid var(--si-warm-border);
-  border-right: 1px solid var(--si-warm-border);
+  border-bottom: 1px solid var(--si-border);
+  border-right: 1px solid var(--si-border);
 
   /* 🔥 Allow long text to wrap to prevent table from breaking container */
   white-space: normal;
