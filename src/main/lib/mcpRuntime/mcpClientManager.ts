@@ -296,6 +296,14 @@ export class MCPClientManager {
         }
       }
 
+      // Step 3.5: For investment-studio brand, auto-connect research-mcp if not already in profile
+      if ((process.env.BRAND_NAME || 'openkosmos') === 'investment-studio') {
+        const hasResearchMcp = serverInfos.some(s => s.config.name === 'research-mcp');
+        if (!hasResearchMcp) {
+          this._startConnectionAsync('research-mcp');
+        }
+      }
+
     } catch (error) {
       throw error;
     }
@@ -322,10 +330,10 @@ export class MCPClientManager {
       // 🆕 Built-in server is not in baseline config but is not a ghost server
       const baselineServerNames = new Set(baselineConfigs.map(info => info.config.name));
       const ghostRuntimeClients = currentRuntimeClients.filter(name =>
-        !baselineServerNames.has(name) && name !== BUILTIN_SERVER_NAME
+        !baselineServerNames.has(name) && name !== BUILTIN_SERVER_NAME && name !== 'research-mcp'
       );
       const ghostRuntimeStates = currentRuntimeStates.filter(state =>
-        !baselineServerNames.has(state.serverName) && state.serverName !== BUILTIN_SERVER_NAME
+        !baselineServerNames.has(state.serverName) && state.serverName !== BUILTIN_SERVER_NAME && state.serverName !== 'research-mcp'
       );
 
 
@@ -1277,21 +1285,35 @@ export class MCPClientManager {
     // Get server config from ProfileCacheManager
     const serverInfo = profileCacheManager.getMcpServerInfo(this.currentUserAlias, serverName);
     if (!serverInfo.config) {
-      throw new Error(`Server "${serverName}" not found in configuration`);
+      // For investment-studio brand, research-mcp is a built-in server that may not be in profile
+      if (serverName === 'research-mcp' && (process.env.BRAND_NAME || 'openkosmos') === 'investment-studio') {
+        const { buildResearchMcpConfig } = require('./seedResearchMcp');
+        let uvPath = 'uv';
+        try {
+          const { RuntimeManager } = require('../runtime/RuntimeManager');
+          uvPath = RuntimeManager.getInstance().getBinaryPath('uv');
+        } catch { /* fallback to PATH */ }
+        serverInfo.config = buildResearchMcpConfig(uvPath);
+      } else {
+        throw new Error(`Server "${serverName}" not found in configuration`);
+      }
     }
+
+    // At this point serverInfo.config is guaranteed non-null (either from profile or built-in fallback)
+    const resolvedConfig = serverInfo.config!;
 
     // Convert to McpServerConfig format
     const serverConfig: McpServerConfig = {
-      name: serverInfo.config.name,
-      transport: serverInfo.config.transport,
-      command: serverInfo.config.command,
-      args: serverInfo.config.args,
-      url: serverInfo.config.url,
-      env: serverInfo.config.env,
-      in_use: serverInfo.config.in_use,
-      version: serverInfo.config.version,
-      source: serverInfo.config.source as 'ON-DEVICE' | 'PLUGIN' | undefined,
-      headers: serverInfo.config.headers,
+      name: resolvedConfig.name,
+      transport: resolvedConfig.transport,
+      command: resolvedConfig.command,
+      args: resolvedConfig.args,
+      url: resolvedConfig.url,
+      env: resolvedConfig.env,
+      in_use: resolvedConfig.in_use,
+      version: resolvedConfig.version,
+      source: resolvedConfig.source as 'ON-DEVICE' | 'PLUGIN' | undefined,
+      headers: resolvedConfig.headers,
     };
 
     // 🔥 Handle OpenKosmos placeholders: replace placeholders in url and env
