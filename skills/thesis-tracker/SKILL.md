@@ -1,35 +1,45 @@
 ---
 name: thesis-tracker
-description: Maintain and update investment theses for portfolio positions and watchlist names. Track key data points, catalysts, and thesis milestones over time. Use when updating a thesis with new information, reviewing position rationale, or checking if a thesis is still intact. Triggers on "update thesis for [company]", "is my thesis still intact", "thesis check", "add data point to [company]", or "review my positions".
+description: "Maintain and update investment theses for portfolio positions. Triggers on: update thesis, thesis check, is my thesis intact, review positions, 论点追踪, 投资逻辑检验, 持仓复盘"
+version: 1.0.0
+license: MIT
 ---
 
 # Thesis Tracker
 
+## Input
+- stock_code: Stock code (e.g. 600036 or AAPL)
+- action: create | update | review
+
 ## Workflow
+
+### Step 0: Check Cache (MANDATORY)
+Before any `*_collect` call, follow `skills/_cache-policy.md`:
+- Read `{target_dir}/data-cache/tushare/{endpoint}.meta.json` for relevant endpoints. Within TTL → reuse the CSV.
+- On cache miss, call the collect tool and write `meta.json`.
+- Force refresh when the user says "最新数据 / 刷新 / 重新拉取".
 
 ### Step 1: Define or Load Thesis
 
 If creating a new thesis:
 - **Company**: Name and ticker
 - **Position**: Long or Short
-- **Thesis statement**: 1-2 sentence core thesis (e.g., "Long ACME — margin expansion from pricing power + operating leverage as mix shifts to software")
+- **Thesis statement**: 1-2 sentence core thesis (e.g., "Long 600036 — retail AUM growth + fee income expansion as wealth management mix shifts")
 - **Key pillars**: 3-5 supporting arguments
 - **Key risks**: 3-5 risks that would invalidate the thesis
-- **Catalysts**: Upcoming events that could prove/disprove the thesis (earnings, product launches, regulatory decisions)
+- **Catalysts**: Upcoming events (earnings, policy changes, product launches)
 - **Target price / valuation**: What's it worth if the thesis plays out
 - **Stop-loss trigger**: What would make you exit
 
-If updating an existing thesis, ask the user for the new data point or development.
+If updating an existing thesis, load from `{target_dir}/thesis/thesis.md` and ask for the new data point.
 
 ### Step 2: Update Log
 
 For each new data point or development:
 
-- **Date**: When this happened
-- **Data point**: What changed (earnings beat, management departure, competitor move, etc.)
-- **Thesis impact**: Does this strengthen, weaken, or neutralize a specific pillar?
-- **Action**: No change / Increase position / Trim / Exit
-- **Updated conviction**: High / Medium / Low
+| Date | Data Point | Pillar Affected | Impact | Action | Conviction |
+|------|-----------|----------------|--------|--------|------------|
+| | | | Strengthen/Weaken/Neutral | Hold/Add/Trim/Exit | High/Med/Low |
 
 ### Step 3: Thesis Scorecard
 
@@ -39,11 +49,11 @@ Maintain a running scorecard:
 |--------|---------------------|----------------|-------|
 | Revenue growth >20% | On track | Q3 was 22% | Stable |
 | Margin expansion | Behind | Margins flat YoY | Concerning |
-| New product launch | Pending | Delayed to Q2 | Watch |
+| Policy tailwind | Pending | New regulation announced | Watch |
 
 ### Step 4: Catalyst Calendar
 
-Track upcoming catalysts:
+Track upcoming catalysts for this position:
 
 | Date | Event | Expected Impact | Notes |
 |------|-------|-----------------|-------|
@@ -51,17 +61,23 @@ Track upcoming catalysts:
 
 ### Step 5: Output
 
-Thesis summary suitable for:
-- Morning meeting discussion
-- Portfolio review
-- Risk committee presentation
+Save thesis to `{target_dir}/thesis/thesis.md` with:
+- Thesis statement and pillars
+- Current scorecard
+- Update log (append-only)
+- Catalyst calendar
+- Current conviction level
 
-Format: Concise markdown or Word doc with the scorecard, recent updates, and current conviction level.
+## Storage
+
+- Thesis file: `{target_dir}/thesis/thesis.md`
+- One thesis per research target (aligned with portfolio structure)
+- Update log is append-only — never delete history
 
 ## Important Notes
 
 - A thesis should be falsifiable — if nothing could disprove it, it's not a thesis
 - Track disconfirming evidence as rigorously as confirming evidence
 - Review theses at least quarterly, even when nothing dramatic has happened
+- For A-share: pay attention to policy/regulatory shifts as thesis risks (industry policy, capital market reform, window guidance)
 - If the user manages multiple positions, offer to do a full portfolio thesis review
-- Store thesis data in a structured format so it can be referenced across sessions

@@ -1,9 +1,15 @@
 ---
 name: catalyst-calendar
-description: Build and maintain a calendar of upcoming catalysts across a coverage universe — earnings dates, conferences, product launches, regulatory decisions, and macro events. Helps prioritize attention and position ahead of events. Triggers on "catalyst calendar", "upcoming events", "what's coming up", "earnings calendar", "event calendar", or "catalyst tracker".
+description: "Build and maintain a calendar of upcoming catalysts across coverage universe. Triggers on: catalyst calendar, upcoming events, earnings calendar, event calendar, 催化剂日历, 事件日历, 近期催化"
+version: 1.0.0
+license: MIT
 ---
 
 # Catalyst Calendar
+
+## Input
+- universe: List of stock codes or "current portfolio"
+- horizon: Time horizon (default: next 4 weeks)
 
 ## Workflow
 
@@ -11,7 +17,7 @@ description: Build and maintain a calendar of upcoming catalysts across a covera
 
 - List of companies to track (tickers or names)
 - Sector / industry focus
-- Include macro events? (Fed meetings, economic data, regulatory deadlines)
+- Include macro events? (central bank meetings, economic data, regulatory deadlines)
 - Time horizon (next 2 weeks, month, quarter)
 
 ### Step 2: Gather Catalysts
@@ -19,31 +25,37 @@ description: Build and maintain a calendar of upcoming catalysts across a covera
 For each company, identify upcoming events:
 
 **Earnings & Financial Events**
-- Quarterly earnings date and time (pre/post market)
+- Quarterly earnings date (A-share: annual report Apr 30 deadline, Q1 Apr 30, H1 Aug 31, Q3 Oct 31)
 - Annual shareholder meeting
 - Investor day / analyst day
-- Capital markets day
 - Debt maturity / refinancing dates
 
 **Corporate Events**
 - Product launches or announcements
-- FDA approvals / regulatory decisions
+- Regulatory approvals / decisions
 - Contract renewals or expirations
 - M&A milestones (close dates, regulatory approvals)
 - Management transitions
-- Insider trading windows (lockup expirations)
+- Share lockup expirations (A-share: IPO lockup, private placement lockup)
+- Share buyback/cancellation announcements
 
 **Industry Events**
 - Major conferences (dates, which companies presenting)
 - Trade shows and expos
 - Regulatory comment periods or rulings
-- Industry data releases (monthly sales, traffic, etc.)
+- Industry data releases (monthly sales, PMI, etc.)
 
-**Macro Events**
+**Macro Events (China-specific)**
+- PBOC MLF/LPR decisions
+- State Council / Politburo meetings on economy
+- NBS data releases (CPI, PPI, industrial profit, PMI)
+- NDRC policy announcements
+- CSRC regulatory changes (IPO pace, margin rules, short-selling rules)
+
+**Macro Events (Global)**
 - Fed meetings (FOMC dates)
 - Jobs report, CPI, GDP releases
 - Central bank decisions (ECB, BOJ, etc.)
-- Geopolitical events with market impact
 
 ### Step 3: Calendar View
 
@@ -56,7 +68,7 @@ For each company, identify upcoming events:
 Each week, generate a forward-looking summary:
 
 **This Week's Key Events:**
-1. [Day]: [Company] Q[X] earnings — consensus [$X EPS], our estimate [$X], key focus: [metric]
+1. [Day]: [Company] Q[X] earnings — consensus [X billion rev], our estimate [X], key focus: [metric]
 2. [Day]: [Event] — why it matters for [stocks]
 3. [Day]: [Macro release] — expectations and positioning
 
@@ -70,15 +82,15 @@ Each week, generate a forward-looking summary:
 
 ### Step 5: Output
 
-- Excel workbook with calendar view and sortable columns
-- Weekly preview email/note (markdown)
-- Optional: integration with Google Calendar
+- Markdown calendar saved to `{workspace_dir}/_shared/catalyst-calendar.md`
+- Weekly preview note (markdown)
+- Update the calendar incrementally (append new, mark past events as resolved)
 
 ## Important Notes
 
-- Earnings dates shift — verify against company IR pages and Bloomberg/FactSet closer to the date
-- Pre-announce risk: track companies with a history of pre-announcing (positive or negative)
-- Conference attendance lists are valuable — which companies are presenting and which are conspicuously absent?
-- Some catalysts are recurring (monthly industry data) — build a template and auto-populate
-- Color-code by impact level: Red = high impact, Yellow = moderate, Green = routine
+- A-share earnings dates: check cninfo.com.cn for official disclosure schedule
+- Pre-announce risk (A-share: performance forecast / 业绩预告 is mandatory for certain conditions)
+- Conference attendance: which companies are at sell-side conferences matters for sentiment
+- Some catalysts are recurring (monthly PMI, quarterly earnings) — build a template
 - Archive past catalysts with the actual outcome — builds pattern recognition over time
+- Color-code by impact level: Red = high impact, Yellow = moderate, Green = routine
