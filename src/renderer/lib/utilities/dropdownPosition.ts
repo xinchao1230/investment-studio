@@ -3,6 +3,8 @@ export interface AnchoredDropdownPosition {
   left: number;
   triggerTop: number;
   triggerBottom?: number;
+  /** Trigger's left edge. Optional — only populated for left-aligned menus. */
+  triggerLeft?: number;
   triggerRight: number;
 }
 
@@ -80,6 +82,7 @@ export function getAnchoredDropdownPosition(
     left,
     triggerTop: rect.top,
     triggerBottom: rect.bottom,
+    triggerLeft: rect.left,
     triggerRight: rect.right,
   };
 }
@@ -128,6 +131,54 @@ export function adjustAnchoredDropdownToViewport(
 
   const nextLeft = Math.min(
     Math.max(padding, position.triggerRight - rect.width),
+    Math.max(padding, windowWidth - rect.width - padding),
+  );
+  element.style.left = `${nextLeft}px`;
+
+  const fitsBelow = triggerBottom + offset + rect.height <= windowHeight - padding;
+  const fitsAbove = position.triggerTop - offset - rect.height >= padding;
+  const isCurrentlyAbove = position.top < position.triggerTop;
+
+  let nextTop = position.top;
+
+  if (isCurrentlyAbove && fitsBelow) {
+    nextTop = triggerBottom + offset;
+  } else if (!isCurrentlyAbove && !fitsBelow && fitsAbove) {
+    nextTop = position.triggerTop - rect.height - offset;
+  } else if (rect.bottom > windowHeight - padding) {
+    nextTop = Math.max(padding, windowHeight - rect.height - padding);
+  }
+
+  if (rect.top < padding) {
+    nextTop = padding;
+  }
+
+  element.style.top = `${Math.max(padding, nextTop)}px`;
+}
+
+/**
+ * Left-aligned variant of adjustAnchoredDropdownToViewport: the dropdown's LEFT
+ * edge lines up with the trigger's left edge (expanding rightward), instead of
+ * the default right-edge alignment. Used by the attach menu so its popup never
+ * extends left past the + button. Still clamps to the viewport's right edge so a
+ * wide menu near the window edge stays on-screen. Vertical logic is identical.
+ */
+export function adjustAnchoredDropdownToViewportLeftAligned(
+  element: HTMLElement,
+  position: AnchoredDropdownPosition,
+  padding = 10,
+  offset = 4,
+): void {
+  const rect = element.getBoundingClientRect();
+  const windowWidth = window.innerWidth;
+  const windowHeight = window.innerHeight;
+  const triggerBottom = position.triggerBottom ?? position.triggerTop;
+
+  // Left-align to the trigger, but never overflow the viewport's right edge.
+  // Fall back to the precomputed `left` if triggerLeft wasn't provided.
+  const triggerLeft = position.triggerLeft ?? position.left;
+  const nextLeft = Math.min(
+    Math.max(padding, triggerLeft),
     Math.max(padding, windowWidth - rect.width - padding),
   );
   element.style.left = `${nextLeft}px`;

@@ -1,7 +1,7 @@
 import React, { useLayoutEffect, useRef, createElement } from 'react';
 import { useScreenshotEnabled } from '../../lib/screenshot/useScreenshotEnabled';
 import { useScreenshotHotkey } from '../../lib/screenshot/useScreenshotHotkey';
-import { adjustAnchoredDropdownToViewport, ANCHORED_DROPDOWN_SIZE_PRESETS, AnchoredDropdownPosition, getAnchoredDropdownPosition } from '../../lib/utilities/dropdownPosition';
+import { adjustAnchoredDropdownToViewportLeftAligned, ANCHORED_DROPDOWN_SIZE_PRESETS, AnchoredDropdownPosition, getAnchoredDropdownPosition } from '../../lib/utilities/dropdownPosition';
 import { atom } from '@/atom';
 import { useClickOut } from '../ui/use-click-out';
 
@@ -43,7 +43,9 @@ const AttachMenuDropdown: React.FC<InnerProps> = ({ position }) => {
 
   useLayoutEffect(() => {
     if (attachMenuRef.current) {
-      adjustAnchoredDropdownToViewport(attachMenuRef.current, position);
+      // Left-align the popup to the + button (its left edge never extends past
+      // the trigger's left edge), unlike the default right-edge alignment.
+      adjustAnchoredDropdownToViewportLeftAligned(attachMenuRef.current, position);
     }
   }, [position]);
 
@@ -67,7 +69,10 @@ const AttachMenuDropdown: React.FC<InnerProps> = ({ position }) => {
       className="dropdown-menu attach-dropdown-menu"
       style={{
         top: `${position.top}px`,
-        left: `${position.left}px`,
+        // Initial paint uses the trigger's left edge so the popup is left-aligned
+        // from frame one (getAnchoredDropdownPosition computes a right-aligned
+        // `left`); the layout effect above then clamps it to the viewport.
+        left: `${position.triggerLeft ?? position.left}px`,
       }}
       role="menu"
     >

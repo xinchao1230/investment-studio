@@ -131,6 +131,15 @@
   background: rgba(0, 0, 0, 0.05);
 }
 
+/* Attach menu (the + button popup): tint hover instead of the neutral grey.
+   Scoped to .attach-dropdown-menu so only this menu picks up the accent — other
+   shared dropdowns keep their neutral hover. Specificity (0,2,1) beats the two
+   global .dropdown-menu-item:hover rules without !important. */
+.attach-dropdown-menu .dropdown-menu-item:hover {
+  background: var(--si-accent-soft);
+  color: var(--si-gold);
+}
+
 .dropdown-menu-item:active {
   background: rgba(0, 0, 0, 0.08);
 }
