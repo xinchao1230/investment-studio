@@ -25,6 +25,30 @@
   --rw-accent-strong: var(--si-accent-strong);  /* fg: text / border / icon */
   --rw-accent-strong-bg: var(--si-accent-soft); /* bg: filled chip surface */
 
+  /* Neutral desktop-app document tabs (NO accent / tint).
+     The strip is a light grey toolbar; the active tab is a white card that
+     floats out of it with a thin grey border and rounded top corners, its
+     bottom edge fused into the white content surface below. Inactive tabs are
+     muted text only. Intentionally token-less of --si-gold so re-tinting the
+     app never colors these tabs — this UI must stay neutral grey by spec. */
+  --tabs-toolbar-bg: #ffffff;
+  /* Active tab + content share ONE color so the tab's bottom edge dissolves
+     into the document surface below. That surface is the document header /
+     body, which render on --rw-bg (paper), so we fuse to --rw-bg rather than
+     literal white — otherwise a faint seam shows where #fff meets #fdfdfc.
+     The toolbar is pure white; the active card is paper — the 1px grey border
+     does the separation, exactly like a native desktop tab strip. */
+  --tabs-content-bg: var(--rw-bg);
+  --tabs-active-bg: var(--rw-bg);
+  --tabs-border: #d8d8d8;
+  --tabs-divider: #d0d0d0;
+  --tabs-active-fg: #202124;
+  --tabs-inactive-fg: #5f6368;
+  --tabs-hover-bg: rgba(0, 0, 0, 0.045);
+  --tabs-close-hover-bg: rgba(0, 0, 0, 0.08);
+  --tabs-focus-outline: rgba(0, 0, 0, 0.28);
+  --tabs-radius: 11px;
+
   /* Welcome-card surfaces. */
   --rw-bg-card: var(--si-card);
   --rw-bg-card-hover: #f5f4f2;
@@ -43,6 +67,25 @@
   color: var(--rw-text);
   font-size: 13px;
   line-height: 1.55;
+}
+
+/* Dark surfaces for the neutral document tabs. The research workspace has no
+   in-app dark toggle today, so we key off the OS scheme; if a [data-theme]
+   dark mode is added later these same tokens can be overridden there. Values
+   are neutral grey per spec — no accent/tint. */
+@media (prefers-color-scheme: dark) {
+  [data-theme="research"] {
+    --tabs-toolbar-bg: #1f1f1f;
+    --tabs-content-bg: #242424;
+    --tabs-border: rgba(255, 255, 255, 0.14);
+    --tabs-divider: rgba(255, 255, 255, 0.16);
+    --tabs-active-bg: #2a2a2a;
+    --tabs-active-fg: rgba(255, 255, 255, 0.92);
+    --tabs-inactive-fg: rgba(255, 255, 255, 0.62);
+    --tabs-hover-bg: rgba(255, 255, 255, 0.06);
+    --tabs-close-hover-bg: rgba(255, 255, 255, 0.10);
+    --tabs-focus-outline: rgba(255, 255, 255, 0.35);
+  }
 }
 
 [data-theme="research"] .rw-pane-left {
@@ -1188,49 +1231,157 @@
 }
 
 /* ===========================================================
-   Pill tabs — active tab is a filled terracotta rounded chip.
+   Neutral desktop-app document tabs.
+   - Toolbar: white, with a 1px bottom divider drawn INSIDE the strip
+     (the strip has overflow-x:auto, which clips overflow-y — so nothing
+     can paint outside it; the divider and fusion must live inside).
+   - Inactive tabs: muted text only, separated by a faint vertical hairline.
+   - Active tab: a paper-colored card with a crisp grey border on its top +
+     sides, full strip height so its opaque bottom edge covers the strip's
+     bottom divider locally and flows into the document surface below.
+   No accent / tint; regular-weight text (color marks the active tab).
    =========================================================== */
+
+/* Bottom divider, full width, sitting just inside the strip's bottom edge
+   and BEHIND the tabs (z-index 2 < active tab's 3). The active card covers
+   the segment under it, breaking the line so the tab fuses with content. */
+[data-theme="research"] .rw-tab-strip::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 1px;
+  background: var(--tabs-border);
+  z-index: 2;
+  pointer-events: none;
+}
+
 [data-theme="research"] .rw-tab {
+  position: relative;
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 5px 12px;
-  font-size: 12.5px;
-  color: var(--si-muted);
-  border-radius: 7px;
-  cursor: pointer;
-  border: none;
+  gap: 8px;
+  align-self: stretch;
+  height: 100%;
+  padding: 0 15px;
+  box-sizing: border-box;
+  font-size: 13px;
+  color: var(--tabs-inactive-fg);
+  border: 1px solid transparent;
+  border-bottom: 0;
+  border-radius: var(--tabs-radius) var(--tabs-radius) 0 0;
   background: transparent;
+  cursor: pointer;
+  z-index: 1;
+  transition: background-color 120ms ease, color 120ms ease,
+    border-color 120ms ease;
 }
-[data-theme="research"] .rw-tab:hover {
-  background: #f5f5f4;
-  color: #555;
+
+/* Vertical hairline between two adjacent INACTIVE tabs. Suppressed for the
+   first tab, the active tab, and the tab right after the active card. */
+[data-theme="research"] .rw-tab::before {
+  content: "";
+  position: absolute;
+  left: -3px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 1px;
+  height: 20px;
+  background: var(--tabs-divider);
+  pointer-events: none;
 }
+[data-theme="research"] .rw-tab:first-child::before,
+[data-theme="research"] .rw-tab.is-active::before,
+[data-theme="research"] .rw-tab.is-active + .rw-tab::before {
+  display: none;
+}
+
+/* Inactive hover: text darkens, plus a fully-rounded background rectangle
+   that floats INSIDE the tab — inset from top/bottom so it never touches the
+   strip's bottom edge (the element is full-height with top-only corners, so
+   backgrounding it directly would merge with the bottom). Painted on ::after
+   behind the label/close. */
+[data-theme="research"] .rw-tab:not(.is-active):hover {
+  color: var(--tabs-active-fg);
+}
+[data-theme="research"] .rw-tab:not(.is-active):hover::after {
+  content: "";
+  position: absolute;
+  inset: 2px;
+  border-radius: 6px;
+  background: var(--tabs-hover-bg);
+  z-index: -1;
+  pointer-events: none;
+}
+[data-theme="research"] .rw-tab:focus-visible {
+  outline: 2px solid var(--tabs-focus-outline);
+  outline-offset: -2px;
+}
+
+/* Active tab: paper card, crisp border on top + sides only. Full strip height
+   means its opaque bottom edge overlaps the strip's bottom divider (z-index 3
+   over 2), erasing that 1px segment so the card reads as continuous with the
+   document surface below — both are --rw-bg.
+   The arc border is tinted with the brand accent (--si-gold) so the
+   selected tab follows the app's tint, while the LABEL stays neutral
+   (--tabs-active-fg) per spec — only the frame is colored, not the text. */
 [data-theme="research"] .rw-tab.is-active {
-  background: var(--rw-accent-strong-bg);
-  color: var(--rw-accent-strong);
-  font-weight: 600;
+  background: var(--tabs-active-bg);
+  color: var(--tabs-active-fg);
+  font-weight: 400;
+  border-color: var(--si-gold);
+  z-index: 3;
 }
+
 [data-theme="research"] .rw-tab-dirty {
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: var(--si-gold);
+  background: currentColor;
+  opacity: 0.55;
+  flex-shrink: 0;
+}
+
+/* Close affordance — neutral round hover, no tint.
+   Visibility/opacity is driven by Tailwind utilities in the JSX
+   (inactive tabs reveal on group-hover); here we only own the hit
+   area, shape, and the neutral hover background. */
+[data-theme="research"] .rw-tab-close {
+  width: 20px;
+  height: 20px;
+  /* The 12px X glyph is centered in this 20px box, leaving ~4px slack on the
+     right. Pull the box 4px into the tab's right padding so the glyph lands
+     the same 15px from the tab edge as the label does on the left. */
+  margin-right: -4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  color: inherit;
+  border-radius: 999px;
+  cursor: pointer;
+}
+[data-theme="research"] .rw-tab-close:hover {
+  background: var(--tabs-close-hover-bg);
+}
+[data-theme="research"] .rw-tab-close:focus-visible {
+  outline: 2px solid var(--tabs-focus-outline);
+  outline-offset: -2px;
 }
 
 /* ===========================================================
-   Segmented toolbar — icons grouped into bordered rounded pods.
+   Document toolbar — Edge/Xcode-style. Borderless icon buttons
+   (no pod outline, no segment dividers); left/right tab-nav arrows
+   that dim when disabled; centered document title.
    =========================================================== */
 [data-theme="research"] .rw-toolgroup {
   display: inline-flex;
   align-items: center;
-  border: 1px solid var(--si-border-strong);
-  border-radius: 8px;
-  background: var(--si-card);
-  overflow: hidden;
 }
 [data-theme="research"] .rw-toolgroup + .rw-toolgroup {
-  margin-left: 8px;
+  margin-left: 4px;
 }
 [data-theme="research"] .rw-toolbtn {
   width: 30px;
@@ -1239,12 +1390,10 @@
   align-items: center;
   justify-content: center;
   border: none;
+  border-radius: 7px;
   background: transparent;
   color: #7a7a78;
   cursor: pointer;
-}
-[data-theme="research"] .rw-toolbtn + .rw-toolbtn {
-  border-left: 1px solid #f0efed;
 }
 [data-theme="research"] .rw-toolbtn:hover {
   background: #f5f4f2;
@@ -1253,5 +1402,27 @@
 [data-theme="research"] .rw-toolbtn.is-active {
   background: var(--rw-accent-strong-bg);
   color: var(--rw-accent-strong);
-  border-left-color: transparent;
+}
+
+/* Left-side tab navigation arrows. Borderless, dim-on-disable. */
+[data-theme="research"] .rw-navbtn {
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  color: #6b6b69;
+  cursor: pointer;
+  transition: background-color 120ms ease, color 120ms ease, opacity 120ms ease;
+}
+[data-theme="research"] .rw-navbtn:hover:not(:disabled) {
+  background: #f5f4f2;
+  color: #2a2a28;
+}
+[data-theme="research"] .rw-navbtn:disabled {
+  opacity: 0.3;
+  cursor: default;
 }

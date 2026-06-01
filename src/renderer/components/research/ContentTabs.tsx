@@ -15,6 +15,8 @@ import {
   Minimize,
   ExternalLink,
   LogOut,
+  ChevronLeft,
+  ChevronRight,
   Code as CodeIcon,
   File as FileIcon,
 } from 'lucide-react';
@@ -311,16 +313,6 @@ function makeStatusCell(market: MarketConvention): React.FC<any> {
   return StatusCell;
 }
 
-function formatTime(mtime?: number): string {
-  if (!mtime) return '—';
-  return new Intl.DateTimeFormat('en-US', {
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-  }).format(new Date(mtime));
-}
-
 /** HH:MM:SS for the "Saved 12:04:52" toolbar indicator. */
 function formatSavedAt(ts: number): string {
   return new Intl.DateTimeFormat('en-US', {
@@ -403,6 +395,16 @@ export const ContentTabs: React.FC<ContentTabsProps> = ({
   leftCollapsed = false,
 }) => {
   const activeTab = tabs.find((t) => t.id === activeTabId);
+  const activeIndex = tabs.findIndex((t) => t.id === activeTabId);
+  const canGoPrev = activeIndex > 0;
+  const canGoNext = activeIndex >= 0 && activeIndex < tabs.length - 1;
+  const goPrevTab = useCallback(() => {
+    if (activeIndex > 0) onTabSelect(tabs[activeIndex - 1].id);
+  }, [activeIndex, tabs, onTabSelect]);
+  const goNextTab = useCallback(() => {
+    if (activeIndex >= 0 && activeIndex < tabs.length - 1)
+      onTabSelect(tabs[activeIndex + 1].id);
+  }, [activeIndex, tabs, onTabSelect]);
   // macOS traffic-light clearance for the tab strip. The frameless window
   // floats the close/min/max buttons over the top-left of the renderer. When
   // the left sidebar is collapsed (32px strip), they hang over this tab strip,
@@ -786,10 +788,6 @@ export const ContentTabs: React.FC<ContentTabsProps> = ({
     [onTabClose],
   );
 
-  const basename = activeTab
-    ? activeTab.filePath.split(/[\\/]/).pop() ?? activeTab.label
-    : '';
-
   // Render edit panes for ALL currently-editing tabs (not just the
   // active one) so switching tabs doesn't drop unsaved buffers.
   // Inactive panes are hidden via `display:none` rather than
@@ -853,8 +851,11 @@ export const ContentTabs: React.FC<ContentTabsProps> = ({
        * making tabs appear non-switchable and the X close button inert.
        */}
       <div
-        className="relative z-50 isolate flex h-10 items-center gap-1 pr-2 overflow-x-auto bg-[var(--rw-bg-soft)] pointer-events-auto"
-        style={{ paddingLeft: tabStripPaddingLeft }}
+        className="rw-tab-strip relative z-50 isolate flex h-11 items-stretch gap-1 pr-2 pt-2.5 overflow-x-auto pointer-events-auto"
+        style={{
+          paddingLeft: tabStripPaddingLeft,
+          background: 'var(--tabs-toolbar-bg)',
+        }}
       >
         {tabs.map((tab) => {
           const isActive = tab.id === activeTabId;
@@ -887,8 +888,10 @@ export const ContentTabs: React.FC<ContentTabsProps> = ({
                   e.stopPropagation();
                   handleTabCloseGuarded(tab.id);
                 }}
-                className={`p-0.5 rounded hover:bg-black/10 ${
-                  isActive ? 'opacity-60' : 'opacity-0 group-hover:opacity-100'
+                className={`rw-tab-close transition-opacity hover:!opacity-100 ${
+                  isActive
+                    ? 'opacity-70'
+                    : 'opacity-0 group-hover:opacity-100'
                 }`}
               >
                 <X size={12} />
@@ -896,26 +899,41 @@ export const ContentTabs: React.FC<ContentTabsProps> = ({
             </div>
           );
         })}
-        <button disabled className="px-2 text-[var(--rw-text-3)] cursor-not-allowed">
-          +
-        </button>
       </div>
 
-      {/* Document header */}
+      {/* Document header — Edge/Xcode-style toolbar: prev/next tab nav on the
+          left (disabled at the ends), the active tab's title centered, and
+          borderless action icons on the right. */}
       {activeTab && (
-        <div className="flex items-center justify-between h-8 px-4 text-[12.5px] text-[var(--rw-text-2)] bg-[var(--rw-bg)]">
-          <span className="truncate">
-            {activeTab.pathPrefix && (
-              <>
-                <span className="text-[var(--rw-text)] font-medium">{activeTab.pathPrefix}</span>
-                <span className="mx-1.5 text-[var(--rw-text-3)]">·</span>
-              </>
-            )}
-            <span className="text-[var(--rw-text)]">{basename}</span>
-            <span className="mx-1.5 text-[var(--rw-text-3)]">·</span>
-            Last updated {formatTime(activeTab.mtime)}
-          </span>
-          <div className="flex items-center">
+        <div className="rw-doc-toolbar relative flex items-center h-10 px-3 text-[12.5px] text-[var(--rw-text-2)] bg-[var(--rw-bg)]">
+          {/* Left: tab navigation arrows */}
+          <div className="flex items-center gap-0.5">
+            <button
+              className="rw-navbtn"
+              onClick={goPrevTab}
+              disabled={!canGoPrev}
+              title="Previous tab"
+            >
+              <ChevronLeft size={18} />
+            </button>
+            <button
+              className="rw-navbtn"
+              onClick={goNextTab}
+              disabled={!canGoNext}
+              title="Next tab"
+            >
+              <ChevronRight size={18} />
+            </button>
+          </div>
+
+          {/* Center: active document title, absolutely centered in the row so
+              it stays put regardless of the left/right cluster widths. */}
+          <div className="absolute left-1/2 -translate-x-1/2 max-w-[55%] truncate text-[13px] font-medium text-[var(--rw-text)] pointer-events-none">
+            {activeTab.label}
+          </div>
+
+          {/* Right: borderless action icons */}
+          <div className="flex items-center ml-auto">
             {/* Group 1: document actions (always has >=1 button: search) */}
             <div className="rw-toolgroup">
               <button
