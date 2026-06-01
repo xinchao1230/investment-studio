@@ -1463,7 +1463,7 @@ export const ResearchPage: React.FC = () => {
   return (
     <LayoutProvider>
     <PasteToWorkspaceProvider>
-    <div ref={setRootRef} data-theme="research" data-os={researchOs} className="flex h-full w-full">
+    <div ref={setRootRef} data-theme="research" data-os={researchOs} data-active-mode={activeMode} className="flex h-full w-full">
       {leftCollapsed ? (
         <div
           className="rw-pane-left rw-pane-left--collapsed"
