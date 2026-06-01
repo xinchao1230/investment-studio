@@ -257,6 +257,12 @@ export class AgentChatPromptService {
         sections.push(`- Your working directory is \`${primaryCwd}\`. Pass the correct 'cwd' parameter when using execute_command.`);
         sections.push('- To run commands outside this directory, prepend `cd {target_dir} &&` before the command.');
         sections.push('\n---');
+
+        // === FSI Skill Data Source Fallback (investment-studio brand) ===
+        if (process.env.BRAND_NAME === 'investment-studio') {
+          sections.push(`\n**Data Source Fallback:** When a skill requests financial data and no premium MCP server (FactSet, S&P Kensho, Daloopa, Morningstar) is connected, use the research-mcp tools available to this agent: tushare_collect for A-share data, yfinance_collect for US/HK stock data. These serve as the primary fallback data source.\n`);
+        }
+
         workspaceInfo = sections.join('\n');
 
         if (hasKnowledgeBase) {
