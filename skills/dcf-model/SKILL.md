@@ -1,6 +1,6 @@
 ---
 name: dcf-model
-description: Real DCF (Discounted Cash Flow) model creation for equity valuation. Retrieves financial data from SEC filings and analyst reports, builds comprehensive cash flow projections with proper WACC calculations, performs sensitivity analysis, and outputs professional Excel models with executive summaries. Use when users need to value a company using DCF methodology, request intrinsic value analysis, or ask for detailed financial modeling with growth projections and terminal value calculations.
+description: "DCF (Discounted Cash Flow) model creation for equity valuation. Builds cash flow projections with WACC, sensitivity analysis, and outputs Excel models. Triggers on: DCF, discounted cash flow, intrinsic value, DCF估值, 现金流折现, 内在价值"
 ---
 
 # DCF Model Builder
@@ -11,7 +11,19 @@ This skill creates institutional-quality DCF models for equity valuation followi
 
 ## Tools
 
-- Default to using all of the information provided by the user and MCP servers available for data sourcing.
+- Default to using all of the information provided by the user and available MCP/data tools for data sourcing.
+- Follow `skills/_cache-policy.md` for all research-mcp data fetches.
+
+**Data Source Priority:**
+1. **Institutional MCP servers** (if configured) — FactSet, Daloopa, S&P Kensho, Morningstar. Use exclusively when available.
+2. **research-mcp tools** — `tushare_collect` (A-share), `yfinance_collect` (US/HK). Cache root: `{target_dir}/data-cache/{source}/`.
+3. **Web search** — Fallback for current prices, beta, risk-free rate when MCP tools unavailable.
+4. **User-provided data** — Historical financials from their research.
+
+**Market routing (for research-mcp):**
+- A-share (6-digit codes, .SH/.SZ/.BJ): `tushare_collect` (income, balancesheet, cashflow, daily)
+- HK (.HK) / US (alpha tickers): `yfinance_collect`
+- Force refresh: "最新数据 / 刷新 / 重新拉取 / force refresh"
 
 ## Critical Constraints - Read These First
 
@@ -92,12 +104,13 @@ This applies to every merged section header in the DCF (market data, scenario bl
 
 ### Step 1: Data Retrieval and Validation
 
-Fetch data from MCP servers, user provided data, and the web.
+Fetch data using available data sources per the priority above.
 
 **Data Sources Priority:**
-1. **MCP Servers** (if configured) - Structured financial data from providers like Daloopa
-2. **User-Provided Data** - Historical financials from their research
-3. **Web Search/Fetch** - Current prices, beta, debt and cash when needed
+1. **Institutional MCP servers** (if configured) — FactSet, Daloopa, etc. for structured financial data
+2. **research-mcp tools** — `tushare_collect` for A-share, `yfinance_collect` for US/HK. Always check cache first per `skills/_cache-policy.md`.
+3. **User-Provided Data** — Historical financials from their research
+4. **Web Search/Fetch** — Current prices, beta, debt and cash when needed
 
 **Validation Checklist:**
 - Verify net debt vs net cash (critical for valuation)
@@ -452,8 +465,8 @@ Before writing formulas, confirm scenario block row locations and set up consoli
 ```csv
 Item,Source Comment
 Stock price,Source: Market data script 2025-10-12 Close price
-Shares outstanding,Source: 10-K FY2024 Page 45 Note 12
-Historical revenue,Source: 10-K FY2024 Page 32 Consolidated Statements
+Shares outstanding,Source: Annual Report FY2024, Note 12
+Historical revenue,Source: Annual Report FY2024, Consolidated Income Statement
 Beta,Source: Market data script 2025-10-12 5-year monthly beta
 Consensus estimates,Source: Management guidance Q3 2024 earnings call
 ```
@@ -1195,14 +1208,14 @@ This approach centralizes scenario logic, making the model easier to audit and m
 ### At Start of DCF Build
 
 1. **Gather market data**:
-   - Check for available MCP servers for current market data
-   - Use web search/fetch for stock prices, beta, and other market metrics
+   - Use `tushare_collect` (daily endpoint) or `yfinance_collect` (history) for stock prices, beta
+   - Use web search for risk-free rate, ERP if needed
    - Request from user if specific data is needed
 
 2. **Gather historical financials**:
-   - Check for available MCP servers (Daloopa, etc.)
-   - Request from user if not available via MCP
-   - Manual extraction from 10-Ks if necessary
+   - Use `tushare_collect` (income/balancesheet/cashflow) for A-share
+   - Use `yfinance_collect` for US/HK
+   - Follow cache policy; manual extraction from annual reports if necessary
 
 3. **Begin model construction** using the DCF methodology detailed in this skill
 
@@ -1239,10 +1252,12 @@ This approach centralizes scenario logic, making the model easier to audit and m
 
 ### Available Data Sources
 
-- **MCP servers**: If configured (Daloopa for historical financials)
-- **Web search/fetch**: For current stock prices, beta, and market data
+- **Institutional MCP servers**: FactSet, Daloopa, S&P Kensho, Morningstar (if configured)
+- **tushare_collect**: A-share historical financials (income, balancesheet, cashflow, daily)
+- **yfinance_collect**: US/HK historical financials and price data
+- **Web search/fetch**: For current risk-free rate, beta, ERP, and supplementary data
 - **User-provided data**: Historical financials, consensus estimates
-- **Manual extraction**: SEC EDGAR filings as fallback
+- **Manual extraction**: Company annual reports (cninfo.com.cn / SEC EDGAR) as fallback
 
 ## Final Output Checklist
 

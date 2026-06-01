@@ -1,6 +1,6 @@
 ---
 name: 3-statement-model
-description: Complete, populate and fill out 3-statement financial model templates (Income Statement, Balance Sheet, Cash Flow Statement) . Use when asked to fill out model templates, complete existing model frameworks, populate financial models with data, complete a partially filled IS/BS/CF framework, or link integrated financial statements within an existing template structure. Triggers include requests to fill in, complete, or populate a 3-statement model template
+description: "Complete, populate and fill out 3-statement financial model templates (Income Statement, Balance Sheet, Cash Flow Statement). Triggers on: 3-statement model, fill model, populate model, 三大报表, 财务模型, 利润表/资产负债表/现金流量表建模"
 ---
 
 # 3-Statement Financial Model Template Completion
@@ -166,9 +166,19 @@ Use a scenario toggle (dropdown) in the Assumptions tab with CHOOSE or INDEX/MAT
 
 **Scenario Audit Checks**: Toggle switches all statements, BS balances in all scenarios, Cash ties out, Hierarchy holds (Upside > Base > Downside for NI, EBITDA, FCF, margins).
 
-## SEC Filings Data Extraction
+## Data Extraction from Filings
 
-If the template specifically requires pulling data from SEC filings (10-K, 10-Q), see [references/sec-filings.md](references/sec-filings.md) for detailed extraction guidance. This reference is only needed when populating templates with public company data from regulatory filings.
+If the template requires pulling data from company filings, follow this priority:
+1. **Institutional MCP servers** (if configured) — FactSet, Daloopa, etc. Use exclusively when available.
+2. **research-mcp tools:**
+   - A-share: `tushare_collect` (income/balancesheet/cashflow endpoints). Follow `skills/_cache-policy.md`.
+   - US/HK: `yfinance_collect`
+3. **Manual extraction:**
+   - A-share: Annual reports on cninfo.com.cn
+   - US: SEC filings (10-K, 10-Q). See [references/sec-filings.md](references/sec-filings.md).
+   - HK: HKExnews annual reports
+
+This is only needed when populating templates with public company data.
 
 ## Completing Model Templates
 

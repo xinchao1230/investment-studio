@@ -1,6 +1,6 @@
 ---
 name: competitive-analysis
-description: Framework for building competitive landscape decks — market positioning, competitor deep-dives, comparative analysis, strategic synthesis. Use when the user asks for a competitive landscape, competitor analysis, peer comparison, market positioning assessment, strategic review, or investment memo deck. Also triggers on "who are the competitors to X", "benchmark X against peers", "build a market map", or any request to systematically evaluate competitive dynamics across an industry.
+description: "Framework for building competitive landscape decks — market positioning, competitor deep-dives, comparative analysis. Triggers on: competitive landscape, competitor analysis, peer comparison, market positioning, 竞争格局, 竞品分析, 对标分析, 行业竞争"
 ---
 
 # Competitive Landscape Mapping
