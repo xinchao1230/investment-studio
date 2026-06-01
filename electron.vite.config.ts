@@ -38,6 +38,16 @@ export default defineConfig(({ command, mode }) => {
             // This ensures __dirname in any chunk === dist-vite/main/,
             // so path.join(__dirname, 'preload.*.js') resolves correctly.
             chunkFileNames: '[name]-[hash].js',
+            // Inline all dynamic imports into main.js. The Electron main
+            // process is loaded synchronously and gets no benefit from
+            // code-splitting, but cross-chunk module-init ordering under
+            // Rolldown produces hard-to-debug runtime crashes when modules
+            // form even benign cycles (e.g. featureFlagManager calling
+            // createLogger() at module top — featureFlagManager lands in
+            // a `lazy-*` chunk and runs before main.js exports the
+            // unifiedLogger init function, throwing
+            // "init_unifiedLogger is not a function" at boot).
+            inlineDynamicImports: true,
           },
         },
         sourcemap: isDev ? true : false,
