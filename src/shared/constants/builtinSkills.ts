@@ -64,10 +64,11 @@ export const BUILTIN_SKILL_NAMES: string[] = [
 export const BUILTIN_SKILL_CHANGELOG: Record<number, string[]> = {
   1: ['docx', 'frontend-design', 'pptx', 'skill-creator'],
   2: ['dcf-model', 'comps-analysis', '3-statement-model', 'competitive-analysis', 'initiating-coverage', 'idea-generation', 'sector-overview'],
+  3: ['earnings-preview', 'thesis-tracker', 'catalyst-calendar', 'model-update'],
 };
 
 /** Current migration version — must equal the highest key in BUILTIN_SKILL_CHANGELOG. */
-export const BUILTIN_DEFAULTS_VERSION = 2;
+export const BUILTIN_DEFAULTS_VERSION = 3;
 
 /**
  * Check if a skill is a built-in skill
@@ -99,6 +100,10 @@ const INVESTMENT_STUDIO_SKILL_NAMES: string[] = [
   'initiating-coverage',
   'idea-generation',
   'sector-overview',
+  'earnings-preview',
+  'thesis-tracker',
+  'catalyst-calendar',
+  'model-update',
 ];
 
 /**
