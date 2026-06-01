@@ -311,10 +311,11 @@ export class MCPClientCacheManager {
 
     // Handle built-in servers (may not be in config but still need to be displayed)
     const BUILTIN_SERVER_NAME = 'builtin-tools'
+    const BRAND_BUILTIN_SERVERS = new Set([BUILTIN_SERVER_NAME, 'research-mcp'])
     const existingServerNames = new Set(this.cache.servers.map(s => s.name))
 
     serverStates.forEach((state: any) => {
-      if (state.serverName === BUILTIN_SERVER_NAME && !existingServerNames.has(BUILTIN_SERVER_NAME)) {
+      if (BRAND_BUILTIN_SERVERS.has(state.serverName) && !existingServerNames.has(state.serverName)) {
         const runtimeState = runtimeStatesMap.get(state.serverName)
         if (runtimeState) {
           const builtinServer: MCPServerExtended = {
@@ -419,6 +420,10 @@ export class MCPClientCacheManager {
     const builtinServer = this.cache.servers.find(s => s.name === BUILTIN_SERVER_NAME)
     if (builtinServer && !newServers.some(s => s.name === BUILTIN_SERVER_NAME)) {
       newServers.push(builtinServer)
+    }
+    const researchMcpServer = this.cache.servers.find(s => s.name === 'research-mcp')
+    if (researchMcpServer && !newServers.some(s => s.name === 'research-mcp')) {
+      newServers.push(researchMcpServer)
     }
 
     // Check if there are any changes

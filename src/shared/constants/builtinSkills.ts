@@ -63,10 +63,11 @@ export const BUILTIN_SKILL_NAMES: string[] = [
 /** Incremental changelog for existing-agent migration. See top-of-file guide before editing. */
 export const BUILTIN_SKILL_CHANGELOG: Record<number, string[]> = {
   1: ['docx', 'frontend-design', 'pptx', 'skill-creator'],
+  2: ['dcf-model', 'comps-analysis', '3-statement-model', 'competitive-analysis', 'initiating-coverage', 'idea-generation', 'sector-overview'],
 };
 
 /** Current migration version — must equal the highest key in BUILTIN_SKILL_CHANGELOG. */
-export const BUILTIN_DEFAULTS_VERSION = 1;
+export const BUILTIN_DEFAULTS_VERSION = 2;
 
 /**
  * Check if a skill is a built-in skill
@@ -89,6 +90,15 @@ const INVESTMENT_STUDIO_SKILL_NAMES: string[] = [
   'industry-comparison',
   'marginal-tracking',
   'stock-screening',
+  // FSI imports — valuation modeling
+  'dcf-model',
+  'comps-analysis',
+  '3-statement-model',
+  'competitive-analysis',
+  // FSI imports — research workflows
+  'initiating-coverage',
+  'idea-generation',
+  'sector-overview',
 ];
 
 /**
