@@ -1,7 +1,7 @@
 ---
 name: comps-analysis
 description: |
-  Build institutional-grade comparable company analyses with operating metrics, valuation multiples, and statistical benchmarking in Excel/spreadsheet format.
+  Build institutional-grade comparable company analyses with operating metrics, valuation multiples, and statistical benchmarking in Excel/spreadsheet format. Triggers on: comps, comparable company, peer valuation, 可比公司, 估值对比, 同行比较
 
   **Perfect for:**
   - Public company valuation (M&A, investment analysis)
@@ -25,12 +25,18 @@ description: |
 
 **ALWAYS follow this data source hierarchy:**
 
-1. **FIRST: Check for MCP data sources** - If S&P Kensho MCP, FactSet MCP, or Daloopa MCP are available, use them exclusively for financial and trading information
-2. **DO NOT use web search** if the above MCP data sources are available
-3. **ONLY if MCPs are unavailable:** Then use Bloomberg Terminal, SEC EDGAR filings, or other institutional sources
-4. **NEVER use web search as a primary data source** - it lacks the accuracy, audit trails, and reliability required for institutional-grade analysis
+1. **Institutional MCP servers** (if configured) — FactSet MCP, S&P Kensho MCP, Daloopa MCP, Morningstar MCP. Use exclusively when available for financial and trading data.
+2. **research-mcp tools** — `tushare_collect` (A-share/HK), `yfinance_collect` (US/HK), `peer_collect`. Follow `skills/_cache-policy.md` for caching.
+3. **Web search** — Fallback only. Lacks accuracy and audit trails for institutional-grade analysis.
 
-**Why this matters:** MCP sources provide verified, institutional-grade data with proper citations. Web search results can be outdated, inaccurate, or unreliable for financial analysis.
+**Cache check (for research-mcp):** Before any `*_collect` call, read `{target_dir}/data-cache/{source}/{endpoint}.meta.json`. Within TTL (financials = 7d, daily = 12h) → reuse cached CSV, skip the collect call. On cache miss, call the collect tool with `out_dir = {target_dir}/data-cache/{source}/` and write sibling `meta.json`. Force refresh: "最新数据 / 刷新 / 重新拉取 / force refresh".
+
+**Market routing (when using research-mcp):**
+- A-share (6-digit codes, .SH/.SZ/.BJ suffix): `tushare_collect` + `peer_collect`
+- HK (.HK suffix): `yfinance_collect`
+- US (alpha tickers): `yfinance_collect`
+
+**Why this matters:** Institutional MCP sources provide verified data with proper citations. research-mcp tools provide structured financial data with caching. Web search is unreliable for financial analysis.
 
 ---
 
@@ -269,10 +275,10 @@ Same structure as operating section: Max, 75th, Median, 25th, Min for every metr
 ### Required Components
 
 **Data Sources & Quality:**
-- Where did the data come from? (S&P Kensho MCP, FactSet MCP, Daloopa MCP, Bloomberg, SEC filings)
+- Where did the data come from? (tushare_collect, yfinance_collect, peer_collect, or web search fallback)
 - What period does it cover? (Q4 2024, audited figures)
-- How was it verified? (Cross-checked against 10-K/10-Q)
-- Note: Prioritize MCP data sources (S&P Kensho, FactSet, Daloopa) if available for better accuracy and traceability
+- How was it verified? (Cross-checked against annual/quarterly reports)
+- Note: Prioritize tushare/yfinance MCP data for accuracy and traceability; for A-share use cninfo.com.cn filings as cross-reference
 
 **Key Definitions:**
 - EBITDA calculation method (Gross Profit + D&A, or Operating Income + D&A)
@@ -357,10 +363,10 @@ If you have more than 15 metrics, you're probably including noise. Edit ruthless
 2. **Add cell comments to ALL hard-coded inputs** - Right-click cell → Insert Comment → Document source OR assumption
 
    **For sourced data, cite exactly where it came from:**
-   - Example: "Bloomberg Terminal - MSFT Equity DES, accessed 2024-10-02"
-   - Example: "Q4 2024 10-K filing, page 42, line item 'Total Revenue'"
-   - Example: "FactSet consensus estimate as of 2024-10-02"
-   - **Include hyperlinks when possible**: Right-click cell → Link → paste URL to SEC filing, data source, or report
+   - Example: "tushare_collect income endpoint, fetched 2024-10-02"
+   - Example: "2024 Annual Report (cninfo.com.cn), page 42, line item 'Total Revenue'"
+   - Example: "yfinance_collect income_annual, fetched 2024-10-02"
+   - **Include hyperlinks when possible**: Right-click cell → Link → paste URL to filing, data source, or report
 
    **For assumptions, explain the reasoning:**
    - Example: "Assumed 15% EBITDA margin based on peer median, company does not disclose"
@@ -387,7 +393,7 @@ If you have more than 15 metrics, you're probably including noise. Edit ruthless
 ❌ Using different time periods for numerator and denominator (LTM vs quarterly)
 ❌ Hardcoding numbers into formulas instead of cell references
 ❌ **Hard-coded inputs without cell comments citing the source OR explaining the assumption**
-❌ Missing hyperlinks to SEC filings or data sources when available
+❌ Missing hyperlinks to company filings or data sources when available
 ❌ Including too many metrics without clear purpose
 ❌ Including non-comparable companies (different business models)
 ❌ Using outdated data without disclosure
@@ -440,7 +446,7 @@ This helps answer: "Is our target company trading rich or cheap vs. peers?"
    - Lock in units and date references
 
 2. **Gather data** (60-90 minutes)
-   - Pull from primary sources (S&P Kensho MCP, FactSet MCP, Daloopa MCP if available; otherwise Bloomberg, SEC)
+   - Pull from primary sources (tushare_collect / yfinance_collect / peer_collect; fallback: web search)
    - Input all raw numbers in blue
    - Document sources in notes section
 
@@ -469,7 +475,7 @@ This helps answer: "Is our target company trading rich or cheap vs. peers?"
 ### Pro Tips
 - **Save templates**: Build once, reuse forever
 - **Color-code outliers**: Conditional formatting for values >2 standard deviations
-- **Link to source files**: Hyperlink to Bloomberg screenshots or SEC filings
+- **Link to source files**: Hyperlink to company filings (cninfo/SEC) or data source pages
 - **Version control**: Save as "Comps_v1_2024-12-15" with clear dating
 - **Collaborative reviews**: Have someone else check your formulas
 
@@ -486,7 +492,7 @@ This helps answer: "Is our target company trading rich or cheap vs. peers?"
 - [ ] **One blank row for separation between company data and statistics rows**
 - [ ] **No separate "SECTOR STATISTICS" or "VALUATION STATISTICS" header rows**
 - [ ] **Every hard-coded input cell has a comment with either: (1) exact data source, OR (2) assumption explanation**
-- [ ] **Hyperlinks added to cells where applicable** (SEC filings, data provider pages, reports)
+- [ ] **Hyperlinks added to cells where applicable** (company filings, data provider pages, reports)
 
 ---
 
@@ -639,7 +645,7 @@ Before delivering a comp analysis, verify:
 - [ ] Units are clearly labeled (millions/billions)
 - [ ] Formulas reference cells, not hardcoded values
 - [ ] **All hard-coded input cells have comments with either: (1) exact data source with citation, OR (2) clear assumption with explanation**
-- [ ] **Hyperlinks added where relevant** (SEC EDGAR filings, Bloomberg pages, research reports)
+- [ ] **Hyperlinks added where relevant** (cninfo/SEC filings, data source pages, research reports)
 - [ ] Statistics include at least 5 metrics (Max, 75th, Med, 25th, Min)
 - [ ] Notes section documents sources and methodology
 - [ ] Visual formatting follows conventions (blue = input, black = formula)

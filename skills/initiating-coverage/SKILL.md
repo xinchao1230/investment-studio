@@ -1,6 +1,6 @@
 ---
 name: initiating-coverage
-description: Create institutional-quality equity research initiation reports through a 5-task workflow. Tasks must be executed individually with verified prerequisites - (1) company research, (2) financial modeling, (3) valuation analysis, (4) chart generation, (5) final report assembly. Each task produces specific deliverables (markdown docs, Excel models, charts, or DOCX reports). Tasks 3-5 have dependencies on earlier tasks.
+description: "Create institutional-quality equity research initiation reports through a 5-task workflow. Triggers on: initiating coverage, initiation report, first coverage, 首次覆盖, 深度报告, 个股研究启动"
 ---
 
 # Initiating Coverage
@@ -215,8 +215,10 @@ Request 5: Task 5 - Report Assembly (requires ALL previous task outputs)
 **Purpose**: Extract historical financials and build comprehensive Excel financial model with projections and scenarios.
 
 **Prerequisites**: ⚠️ Verify before starting
-- **Required**: Access to company financial data
-  - For public companies: Latest 10-K from SEC EDGAR
+- **Required**: Access to company financial data (priority order):
+  1. Institutional MCP (FactSet, Daloopa) — if configured
+  2. research-mcp: `tushare_collect` for A-share, `yfinance_collect` for US/HK. Follow `skills/_cache-policy.md`.
+  3. SEC EDGAR / cninfo.com.cn / HKExnews filings
   - For private companies: Financial statements or available estimates
   - OR: Pre-extracted historical financials provided by user
 - **Optional**: Company research (Task 1) for business context
@@ -373,7 +375,7 @@ Required from model:
   - Comparable companies data (Task 3 tab in same Excel file)
   - Valuation ranges (Task 3 tab in same Excel file)
 - **Required**: External market data
-  - Historical stock price data (Yahoo Finance, Bloomberg, etc.)
+  - Historical stock price data (institutional MCP if configured; otherwise `tushare_collect daily` for A-share, `yfinance_collect history` for US/HK)
   - Historical valuation multiples (for historical trend charts)
 
 **⚠️ CRITICAL: DO NOT START THIS TASK UNLESS TASKS 1, 2, AND 3 ARE COMPLETE**
