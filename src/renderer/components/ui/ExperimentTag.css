@@ -6,7 +6,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background-color: #3b82f6; /* Blue-500 */
+  background-color: var(--si-gold); /* brand accent fill */
   color: white;
   font-weight: 600;
   border-radius: 4px;
@@ -32,5 +32,5 @@
 
 /* Hover effect */
 .experiment-tag:hover {
-  background-color: #2563eb; /* Blue-600 */
+  background-color: var(--si-accent-strong); /* deeper accent on hover */
 }

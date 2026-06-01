@@ -148,6 +148,16 @@ export interface AppConfig {
    * Whether the main window is maximized (global application-level window preference)
    */
   mainWindowMaximized?: boolean;
+
+  /**
+   * App-level accent / tint color (global, unrelated to user profile).
+   *
+   * Stable enum string; the renderer owns the value↔color mapping in
+   * `src/renderer/lib/theme/tintColor.ts` (kept in sync with this union).
+   * Missing or unknown values fall back to 'default' (the built-in brand
+   * accent). Persisted verbatim — never rename these literals.
+   */
+  tintColor?: 'default' | 'blue' | 'green' | 'yellow' | 'pink' | 'orange' | 'purple' | 'red';
 }
 
 /**
@@ -161,6 +171,7 @@ export const DEFAULT_APP_CONFIG: AppConfig = {
   leftSidebarWidth: 288,
   zoomLevel: 0,
   mainWindowMaximized: false,
+  tintColor: 'default',
 };
 
 // ─── Type Guards ──────────────────────────────────────────────────────────────
@@ -199,5 +210,6 @@ export function isAppConfig(obj: any): obj is AppConfig {
   if (obj.leftSidebarCollapsed !== undefined && typeof obj.leftSidebarCollapsed !== 'boolean') return false;
   if (obj.zoomLevel !== undefined && (!Number.isFinite(obj.zoomLevel) || typeof obj.zoomLevel !== 'number')) return false;
   if (obj.mainWindowMaximized !== undefined && typeof obj.mainWindowMaximized !== 'boolean') return false;
+  if (obj.tintColor !== undefined && typeof obj.tintColor !== 'string') return false;
   return true;
 }

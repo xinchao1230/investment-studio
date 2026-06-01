@@ -30,6 +30,12 @@ import { useDirtyEditors } from '../../contexts/DirtyEditorsContext';
 import { useToast } from '../ui/ToastProvider';
 import { MarkdownFindBar } from './MarkdownFindBar';
 import { parseFrontMatter, type FrontMatter } from '../../lib/utils/yamlFrontMatter';
+import {
+  resolveMarketConvention,
+  classifyDelta,
+  deltaClassName,
+  type MarketConvention,
+} from './marketConvention';
 
 /** Simple CSV table renderer for the research workspace view mode. */
 const CSVTable: React.FC<{ content: string; delimiter?: string }> = ({
@@ -108,7 +114,7 @@ export interface Tab {
     | 'binary';
   sheetData?: any;
   mtime?: number;
-  /** Optional breadcrumb prefix shown before the filename (e.g. "携程集团.HK"). */
+  /** Optional breadcrumb prefix shown before the filename (e.g. "Trip.com.HK"). */
   pathPrefix?: string;
   /** Monaco language id for `code` / `text` / `json` / `html` source views. */
   language?: string;
@@ -250,32 +256,64 @@ interface ContentTabsProps {
    *  refresh its file-content cache (the fs watcher echo is suppressed
    *  for our own writes). */
   onTabSaved?: (tabId: string, filePath: string, content: string) => void;
+  /** True when the left sidebar is collapsed. On macOS the frameless
+   *  (titleBarStyle: 'hiddenInset') window floats the traffic-light controls
+   *  over the renderer's top-left. The expanded left pane normally shields
+   *  the center pane from them; when collapsed, only a 32px strip remains and
+   *  the lights hang over this tab strip — so we add left clearance. */
+  leftCollapsed?: boolean;
 }
 
+// Status-pill styling keyed by the literal cell text that tracking/marginal
+// skills write into markdown tables. These keys are SKILL OUTPUT CONTENT, not
+// UI labels — they must stay Chinese to match what the analyst writes.
 const STATUS_MAP: Record<string, string> = {
   '边际改善': 'rw-status-pill rw-status-good',
   '边际承压': 'rw-status-pill rw-status-warn',
   '边际恶化': 'rw-status-pill rw-status-bad',
 };
 
-const StatusCell: React.FC<any> = ({ children, ...rest }) => {
-  const text = React.Children.toArray(children)
-    .map((c) => (typeof c === 'string' ? c : ''))
-    .join('')
-    .trim();
-  const cls = STATUS_MAP[text];
-  if (cls)
-    return (
-      <td {...rest}>
-        <span className={cls}>{text}</span>
-      </td>
-    );
-  return <td {...rest}>{children}</td>;
-};
+// Max character length for a table cell to be treated as a single delta
+// token (e.g. "+12.3%"); longer cells are prose and must not be recolored.
+const MAX_DELTA_CELL_LEN = 16;
+
+function makeStatusCell(market: MarketConvention): React.FC<any> {
+  const StatusCell: React.FC<any> = ({ children, ...rest }) => {
+    const text = React.Children.toArray(children)
+      .map((c) => (typeof c === 'string' ? c : ''))
+      .join('')
+      .trim();
+
+    // 1) Existing status-word pills.
+    const cls = STATUS_MAP[text];
+    if (cls) {
+      return (
+        <td {...rest}>
+          <span className={cls}>{text}</span>
+        </td>
+      );
+    }
+
+    // 2) Market-aware delta coloring for percent-change cells.
+    //    Length guard so long prose containing a percent is not recolored.
+    const direction = classifyDelta(text);
+    if (direction && text.length <= MAX_DELTA_CELL_LEN) {
+      return (
+        <td {...rest}>
+          <span className={deltaClassName(direction, market)}>{text}</span>
+        </td>
+      );
+    }
+
+    return <td {...rest}>{children}</td>;
+  };
+  StatusCell.displayName = 'StatusCell';
+  return StatusCell;
+}
 
 function formatTime(mtime?: number): string {
   if (!mtime) return '—';
-  return new Intl.DateTimeFormat('zh-CN', {
+  return new Intl.DateTimeFormat('en-US', {
     month: '2-digit',
     day: '2-digit',
     hour: '2-digit',
@@ -283,9 +321,9 @@ function formatTime(mtime?: number): string {
   }).format(new Date(mtime));
 }
 
-/** HH:MM:SS for the “已保存 12:04:52” toolbar indicator. */
+/** HH:MM:SS for the "Saved 12:04:52" toolbar indicator. */
 function formatSavedAt(ts: number): string {
-  return new Intl.DateTimeFormat('zh-CN', {
+  return new Intl.DateTimeFormat('en-US', {
     hour: '2-digit',
     minute: '2-digit',
     second: '2-digit',
@@ -293,11 +331,11 @@ function formatSavedAt(ts: number): string {
   }).format(new Date(ts));
 }
 
-/** Small autosave status badge shown in place of the old “保存” button.
+/** Small autosave status badge shown in place of the old "Save" button.
  *  Three states:
- *    - saving:   “保存中…” (in-flight write)
- *    - dirty:    “未保存” (debounce window between keystroke and save)
- *    - savedAt: “已保存 HH:MM:SS”
+ *    - saving:   "Saving…" (in-flight write)
+ *    - dirty:    "Unsaved" (debounce window between keystroke and save)
+ *    - savedAt: "Saved HH:MM:SS"
  */
 const SaveStatusIndicator: React.FC<{
   saving: boolean;
@@ -307,13 +345,13 @@ const SaveStatusIndicator: React.FC<{
   let label: string;
   let cls: string;
   if (saving) {
-    label = '保存中…';
+    label = 'Saving…';
     cls = 'text-[var(--rw-text-2)]';
   } else if (dirty) {
-    label = '未保存';
+    label = 'Unsaved';
     cls = 'text-[var(--rw-text-2)]';
   } else if (savedAt) {
-    label = `已保存 ${formatSavedAt(savedAt)}`;
+    label = `Saved ${formatSavedAt(savedAt)}`;
     cls = 'text-[var(--rw-text-3)]';
   } else {
     return null;
@@ -362,8 +400,26 @@ export const ContentTabs: React.FC<ContentTabsProps> = ({
   onTabSelect,
   onTabClose,
   onTabSaved,
+  leftCollapsed = false,
 }) => {
   const activeTab = tabs.find((t) => t.id === activeTabId);
+  // macOS traffic-light clearance for the tab strip. The frameless window
+  // floats the close/min/max buttons over the top-left of the renderer. When
+  // the left sidebar is collapsed (32px strip), they hang over this tab strip,
+  // so we inset the first tab past them. Expanded left pane shields us, and
+  // Windows/Linux have a separate title bar — no inset in either case.
+  const isMac =
+    typeof window !== 'undefined' &&
+    window.electronAPI?.platform === 'darwin';
+  const tabStripPaddingLeft = isMac && leftCollapsed ? 52 : 8;
+  const deltaMarket = useMemo<MarketConvention>(
+    () => resolveMarketConvention(activeTab?.pathPrefix),
+    [activeTab?.pathPrefix],
+  );
+  const StatusCellForMarket = useMemo(
+    () => makeStatusCell(deltaMarket),
+    [deltaMarket],
+  );
   const { isDirty } = useDirtyEditors();
   const { showError, showSuccess, showInfo } = useToast();
 
@@ -392,7 +448,7 @@ export const ContentTabs: React.FC<ContentTabsProps> = ({
   const [dirtyTabs, setDirtyTabs] = useState<Record<string, boolean>>({});
 
   // Per-tab autosave bookkeeping driven by EditableMonacoPane's
-  // onSavingChange + onSaved. Used to render the “保存中… / 已保存 HH:MM:SS”
+  // onSavingChange + onSaved. Used to render the "Saving… / Saved HH:MM:SS"
   // toolbar indicator that replaces the explicit Save button.
   const [savingTabs, setSavingTabs] = useState<Record<string, boolean>>({});
   const [savedAtTabs, setSavedAtTabs] = useState<Record<string, number>>({});
@@ -655,7 +711,7 @@ export const ContentTabs: React.FC<ContentTabsProps> = ({
   const handleSearchClick = useCallback(() => {
     if (!activeTab) return;
     if (activeTab.type === 'spreadsheet') {
-      showInfo('电子表格暂不支持页内搜索');
+      showInfo('In-page search is not supported for spreadsheets');
       return;
     }
     // Markdown in preview mode → DOM find bar.
@@ -774,7 +830,7 @@ export const ContentTabs: React.FC<ContentTabsProps> = ({
   if (tabs.length === 0) {
     return (
       <div className="flex-1 flex items-center justify-center text-[var(--rw-text-3)] text-sm">
-        从左侧选择文件以打开
+        Select a file from the left to open
       </div>
     );
   }
@@ -796,7 +852,10 @@ export const ContentTabs: React.FC<ContentTabsProps> = ({
        * portals can sit above the tab strip and silently swallow clicks,
        * making tabs appear non-switchable and the X close button inert.
        */}
-      <div className="relative z-50 isolate flex h-7 rw-divider overflow-x-auto bg-[var(--rw-bg-soft)] pointer-events-auto">
+      <div
+        className="relative z-50 isolate flex h-10 items-center gap-1 pr-2 overflow-x-auto bg-[var(--rw-bg-soft)] pointer-events-auto"
+        style={{ paddingLeft: tabStripPaddingLeft }}
+      >
         {tabs.map((tab) => {
           const isActive = tab.id === activeTabId;
           const tabIsDirty =
@@ -804,19 +863,12 @@ export const ContentTabs: React.FC<ContentTabsProps> = ({
           return (
             <div
               key={tab.id}
-              className={`group flex items-center gap-2 px-3 text-[12.5px] cursor-pointer border-r border-[var(--rw-border)] shrink-0 h-full ${
-                isActive
-                  ? 'rw-tab-active-bar bg-white text-[var(--rw-text)]'
-                  : 'bg-[var(--rw-bg-soft)] text-[var(--rw-text-2)] hover:bg-black/5'
-              }`}
+              className={`rw-tab group shrink-0 max-w-[160px] ${isActive ? 'is-active' : ''}`}
               onClick={() => onTabSelect(tab.id)}
             >
               <span className="truncate max-w-[120px]">{tab.label}</span>
               {tabIsDirty && (
-                <span
-                  className="w-1.5 h-1.5 rounded-full bg-[var(--rw-accent,#3b82f6)]"
-                  title="Unsaved changes"
-                />
+                <span className="rw-tab-dirty" title="Unsaved changes" />
               )}
               <button
                 // Fires on pointerdown so the close happens before any
@@ -851,73 +903,81 @@ export const ContentTabs: React.FC<ContentTabsProps> = ({
 
       {/* Document header */}
       {activeTab && (
-        <div className="flex items-center justify-between h-8 px-4 rw-divider text-[12.5px] text-[var(--rw-text-2)] bg-[var(--rw-bg)]">
+        <div className="flex items-center justify-between h-8 px-4 text-[12.5px] text-[var(--rw-text-2)] bg-[var(--rw-bg)]">
           <span className="truncate">
             {activeTab.pathPrefix && (
               <>
                 <span className="text-[var(--rw-text)] font-medium">{activeTab.pathPrefix}</span>
-                <span className="mx-1.5 text-[var(--rw-text-3)]">›</span>
+                <span className="mx-1.5 text-[var(--rw-text-3)]">·</span>
               </>
             )}
             <span className="text-[var(--rw-text)]">{basename}</span>
             <span className="mx-1.5 text-[var(--rw-text-3)]">·</span>
-            最近更新 {formatTime(activeTab.mtime)}
+            Last updated {formatTime(activeTab.mtime)}
           </span>
-          <div className="flex items-center gap-0.5">
-            <button
-              className="p-1 rounded hover:bg-black/5 text-[var(--rw-text-2)]"
-              onClick={handleSearchClick}
-              title="Find in document (Ctrl+F)"
-            >
-              <Search size={14} />
-            </button>
-            {activeTab?.type === 'html' && !activeIsEditing && (
+          <div className="flex items-center">
+            {/* Group 1: document actions (always has >=1 button: search) */}
+            <div className="rw-toolgroup">
               <button
-                onClick={() => toggleHtmlSource(activeTab.id)}
-                title={
-                  htmlSourceTabs.has(activeTab.id)
-                    ? 'View rendered'
-                    : 'View source'
-                }
-                className="p-1 rounded hover:bg-black/5 text-[var(--rw-text-2)]"
+                className="rw-toolbtn"
+                onClick={handleSearchClick}
+                title="Find in document (Ctrl+F)"
               >
-                {htmlSourceTabs.has(activeTab.id) ? (
-                  <Eye size={14} />
-                ) : (
-                  <CodeIcon size={14} />
-                )}
+                <Search size={16} />
               </button>
-            )}
-            {activeIsEditable && (
+              {activeTab?.type === 'html' && !activeIsEditing && (
+                <button
+                  onClick={() => toggleHtmlSource(activeTab.id)}
+                  title={
+                    htmlSourceTabs.has(activeTab.id)
+                      ? 'View rendered'
+                      : 'View source'
+                  }
+                  className="rw-toolbtn"
+                >
+                  {htmlSourceTabs.has(activeTab.id) ? (
+                    <Eye size={16} />
+                  ) : (
+                    <CodeIcon size={16} />
+                  )}
+                </button>
+              )}
+              {activeIsEditable && (
+                <button
+                  onClick={toggleEdit}
+                  title={activeIsEditing ? 'Exit edit mode (Ctrl+E / Esc)' : 'Edit (Ctrl+E)'}
+                  className={`rw-toolbtn${activeIsEditing ? ' is-active' : ''}`}
+                >
+                  {activeIsEditing ? <LogOut size={16} /> : <Edit3 size={16} />}
+                </button>
+              )}
+            </div>
+
+            {/* Group 2: external / view actions (3 unconditional buttons) */}
+            <div className="rw-toolgroup">
               <button
-                onClick={toggleEdit}
-                title={activeIsEditing ? 'Exit edit mode (Ctrl+E / Esc)' : 'Edit (Ctrl+E)'}
-                className="p-1 rounded hover:bg-black/5 text-[var(--rw-text-2)]"
+                onClick={handleOpenExternal}
+                title="Open with default app"
+                className="rw-toolbtn"
               >
-                {activeIsEditing ? <LogOut size={14} /> : <Edit3 size={14} />}
+                <ExternalLink size={16} />
               </button>
-            )}
-            <button
-              onClick={handleOpenExternal}
-              title="Open with default app"
-              className="p-1 rounded hover:bg-black/5 text-[var(--rw-text-2)]"
-            >
-              <ExternalLink size={14} />
-            </button>
-            <button
-              className="p-1 rounded hover:bg-black/5 text-[var(--rw-text-2)]"
-              onClick={handleDownloadClick}
-              title="Show in folder"
-            >
-              <Download size={14} />
-            </button>
-            <button
-              onClick={toggleFullscreen}
-              title={isFullscreen ? 'Exit fullscreen (Ctrl+Shift+F)' : 'Fullscreen (Ctrl+Shift+F)'}
-              className="p-1 rounded hover:bg-black/5 text-[var(--rw-text-2)]"
-            >
-              {isFullscreen ? <Minimize size={14} /> : <Monitor size={14} />}
-            </button>
+              <button
+                className="rw-toolbtn"
+                onClick={handleDownloadClick}
+                title="Show in folder"
+              >
+                <Download size={16} />
+              </button>
+              <button
+                onClick={toggleFullscreen}
+                title={isFullscreen ? 'Exit fullscreen (Ctrl+Shift+F)' : 'Fullscreen (Ctrl+Shift+F)'}
+                className="rw-toolbtn"
+              >
+                {isFullscreen ? <Minimize size={16} /> : <Monitor size={16} />}
+              </button>
+            </div>
+
             {activeIsEditing && activeTab && (
               <SaveStatusIndicator
                 saving={Boolean(savingTabs[activeTab.id])}
@@ -1023,7 +1083,7 @@ export const ContentTabs: React.FC<ContentTabsProps> = ({
                       remarkPlugins={[remarkGfm]}
                       rehypePlugins={[rehypeRaw]}
                       components={{
-                        td: StatusCell,
+                        td: StatusCellForMarket,
                         th: ({ children }) => <th>{children}</th>,
                         a: ({ href, children, ...props }) => {
                           if (href && /^https?:\/\//.test(href)) {

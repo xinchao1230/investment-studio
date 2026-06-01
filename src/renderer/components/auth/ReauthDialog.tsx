@@ -108,7 +108,7 @@ export const ReauthDialog: React.FC<ReauthDialogProps> = ({
             <div className="space-y-4">
               <Button
                 onClick={handleGitHubLogin}
-                className="w-full bg-gray-900 hover:bg-gray-800 text-white py-3 px-4 rounded-md transition-colors font-medium"
+                className="w-full bg-[var(--si-gold)] hover:bg-[var(--si-accent-strong)] text-white py-3 px-4 rounded-md transition-colors font-medium"
                 size="lg"
               >
                 <div className="flex items-center justify-center gap-3">

@@ -146,7 +146,7 @@ const FreWelcomeView: React.FC<FreWelcomeViewProps> = ({
               height: '216px',
               left: 0,
               top: 0,
-              background: '#F8F4F1',
+              background: 'var(--si-code-bg)',
               borderRadius: '24px',
             }}
           />
@@ -205,7 +205,7 @@ const FreWelcomeView: React.FC<FreWelcomeViewProps> = ({
               fontWeight: 650,
               fontSize: '18px',
               lineHeight: '26px',
-              color: '#272320',
+              color: 'var(--si-ink)',
               overflow: 'hidden',
               textOverflow: 'ellipsis',
               whiteSpace: 'nowrap',
@@ -223,7 +223,7 @@ const FreWelcomeView: React.FC<FreWelcomeViewProps> = ({
               fontWeight: 410,
               fontSize: '14px',
               lineHeight: '20px',
-              color: '#272320',
+              color: 'var(--si-ink)',
               overflow: 'hidden',
               display: '-webkit-box',
               WebkitLineClamp: 2,
@@ -461,7 +461,7 @@ const FreWelcomeView: React.FC<FreWelcomeViewProps> = ({
               fontWeight: 450,
               fontSize: '14px',
               lineHeight: '20px',
-              color: '#272320',
+              color: 'var(--si-ink)',
             }}
           >
             Skip for now

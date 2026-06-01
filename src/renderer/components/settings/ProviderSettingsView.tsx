@@ -1,6 +1,20 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { Eye, EyeOff, Check, AlertCircle, Loader2 } from 'lucide-react';
-import { PROVIDER_ICONS } from '../ui/icons/ProviderIcons';
+import { Eye, EyeOff, Check, AlertCircle, Loader2, Cpu, LogOut } from 'lucide-react';
+import { PROVIDER_ICONS, GitHubIcon } from '../ui/icons/ProviderIcons';
+import { Badge } from '../ui/badge';
+import { useAuthContext } from '../auth/AuthProvider';
+import { SKIP_LOGIN_ALIAS } from '@shared/constants/auth';
+import '../../styles/Header.css';
+import '../../styles/ContentView.css';
+import '../../styles/RuntimeSettings.css';
+
+/** Active provider pill tint — brand accent, distinct from the neutral enabled pills.
+ *  Uses the --si-* design tokens so it follows the app theme (CSS vars are valid
+ *  inside React inline-style string values; the browser resolves them). */
+const ACTIVE_PILL_STYLE: React.CSSProperties = {
+  backgroundColor: 'var(--si-accent-soft)',
+  color: 'var(--si-gold)',
+};
 
 type ProviderId = 'openai' | 'deepseek' | 'ollama' | 'custom-openai';
 
@@ -81,6 +95,23 @@ export const ProviderSettingsView: React.FC = () => {
   /** True when the user is signed in with a real GitHub account (not skip-login) */
   const [isCopilotAvailable, setIsCopilotAvailable] = useState(false);
   const [copilotUser, setCopilotUser] = useState<{ login: string; name?: string; email?: string; avatarUrl?: string; copilotPlan?: string } | null>(null);
+
+  // Sign in/out — moved here from the Settings side-pane footer. Same auth
+  // context, same three-state logic (spinner → sign-out glyph → GitHub mark),
+  // rendered as a header action button on the right (like MCP's "+").
+  const { signOut, authData } = useAuthContext();
+  const [isSigningOut, setIsSigningOut] = useState(false);
+  const isCopilotUser = authData?.ghcAuth?.alias !== SKIP_LOGIN_ALIAS;
+
+  const handleSignOut = useCallback(async () => {
+    if (isSigningOut) return;
+    setIsSigningOut(true);
+    try {
+      await signOut();
+    } finally {
+      setIsSigningOut(false);
+    }
+  }, [signOut, isSigningOut]);
 
   // Load current config from main process
   useEffect(() => {
@@ -234,36 +265,124 @@ export const ProviderSettingsView: React.FC = () => {
     }
   }, [cards, updateCard]);
 
-  return (
-    <div className="p-4">
-      <h1 className="text-base font-semibold mb-1">LLM Providers</h1>
-      <p className="text-xs text-gray-500 mb-4">
-        Configure API keys for LLM providers. The active provider is used for all chat and agent interactions.
-      </p>
+  // Resolve a provider id to a short pill label (covers Copilot, which isn't in
+  // PROVIDERS). Strips any "(...)" qualifier so pills stay compact, e.g.
+  // "Ollama (Local)" -> "Ollama". The custom endpoint reads "Custom LLM".
+  const providerLabel = useCallback((id: string): string => {
+    if (id === 'copilot') return 'GitHub Copilot';
+    if (id === 'custom-openai') return 'Custom LLM';
+    const title = PROVIDERS.find((p) => p.id === id)?.title || id;
+    return title.replace(/\s*\(.*\)\s*$/, '').trim();
+  }, []);
 
-      {/* Active provider indicator */}
-      <div className="mb-4 p-2 bg-blue-50 border border-blue-200 rounded-md text-xs text-blue-700">
-        Active provider: <strong>{activeProvider === 'copilot' ? 'GitHub Copilot' : PROVIDERS.find(p => p.id === activeProvider)?.title || activeProvider}</strong>
+  // Status pills: one per enabled provider, plus the active provider even if its
+  // enable toggle is off (so the header always reflects what is actually serving).
+  const enabledProviderIds = PROVIDERS.filter((p) => cards[p.id].enabled).map((p) => p.id as string);
+  if (isCopilotAvailable && !enabledProviderIds.includes('copilot')) {
+    // Copilot has no enable toggle; treat it as available when signed in.
+    enabledProviderIds.push('copilot');
+  }
+  // Always include the active provider, then sort it to the front so the
+  // terracotta active pill leads the row.
+  const withActive = enabledProviderIds.includes(activeProvider)
+    ? enabledProviderIds
+    : [...enabledProviderIds, activeProvider];
+  const pillProviderIds = [
+    ...withActive.filter((id) => id === activeProvider),
+    ...withActive.filter((id) => id !== activeProvider),
+  ];
+
+  return (
+    <div className="runtime-settings-view">
+      <div className="unified-header">
+        <div className="header-title">
+          <Cpu size={20} />
+          <span className="header-name">LLM Providers</span>
+          <div className="mcp-status-badges">
+            {pillProviderIds.length === 0 ? (
+              <Badge variant="normal" className="text-xs">
+                no providers enabled
+              </Badge>
+            ) : (
+              pillProviderIds.map((id) => {
+                const isActive = id === activeProvider;
+                const statusWord = id === 'copilot' ? 'Signed in' : 'Enabled';
+                return (
+                  <Badge
+                    key={id}
+                    variant="normal"
+                    className="text-xs"
+                    style={isActive ? ACTIVE_PILL_STYLE : undefined}
+                    title={isActive ? 'Active provider' : statusWord}
+                  >
+                    {providerLabel(id)} {statusWord}
+                  </Badge>
+                );
+              })
+            )}
+          </div>
+        </div>
+        {/* Right-aligned header action (like MCP's "+"): GitHub Copilot
+            sign IN — only shown when signed out. Once signed in, the sign-out
+            control moves into the GitHub Copilot card's top-right corner. */}
+        {!isCopilotUser && (
+          <div className="header-actions">
+            <button
+              className="btn-action"
+              onClick={handleSignOut}
+              disabled={isSigningOut}
+              title={isSigningOut ? 'Signing out…' : 'Sign in with GitHub Copilot'}
+              aria-label="Sign in with GitHub Copilot"
+            >
+              {isSigningOut ? (
+                <Loader2 size={20} className="animate-spin" />
+              ) : (
+                <GitHubIcon size={20} />
+              )}
+            </button>
+          </div>
+        )}
       </div>
 
-      <div className="space-y-3">
+      <div className="content-view-container">
+        <div className="settings-form-centered">
+          <p className="text-xs text-[var(--si-muted)] mb-4">
+            Configure API keys for LLM providers. The active provider is used for all chat and agent interactions.
+          </p>
+
+          <div className="space-y-3">
         {/* GitHub Copilot card — shown when user is signed in with a real GitHub account */}
         {isCopilotAvailable && (
           <div
-            className={`border rounded-md p-3 bg-white ${activeProvider === 'copilot' ? 'border-blue-400 ring-1 ring-blue-200' : 'border-gray-200'}`}
+            className={`border rounded-md p-3 bg-[var(--si-card)] ${activeProvider === 'copilot' ? 'border-[var(--si-gold)] ring-1 ring-[var(--si-accent-soft)]' : 'border-[var(--si-border)]'}`}
           >
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-2">
                 {PROVIDER_ICONS.copilot && React.createElement(PROVIDER_ICONS.copilot, { size: 18 })}
                 <h2 className="text-sm font-medium">GitHub Copilot</h2>
                 {activeProvider === 'copilot' && (
-                  <span className="px-1.5 py-0.5 text-[10px] font-medium bg-blue-100 text-blue-700 rounded">
+                  <span className="px-1.5 py-0.5 text-[10px] font-medium rounded" style={ACTIVE_PILL_STYLE}>
                     ACTIVE
                   </span>
                 )}
               </div>
+              {/* Sign out — top-right of the card (only present when signed in,
+                  which is exactly when this card renders). */}
+              <button
+                onClick={handleSignOut}
+                disabled={isSigningOut}
+                title={isSigningOut ? 'Signing out…' : 'Sign out of GitHub Copilot'}
+                aria-label="Sign out of GitHub Copilot"
+                className="flex items-center justify-center w-7 h-7 rounded text-[var(--si-muted)] hover:bg-[var(--si-code-bg)] hover:text-[var(--si-ink)] disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isSigningOut ? (
+                  <Loader2 size={16} className="animate-spin" />
+                ) : (
+                  <LogOut size={16} />
+                )}
+              </button>
             </div>
-            <p className="text-xs text-gray-500 mb-2">
+            <p className="text-xs text-[var(--si-muted)] mb-2">
               Use models from your GitHub Copilot subscription
             </p>
             {copilotUser && (
@@ -276,12 +395,12 @@ export const ProviderSettingsView: React.FC = () => {
                     className="rounded-full"
                   />
                 )}
-                <span className="text-xs text-gray-500">
-                  Signed in as <span className="font-medium text-gray-700">{copilotUser.login}</span>
+                <span className="text-xs text-[var(--si-muted)]">
+                  Signed in as <span className="font-medium text-[var(--si-ink)]">{copilotUser.login}</span>
                   {copilotUser.name ? ` (${copilotUser.name})` : ''}
                 </span>
                 {copilotUser.copilotPlan && copilotUser.copilotPlan !== 'none' && (
-                  <span className="px-1.5 py-0.5 text-[10px] font-medium bg-gray-100 text-gray-600 rounded">
+                  <span className="px-1.5 py-0.5 text-[10px] font-medium bg-[var(--si-code-bg)] text-[var(--si-muted)] rounded">
                     {copilotUser.copilotPlan}
                   </span>
                 )}
@@ -295,7 +414,7 @@ export const ProviderSettingsView: React.FC = () => {
                   const result = await api.switch('copilot' as any);
                   if (result.success) setActiveProvider('copilot');
                 }}
-                className="px-3 py-1.5 text-sm rounded border border-blue-300 text-blue-600 hover:bg-blue-50"
+                className="px-3 py-1.5 text-sm rounded border border-[var(--si-border-strong)] text-[var(--si-ink)] hover:bg-[var(--si-code-bg)]"
               >
                 Set as Active
               </button>
@@ -310,15 +429,15 @@ export const ProviderSettingsView: React.FC = () => {
           return (
             <div
               key={spec.id}
-              className={`border rounded-md p-3 bg-white ${isActive ? 'border-blue-400 ring-1 ring-blue-200' : 'border-gray-200'}`}
+              className={`border rounded-md p-3 bg-[var(--si-card)] ${isActive ? 'border-[var(--si-gold)] ring-1 ring-[var(--si-accent-soft)]' : 'border-[var(--si-border)]'}`}
             >
               {/* Header */}
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-2">
                   {PROVIDER_ICONS[spec.id] && React.createElement(PROVIDER_ICONS[spec.id], { size: 18 })}
-                  <h2 className="text-sm font-medium">{spec.title}</h2>
+                  <h2 className="text-sm font-medium">{providerLabel(spec.id)}</h2>
                   {isActive && (
-                    <span className="px-1.5 py-0.5 text-[10px] font-medium bg-blue-100 text-blue-700 rounded">
+                    <span className="px-1.5 py-0.5 text-[10px] font-medium rounded" style={ACTIVE_PILL_STYLE}>
                       ACTIVE
                     </span>
                   )}
@@ -329,12 +448,13 @@ export const ProviderSettingsView: React.FC = () => {
                     checked={c.enabled}
                     onChange={() => handleToggleEnabled(spec.id)}
                     className="rounded"
+                    style={{ accentColor: 'var(--si-gold)' }}
                   />
                   Enabled
                 </label>
               </div>
 
-              <p className="text-xs text-gray-500 mb-2">{spec.description}</p>
+              <p className="text-xs text-[var(--si-muted)] mb-2">{spec.description}</p>
 
               {c.enabled && (
                 <div className="space-y-2">
@@ -347,14 +467,14 @@ export const ProviderSettingsView: React.FC = () => {
                           value={c.apiKey}
                           onChange={(e) => updateCard(spec.id, { apiKey: e.target.value, status: null })}
                           placeholder={c.apiKeyHasValue ? 'Key saved (enter new to replace)' : 'Paste your API key'}
-                          className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm pr-10 focus:outline-none focus:border-blue-500"
+                          className="w-full border border-[var(--si-border)] rounded px-3 py-1.5 text-sm pr-10 focus:outline-none focus:border-[var(--si-ink)]"
                           autoComplete="off"
                         />
                         <button
                           type="button"
                           onClick={() => updateCard(spec.id, { showKey: !c.showKey })}
                           aria-label={c.showKey ? 'hide key' : 'show key'}
-                          className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                          className="absolute right-2 top-1/2 -translate-y-1/2 text-[var(--si-faint)] hover:text-[var(--si-muted)]"
                         >
                           {c.showKey ? <EyeOff size={14} /> : <Eye size={14} />}
                         </button>
@@ -365,13 +485,13 @@ export const ProviderSettingsView: React.FC = () => {
                   {/* Base URL input */}
                   {spec.showBaseUrl && (
                     <div>
-                      <label className="text-xs text-gray-500 mb-0.5 block">Base URL</label>
+                      <label className="text-xs text-[var(--si-muted)] mb-0.5 block">Base URL</label>
                       <input
                         type="text"
                         value={c.baseUrl}
                         onChange={(e) => updateCard(spec.id, { baseUrl: e.target.value, status: null })}
                         placeholder={spec.defaultBaseUrl || 'https://your-api.example.com/v1'}
-                        className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-500"
+                        className="w-full border border-[var(--si-border)] rounded px-3 py-1.5 text-sm focus:outline-none focus:border-[var(--si-ink)]"
                         autoComplete="off"
                       />
                     </div>
@@ -382,14 +502,14 @@ export const ProviderSettingsView: React.FC = () => {
                     <button
                       disabled={c.saving}
                       onClick={() => handleSave(spec.id)}
-                      className="px-3 py-1.5 text-sm rounded bg-blue-600 text-white disabled:bg-gray-300 disabled:cursor-not-allowed hover:bg-blue-700"
+                      className="px-3 py-1.5 text-sm rounded bg-[var(--si-gold)] text-white disabled:bg-[var(--si-border)] disabled:cursor-not-allowed hover:bg-[var(--si-accent-strong)]"
                     >
                       {c.saving ? 'Saving...' : 'Save'}
                     </button>
                     <button
                       disabled={c.testing || (!c.apiKeyHasValue && !c.apiKey && spec.requiresApiKey)}
                       onClick={() => handleTest(spec.id)}
-                      className="px-3 py-1.5 text-sm rounded border border-gray-300 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+                      className="px-3 py-1.5 text-sm rounded border border-[var(--si-border)] disabled:opacity-50 disabled:cursor-not-allowed hover:bg-[var(--si-paper)]"
                     >
                       {c.testing ? (
                         <span className="flex items-center gap-1">
@@ -402,7 +522,7 @@ export const ProviderSettingsView: React.FC = () => {
                     {!isActive && c.enabled && (c.apiKeyHasValue || c.apiKey || !spec.requiresApiKey) && (
                       <button
                         onClick={() => handleSetActive(spec.id)}
-                        className="px-3 py-1.5 text-sm rounded border border-blue-300 text-blue-600 hover:bg-blue-50"
+                        className="px-3 py-1.5 text-sm rounded border border-[var(--si-border-strong)] text-[var(--si-ink)] hover:bg-[var(--si-code-bg)]"
                       >
                         Set as Active
                       </button>
@@ -418,7 +538,7 @@ export const ProviderSettingsView: React.FC = () => {
                           <>
                             Connected ({c.status.latencyMs}ms)
                             {c.status.models && c.status.models.length > 0 && (
-                              <span className="text-gray-500"> — Models: {c.status.models.join(', ')}</span>
+                              <span className="text-[var(--si-muted)]"> — Models: {c.status.models.join(', ')}</span>
                             )}
                           </>
                         ) : (
@@ -432,6 +552,8 @@ export const ProviderSettingsView: React.FC = () => {
             </div>
           );
         })}
+          </div>
+        </div>
       </div>
     </div>
   );

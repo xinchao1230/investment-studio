@@ -31,8 +31,8 @@
 }
 
 .input-area:focus-within {
-  border-color: #0ea5e9;
-  box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.1), 0 2px 12px rgba(0, 0, 0, 0.08);
+  border-color: rgba(0, 0, 0, 0.14);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
 }
 
 /* Textarea - Top section */
@@ -132,18 +132,24 @@
   z-index: 1000;
 }
 
+/* Text provider badge (icon-less providers, e.g. custom-openai -> "Custom").
+   Quiet neutral pill matching the editorial theme's chip language
+   (--si-pill-* tokens, Claude-style 999px radius). Sits unobtrusively
+   beside the model name rather than competing with it. */
 .provider-badge {
   display: inline-flex;
   align-items: center;
-  padding: 2px 6px;
+  padding: 2px 8px;
   font-size: 10px;
   font-weight: 600;
-  color: #6366f1;
-  background: #eef2ff;
-  border: 1px solid #c7d2fe;
-  border-radius: 4px;
+  letter-spacing: 0.02em;
+  color: var(--si-pill-fg);
+  background: var(--si-pill-bg);
+  border: none;
+  border-radius: 999px;
   white-space: nowrap;
-  line-height: 1;
+  line-height: 1.4;
+  flex-shrink: 0;
 }
 
 .provider-badge--icon {
@@ -675,7 +681,7 @@
   min-width: 40px;
   height: 40px;
   min-height: 40px;
-  background: #272320;
+  background: var(--si-gold);
   color: white;
   border: none;
   border-radius: 12px;
@@ -728,17 +734,17 @@
 
 .inline-edit-action-button-secondary {
   background: #ffffff;
-  color: #272320;
-  border-color: rgba(39, 35, 32, 0.22);
+  color: var(--si-ink);
+  border-color: var(--si-border-strong);
 }
 
 .inline-edit-action-button-secondary:hover:not(:disabled) {
   background: #f5f3f1;
-  border-color: rgba(39, 35, 32, 0.35);
+  border-color: var(--si-gold);
 }
 
 .inline-edit-action-button-primary {
-  background: #272320;
+  background: var(--si-gold);
   color: #ffffff;
 }
 

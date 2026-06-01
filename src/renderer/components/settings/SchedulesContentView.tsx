@@ -94,11 +94,11 @@ const InlineEditableMessage: React.FC<{
           fontSize: '13px',
           lineHeight: 1.5,
           fontFamily: 'inherit',
-          color: '#111827',
-          border: '1px solid #D1D5DB',
+          color: 'var(--si-ink)',
+          border: '1px solid var(--si-border)',
           borderRadius: '6px',
           outline: 'none',
-          backgroundColor: '#FFFFFF',
+          backgroundColor: 'var(--si-card)',
           boxSizing: 'border-box',
         }}
         onFocus={(e) => { e.currentTarget.style.borderColor = '#3B82F6' }}
@@ -118,15 +118,15 @@ const InlineEditableMessage: React.FC<{
         padding: '6px 8px',
         fontSize: '13px',
         lineHeight: 1.5,
-        color: '#111827',
-        backgroundColor: '#F9FAFB',
-        border: '1px solid #E5E7EB',
+        color: 'var(--si-ink)',
+        backgroundColor: 'var(--si-paper)',
+        border: '1px solid var(--si-border)',
       }}
       onMouseEnter={(e) => {
-        if (!disabled) e.currentTarget.style.backgroundColor = '#F3F4F6'
+        if (!disabled) e.currentTarget.style.backgroundColor = 'var(--si-code-bg)'
       }}
       onMouseLeave={(e) => {
-        if (!disabled) e.currentTarget.style.backgroundColor = '#F9FAFB'
+        if (!disabled) e.currentTarget.style.backgroundColor = 'var(--si-paper)'
       }}
     >
       {value}
@@ -225,7 +225,7 @@ const ScheduleSessionList: React.FC<{
     <div style={{
       marginTop: '12px',
       paddingTop: '12px',
-      borderTop: '1px solid #E5E7EB',
+      borderTop: '1px solid var(--si-border)',
     }}>
       <button
         onClick={handleToggle}
@@ -256,8 +256,8 @@ const ScheduleSessionList: React.FC<{
           <span style={{
             fontSize: '11px',
             fontWeight: 500,
-            color: '#6B7280',
-            backgroundColor: '#F3F4F6',
+            color: 'var(--si-muted)',
+            backgroundColor: 'var(--si-code-bg)',
             borderRadius: '999px',
             padding: '1px 6px',
           }}>
@@ -288,8 +288,8 @@ const ScheduleSessionList: React.FC<{
                 alignItems: 'center',
                 justifyContent: 'space-between',
                 gap: '8px',
-                backgroundColor: '#F9FAFB',
-                border: '1px solid #E5E7EB',
+                backgroundColor: 'var(--si-paper)',
+                border: '1px solid var(--si-border)',
                 cursor: 'pointer',
                 padding: '8px 10px',
                 borderRadius: '8px',
@@ -297,8 +297,8 @@ const ScheduleSessionList: React.FC<{
                 color: '#374151',
                 textAlign: 'left',
               }}
-              onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#F3F4F6' }}
-              onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = '#F9FAFB' }}
+              onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'var(--si-code-bg)' }}
+              onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'var(--si-paper)' }}
               title={`Open session: ${s.title}`}
             >
               <span style={{
@@ -347,7 +347,7 @@ const DetailItem: React.FC<{
     </div>
     <div style={{
       fontSize: '12px',
-      color: '#111827',
+      color: 'var(--si-ink)',
       lineHeight: 1.5,
       minWidth: 0,
       wordBreak: 'break-word',
@@ -422,13 +422,13 @@ const ScheduleCard: React.FC<{
             <ChevronRight
               size={16}
               style={{
-                color: '#6B7280',
+                color: 'var(--si-muted)',
                 transition: 'transform 0.15s ease',
                 transform: expanded ? 'rotate(90deg)' : 'rotate(0deg)',
               }}
             />
             <div style={{ minWidth: 0 }}>
-              <div style={{ fontSize: '13px', fontWeight: 600, color: '#111827', lineHeight: 1.3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--si-ink)', lineHeight: 1.3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                 {job.name}
               </div>
             </div>
@@ -438,8 +438,8 @@ const ScheduleCard: React.FC<{
               maxWidth: '180px',
               fontSize: '11px',
               color: '#4B5563',
-              backgroundColor: '#F3F4F6',
-              border: '1px solid #E5E7EB',
+              backgroundColor: 'var(--si-code-bg)',
+              border: '1px solid var(--si-border)',
               borderRadius: '999px',
               padding: '2px 8px',
               whiteSpace: 'nowrap',
@@ -452,8 +452,8 @@ const ScheduleCard: React.FC<{
               justifySelf: 'end',
               fontSize: '11px',
               color: '#4B5563',
-              backgroundColor: '#F3F4F6',
-              border: '1px solid #E5E7EB',
+              backgroundColor: 'var(--si-code-bg)',
+              border: '1px solid var(--si-border)',
               borderRadius: '999px',
               padding: '2px 8px',
               textTransform: 'capitalize',
@@ -473,7 +473,7 @@ const ScheduleCard: React.FC<{
                 gap: '6px',
                 border: '1px solid #D1D5DB',
                 borderRadius: '999px',
-                backgroundColor: readOnly || !job.enabled ? '#F9FAFB' : '#FFFFFF',
+                backgroundColor: readOnly || !job.enabled ? 'var(--si-paper)' : 'var(--si-card)',
                 color: readOnly || !job.enabled ? '#9CA3AF' : '#374151',
                 cursor: readOnly || !job.enabled ? 'not-allowed' : 'pointer',
                 padding: '5px 10px',
@@ -488,13 +488,13 @@ const ScheduleCard: React.FC<{
               }
               onMouseEnter={(e) => {
                 if (!readOnly && job.enabled) {
-                  e.currentTarget.style.backgroundColor = '#F9FAFB'
+                  e.currentTarget.style.backgroundColor = 'var(--si-paper)'
                   e.currentTarget.style.borderColor = '#9CA3AF'
                 }
               }}
               onMouseLeave={(e) => {
                 if (!readOnly && job.enabled) {
-                  e.currentTarget.style.backgroundColor = '#FFFFFF'
+                  e.currentTarget.style.backgroundColor = 'var(--si-card)'
                   e.currentTarget.style.borderColor = '#D1D5DB'
                 }
               }}
@@ -562,7 +562,7 @@ const ScheduleCard: React.FC<{
 
         {expanded && (
           <div style={{
-            borderTop: '1px solid #E5E7EB',
+            borderTop: '1px solid var(--si-border)',
             paddingTop: '12px',
             display: 'flex',
             flexDirection: 'column',
@@ -579,12 +579,12 @@ const ScheduleCard: React.FC<{
               <DetailItem label="Raw Schedule">
                 <code style={{
                   display: 'inline-block',
-                  backgroundColor: '#F9FAFB',
+                  backgroundColor: 'var(--si-paper)',
                   padding: '2px 6px',
                   borderRadius: '4px',
                   fontSize: '11px',
                   color: '#4B5563',
-                  border: '1px solid #E5E7EB',
+                  border: '1px solid var(--si-border)',
                 }}>
                   {scheduleValue}
                 </code>
@@ -618,10 +618,10 @@ const ScheduleCard: React.FC<{
               padding: '8px 0',
             }}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                <span style={{ fontSize: '13px', fontWeight: 500, color: '#111827' }}>
+                <span style={{ fontSize: '13px', fontWeight: 500, color: 'var(--si-ink)' }}>
                   Notify on completion
                 </span>
-                <span style={{ fontSize: '12px', color: '#6B7280' }}>
+                <span style={{ fontSize: '12px', color: 'var(--si-muted)' }}>
                   Send a notification when this task finishes
                 </span>
               </div>
@@ -679,9 +679,9 @@ const SchedulesContentView: React.FC<SchedulesContentViewProps> = ({
             {jobs.length === 0 ? (
               <div className="toolbar-settings-card">
                 <div style={{ padding: '20px 16px', textAlign: 'center' }}>
-                  <p style={{ color: '#6B7280', fontSize: '15px', margin: 0 }}>
+                  <p style={{ color: 'var(--si-muted)', fontSize: '15px', margin: 0 }}>
                     No scheduled tasks. Use the <code style={{
-                      backgroundColor: '#F3F4F6',
+                      backgroundColor: 'var(--si-code-bg)',
                       padding: '2px 6px',
                       borderRadius: '4px',
                       fontSize: '14px'

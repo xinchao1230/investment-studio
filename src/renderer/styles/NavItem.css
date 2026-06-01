@@ -36,13 +36,15 @@
 /* Hover state - Menu item 6 */
 .nav-item:hover:not(:disabled) {
   /* Only change visual effect, do not change layout */
-  background: rgba(0, 0, 0, 0.05);
+  background: rgba(11, 46, 79, 0.05);
 }
 
-/* Active/Selected state - Menu item 6 */
+/* Active/Selected state - Menu item 6.
+   Uses the brand-accent soft tint so the selected row follows the app-level
+   tint color (overridden at runtime by applyTintColor via --si-accent-soft). */
 .nav-item.active {
   /* Only change visual effect, do not change layout */
-  background: rgba(0, 0, 0, 0.05);
+  background: var(--si-accent-soft, rgba(11, 46, 79, 0.05));
 }
 
 /* Disabled state */
@@ -111,7 +113,7 @@
   position: absolute;
   top: -7px;
   right: -10px;
-  border: 2px solid #fffbf8;
+  border: 2px solid var(--si-card);
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.16);
   z-index: 2;
 }
@@ -154,13 +156,12 @@
 
   /* .Semantic/Label/Control */
   font-style: normal;
-  font-weight: 410;
-  font-size: 15px;
+  font-weight: 500;
+  font-size: 13px;
   line-height: 20px;
   /* identical to box height, or 133% */
 
-  color: #272320;
-  font-variation-settings: 'opsz' 10.5;
+  color: var(--si-ink);
 
   /* Inside auto layout */
   order: 2;

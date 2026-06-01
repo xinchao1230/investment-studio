@@ -127,6 +127,14 @@ describe('AppRoutes', () => {
     expect(screen.getByTestId('routes')).toBeInTheDocument();
   });
 
+  it('keeps the /loading route registered (used by auto-login)', () => {
+    // The manual sign-in flow no longer routes through /loading — SignInPage's
+    // in-button gate owns that navigation — but the auto-login path still uses
+    // it, so the route must remain registered.
+    render(<AppRoutes />);
+    expect(screen.getByTestId('route-/loading')).toBeInTheDocument();
+  });
+
   it('registers navigate:to event listener on mount', () => {
     render(<AppRoutes />);
     expect((window.electronAPI as any).on).toHaveBeenCalledWith('navigate:to', expect.any(Function));

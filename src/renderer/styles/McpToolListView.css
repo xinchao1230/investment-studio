@@ -40,13 +40,13 @@
 }
 
 .tool-item:hover {
-  background: #F8F4F1;
+  background: var(--si-code-bg);
   border: 1px solid rgba(0, 0, 0, 0.12);
   box-shadow: none;
 }
 
 .tool-item.selected {
-  background: #F8F4F1;
+  background: var(--si-code-bg);
   border: 1px solid rgba(0, 0, 0, 0.18);
 }
 

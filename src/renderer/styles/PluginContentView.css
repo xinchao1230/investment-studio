@@ -56,11 +56,11 @@
 }
 
 .plugin-card-wrapper:not(.selected):hover {
-  background: #F8F4F1;
+  background: var(--si-code-bg);
 }
 
 .plugin-card-wrapper.selected {
-  background: #F8F4F1;
+  background: var(--si-code-bg);
 }
 
 .plugin-card {
@@ -98,7 +98,7 @@
   font-weight: 650;
   font-size: 14px;
   line-height: 20px;
-  color: #272320;
+  color: var(--si-ink);
   font-variation-settings: 'opsz' 10.5;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -118,13 +118,13 @@
   justify-content: center;
   padding: 4px 8px;
   gap: 4px;
-  background: rgba(224, 158, 102, 0.3);
+  background: var(--si-pill-bg);
   border-radius: 8px;
   font-style: normal;
   font-weight: 600;
   font-size: 12px;
   line-height: 16px;
-  color: #6B3900;
+  color: var(--si-pill-fg);
   font-variation-settings: 'opsz' 10.5;
   flex: none;
   white-space: nowrap;
@@ -171,12 +171,12 @@
   justify-content: center;
   padding: 4px 8px;
   gap: 4px;
-  background: rgba(224, 158, 102, 0.3);
+  background: var(--si-pill-bg);
   border-radius: 8px;
   font-weight: 600;
   font-size: 12px;
   line-height: 16px;
-  color: #6B3900;
+  color: var(--si-pill-fg);
   font-variation-settings: 'opsz' 10.5;
   white-space: nowrap;
   box-shadow: none;
@@ -402,12 +402,12 @@
   display: inline-flex;
   align-items: center;
   padding: 2px 8px;
-  background: rgba(224, 158, 102, 0.3);
+  background: var(--si-pill-bg);
   border-radius: 8px;
   font-weight: 600;
   font-size: 11px;
   line-height: 16px;
-  color: #6B3900;
+  color: var(--si-pill-fg);
 }
 
 /* ─── Extension item rows ───────────────────────────────────────── */

@@ -10,8 +10,10 @@
   align-items: flex-start; /* align left */
   gap: 20px;
   width: 100%;
+  max-width: 740px; /* Match conversation column width */
   padding: 0 24px; /* 24px left/right padding */
   margin-bottom: 20px; /* spacing between ChatInput */
+  box-sizing: border-box;
 }
 
 /* Greeting */
@@ -87,8 +89,8 @@
 
 .quick-start-card:focus {
   outline: none;
-  border-color: var(--stroke-card-onPrimary-focus, #0078D4);
-  box-shadow: 0 0 0 2px rgba(0, 120, 212, 0.2);
+  border-color: var(--stroke-card-onPrimary-focus, var(--si-gold));
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--si-gold) 20%, transparent);
 }
 
 .quick-start-card:active {
@@ -116,7 +118,7 @@
 .quick-start-card-title {
   align-self: stretch;
 
-  color: var(--foreground-ctrl-neutral-primary-rest, #272320);
+  color: var(--foreground-ctrl-neutral-primary-rest, var(--si-ink));
 
   /* Semantic/Ramp/Item header */
   font-size: var(--text-ramp-itemHeader-fontSize, 14px);

@@ -58,7 +58,7 @@
   padding: 10px 12px;
   gap: 8px;
   height: 40px;
-  background: #F8F4F1;
+  background: var(--si-code-bg);
   border-radius: 8px 8px 0 0;
   flex: none;
   align-self: stretch;
@@ -316,14 +316,14 @@
 }
 
 .sidepane-workspace-empty-btn.primary {
-  background: #272320;
+  background: var(--si-gold);
   color: #FFFFFF;
-  border: 1px solid #272320;
+  border: 1px solid var(--si-gold);
 }
 
 .sidepane-workspace-empty-btn.primary:hover {
-  background: #3d3935;
-  border-color: #3d3935;
+  background: var(--si-accent-strong);
+  border-color: var(--si-accent-strong);
 }
 
 .sidepane-workspace-empty-btn.primary:active {
@@ -334,12 +334,12 @@
 
 .sidepane-workspace-empty-btn.secondary {
   background: #FFFFFF;
-  color: #272320;
+  color: var(--si-ink);
   border: 1px solid rgba(0, 0, 0, 0.12);
 }
 
 .sidepane-workspace-empty-btn.secondary:hover {
-  background: #F8F4F1;
+  background: var(--si-code-bg);
   border-color: rgba(0, 0, 0, 0.2);
 }
 

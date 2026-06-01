@@ -17,6 +17,15 @@
   color: #6b7280;
 }
 
+/* ── Centered form wrapper — shared by LLM Providers & Financial Data API ──
+   Constrains card stack width to match Browser Control content width. */
+.settings-form-centered {
+  max-width: 56rem;
+  margin-left: auto;
+  margin-right: auto;
+  width: 100%;
+}
+
 /* ── Card description text (subtitle inside card header) ── */
 
 .runtime-card-desc {
@@ -44,7 +53,7 @@
 .runtime-radio {
   width: 16px;
   height: 16px;
-  accent-color: #272320;
+  accent-color: var(--si-gold);
   cursor: pointer;
   flex-shrink: 0;
   margin-left: 12px;
@@ -113,7 +122,7 @@
   border: none;
   outline: none;
   font-size: 13px;
-  color: #272320;
+  color: var(--si-ink);
 }
 
 /* Primary action button */
@@ -123,7 +132,7 @@
   font-size: 13px;
   font-weight: 500;
   color: #ffffff;
-  background: #272320;
+  background: var(--si-gold);
   border: none;
   border-radius: 8px;
   cursor: pointer;
@@ -132,7 +141,7 @@
 }
 
 .runtime-action-btn:hover:not(:disabled) {
-  background: #3d3836;
+  background: var(--si-accent-strong);
 }
 
 .runtime-action-btn:disabled {
@@ -144,9 +153,9 @@
 .runtime-loading-bar {
   padding: 10px 12px;
   font-size: 13px;
-  color: #1d4ed8;
-  background: #eff6ff;
-  border: 1px solid #bfdbfe;
+  color: var(--si-accent-strong);
+  background: var(--si-accent-soft);
+  border: 1px solid var(--si-accent-hover);
   border-radius: 8px;
   margin-top: 4px;
 }
@@ -163,13 +172,13 @@
   background: #F3F4F6;
   border: 1px solid #E5E7EB;
   border-radius: 8px;
-  color: #272320;
+  color: var(--si-ink);
 }
 
 .runtime-python-input:focus {
   outline: none;
-  border-color: #272320;
-  box-shadow: 0 0 0 2px rgba(39, 35, 32, 0.08);
+  border-color: var(--si-gold);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--si-gold) 18%, transparent);
 }
 
 /* Per-version list row */
@@ -201,7 +210,7 @@
 .runtime-python-version {
   font-size: 14px;
   font-weight: 500;
-  color: #272320;
+  color: var(--si-ink);
   flex-shrink: 0;
   min-width: 60px;
 }
@@ -338,7 +347,7 @@
 
 .settings-model-progress-fill {
   height: 100%;
-  background: #272320;
+  background: var(--si-gold);
   border-radius: 3px;
   transition: width 0.15s ease;
 }

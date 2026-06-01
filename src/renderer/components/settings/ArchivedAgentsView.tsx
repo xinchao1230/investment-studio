@@ -110,7 +110,7 @@ const ArchivedAgentsView: React.FC = () => {
       {/* Content */}
       <div className="runtime-settings-content" style={{ padding: '20px', overflow: 'auto' }}>
         {isLoading ? (
-          <div style={{ display: 'flex', justifyContent: 'center', padding: '40px', color: '#6b7280' }}>
+          <div style={{ display: 'flex', justifyContent: 'center', padding: '40px', color: 'var(--si-muted)' }}>
             Loading archived agents...
           </div>
         ) : archivedAgents.length === 0 ? (
@@ -120,7 +120,7 @@ const ArchivedAgentsView: React.FC = () => {
             alignItems: 'center',
             justifyContent: 'center',
             padding: '60px 20px',
-            color: '#6b7280',
+            color: 'var(--si-muted)',
             gap: '12px',
           }}>
             <Archive size={48} strokeWidth={1} style={{ opacity: 0.4 }} />
@@ -141,7 +141,7 @@ const ArchivedAgentsView: React.FC = () => {
                   padding: '16px',
                   borderRadius: '8px',
                   border: '1px solid rgba(0, 0, 0, 0.1)',
-                  backgroundColor: 'var(--color-surface, #ffffff)',
+                  backgroundColor: 'var(--si-card)',
                 }}
               >
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', flex: 1, minWidth: 0 }}>
@@ -149,7 +149,7 @@ const ArchivedAgentsView: React.FC = () => {
                     <span style={{
                       fontSize: '14px',
                       fontWeight: 600,
-                      color: 'var(--color-text-primary, #111827)',
+                      color: 'var(--si-ink)',
                       overflow: 'hidden',
                       textOverflow: 'ellipsis',
                       whiteSpace: 'nowrap',
@@ -162,7 +162,7 @@ const ArchivedAgentsView: React.FC = () => {
                         padding: '1px 6px',
                         borderRadius: '4px',
                         backgroundColor: 'rgba(0, 0, 0, 0.05)',
-                        color: '#6b7280',
+                        color: 'var(--si-muted)',
                       }}>
                         {agent.agent.source}
                       </span>
@@ -171,7 +171,7 @@ const ArchivedAgentsView: React.FC = () => {
                   {agent.agent?.description && (
                     <span style={{
                       fontSize: '12px',
-                      color: '#6b7280',
+                      color: 'var(--si-muted)',
                       overflow: 'hidden',
                       textOverflow: 'ellipsis',
                       whiteSpace: 'nowrap',
@@ -179,7 +179,7 @@ const ArchivedAgentsView: React.FC = () => {
                       {agent.agent.description}
                     </span>
                   )}
-                  <span style={{ fontSize: '11px', color: '#9ca3af' }}>
+                  <span style={{ fontSize: '11px', color: 'var(--si-faint)' }}>
                     Archived {formatDate(agent.archived_at)}
                   </span>
                 </div>

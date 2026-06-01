@@ -658,15 +658,15 @@ const SettingsPage: React.FC = () => {
   };
 
   return (
-    <div className="h-full flex flex-col  bg-[#FFFBF8]">
+    <div className="settings-root h-full flex flex-col" style={{ background: 'var(--si-card)' }}>
       {isMac && <div className="mac-titlebar-region" aria-hidden="true" />}
 
       <div className="flex-1 flex min-h-0">
         {/* Left Navigation */}
         <SettingsNavigation onBack={handleBack} />
-        <ResizableDivider />
-        {/* Right Content Container */}
-        <div className="flex-1 flex flex-col min-w-0 mr-2 mb-2 overflow-hidden rounded-lg border border-black/[0.075] shadow-[0px_2px_6px_rgba(0,0,0,0.05)]">
+        <ResizableDivider className="settings-nav-divider" />
+        {/* Right Content Container — borderless: frame/shadow dropped, content sits on page bg (Claude-style) */}
+        <div className="flex-1 flex flex-col min-w-0 mr-2 mb-2 overflow-hidden">
           <Outlet context={settingsContext} />
         </div>
       </div>

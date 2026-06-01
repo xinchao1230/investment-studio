@@ -7,7 +7,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #FFFBF8 0%, #FFFFFF 50%, #F8F4F1 100%);
+  background: linear-gradient(135deg, var(--si-paper) 0%, var(--si-card) 50%, var(--si-code-bg) 100%);
   position: relative;
   overflow: hidden;
 }

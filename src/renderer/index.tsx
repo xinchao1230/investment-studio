@@ -7,6 +7,7 @@ import { logger } from './lib/utilities/logger';
 import { modelCacheManager } from './lib/models/modelCacheManager';
 import { featureFlagCacheManager } from './lib/featureFlags';
 import { WithStore } from './atom';
+import { applyTintColor, normalizeTintColor } from './lib/theme/tintColor';
 
 function serializeUnknown(value: unknown): unknown {
   if (value instanceof Error) {
@@ -168,6 +169,19 @@ const root = createRoot(container);
 
 // 🚀 Initialize various cache managers (async, non-blocking for rendering)
 (async () => {
+  // Apply the persisted app-level tint color as early as possible so the
+  // accent surfaces (CTAs, links, focus rings, selected nav rows) are correct
+  // on first paint. "default" is a no-op clear, so a missing/absent value just
+  // leaves the built-in brand accent in place.
+  try {
+    const res = await window.electronAPI?.appConfig?.getAppConfig();
+    if (res?.success && res.data) {
+      applyTintColor(normalizeTintColor(res.data.tintColor));
+    }
+  } catch (error) {
+    logger.warn('[Startup] Failed to apply persisted tint color:', error);
+  }
+
   // Initialize Feature Flags cache manager
   try {
     logger.info('[Startup] Initializing feature flags cache manager...');

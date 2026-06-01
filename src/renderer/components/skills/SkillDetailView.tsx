@@ -22,7 +22,7 @@ const LoadingSpinner = () => (
       style={{ animation: 'spin 1s linear infinite' }}
     >
       <circle cx="16" cy="16" r="14" stroke="#e0e0e0" strokeWidth="2"/>
-      <path d="M30 16C30 23.732 23.732 30 16 30" stroke="#272320" strokeWidth="2" strokeLinecap="round"/>
+      <path d="M30 16C30 23.732 23.732 30 16 30" stroke="var(--si-ink)" strokeWidth="2" strokeLinecap="round"/>
     </svg>
     <span>Loading skill content...</span>
   </div>

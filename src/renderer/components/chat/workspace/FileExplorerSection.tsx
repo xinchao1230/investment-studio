@@ -563,7 +563,7 @@ const FileExplorerSection: React.FC<FileExplorerSectionProps> = ({
                 <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
                   <g clipPath="url(#clip0_section)">
                     <circle cx="10" cy="10" r="9" stroke="black" strokeOpacity="0.15" strokeWidth="2"/>
-                    <path d="M19 10C19 12.3869 18.0518 14.6761 16.364 16.364C14.6761 18.0518 12.387 19 10 19" stroke="#272320" strokeWidth="2" strokeLinecap="round"/>
+                    <path d="M19 10C19 12.3869 18.0518 14.6761 16.364 16.364C14.6761 18.0518 12.387 19 10 19" stroke="var(--si-ink)" strokeWidth="2" strokeLinecap="round"/>
                   </g>
                   <defs>
                     <clipPath id="clip0_section">

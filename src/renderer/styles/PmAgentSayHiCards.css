@@ -104,7 +104,7 @@
 
 .pm-agent-say-hi-card h4.pm-agent-say-hi-card-title {
   align-self: stretch;
-  color: var(--foreground-ctrl-neutral-primary-rest, #272320);
+  color: var(--foreground-ctrl-neutral-primary-rest, var(--si-ink));
   font-size: var(--text-ramp-itemHeader-fontSize, 14px);
   font-style: normal;
   font-weight: var(--text-style-default-header-weight, 620);

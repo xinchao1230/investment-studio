@@ -772,7 +772,7 @@ const FreSettingUpView: React.FC<FreSettingUpViewProps> = ({
               <div style={{
                 width: '100%',
                 height: '6px',
-                background: '#F8F4F1',
+                background: 'var(--si-code-bg)',
                 borderRadius: '3px',
                 overflow: 'hidden',
               }}>
@@ -892,7 +892,7 @@ const FreSettingUpView: React.FC<FreSettingUpViewProps> = ({
             height: '208px',
             right: '8px',
             top: '8px',
-            background: '#FFFBF8',
+            background: 'var(--si-paper)',
             border: '0.5px solid rgba(0, 0, 0, 0.1)',
             borderRadius: '26px',
           }} />
@@ -905,8 +905,8 @@ const FreSettingUpView: React.FC<FreSettingUpViewProps> = ({
             flexDirection: 'column',
             gap: '8px',
           }}>
-            <div style={{ width: '80px', height: '6px', background: '#F8F4F1', borderRadius: '3px' }} />
-            <div style={{ width: '44px', height: '6px', background: '#F8F4F1', borderRadius: '3px' }} />
+            <div style={{ width: '80px', height: '6px', background: 'var(--si-code-bg)', borderRadius: '3px' }} />
+            <div style={{ width: '44px', height: '6px', background: 'var(--si-code-bg)', borderRadius: '3px' }} />
           </div>
 
           <div style={{
@@ -917,10 +917,10 @@ const FreSettingUpView: React.FC<FreSettingUpViewProps> = ({
             flexDirection: 'column',
             gap: '8px',
           }}>
-            <div style={{ width: '69px', height: '6px', background: '#F8F4F1', borderRadius: '3px' }} />
-            <div style={{ width: '69px', height: '6px', background: '#F8F4F1', borderRadius: '3px' }} />
-            <div style={{ width: '44px', height: '6px', background: '#F8F4F1', borderRadius: '3px' }} />
-            <div style={{ width: '44px', height: '6px', background: '#F8F4F1', borderRadius: '3px' }} />
+            <div style={{ width: '69px', height: '6px', background: 'var(--si-code-bg)', borderRadius: '3px' }} />
+            <div style={{ width: '69px', height: '6px', background: 'var(--si-code-bg)', borderRadius: '3px' }} />
+            <div style={{ width: '44px', height: '6px', background: 'var(--si-code-bg)', borderRadius: '3px' }} />
+            <div style={{ width: '44px', height: '6px', background: 'var(--si-code-bg)', borderRadius: '3px' }} />
           </div>
 
           <div style={{
@@ -931,8 +931,8 @@ const FreSettingUpView: React.FC<FreSettingUpViewProps> = ({
             alignItems: 'center',
             gap: '8px',
           }}>
-            <div style={{ width: '12px', height: '12px', background: '#F8F4F1', borderRadius: '50%' }} />
-            <div style={{ width: '56px', height: '6px', background: '#F8F4F1', borderRadius: '3px' }} />
+            <div style={{ width: '12px', height: '12px', background: 'var(--si-code-bg)', borderRadius: '50%' }} />
+            <div style={{ width: '56px', height: '6px', background: 'var(--si-code-bg)', borderRadius: '3px' }} />
           </div>
         </div>
       </div>

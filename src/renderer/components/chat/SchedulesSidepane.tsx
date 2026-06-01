@@ -86,7 +86,7 @@ const ExecutingIcon: React.FC = () => (
     <circle cx="10" cy="10" r="9" stroke="black" strokeOpacity="0.15" strokeWidth="2" />
     <path
       d="M19 10C19 12.3869 18.0518 14.6761 16.364 16.364C14.6761 18.0518 12.387 19 10 19"
-      stroke="#272320"
+      stroke="var(--si-ink)"
       strokeWidth="2"
       strokeLinecap="round"
     />
@@ -104,7 +104,7 @@ const CompletedIcon: React.FC = () => (
   >
     <path
       d="M0 10C0 4.47715 4.47715 0 10 0C15.5228 0 20 4.47715 20 10C20 15.5228 15.5228 20 10 20C4.47715 20 0 15.5228 0 10Z"
-      fill="#272320"
+      fill="var(--si-ink)"
     />
     <mask
       id="schedule-sidepane-completed-icon-mask"
@@ -527,7 +527,7 @@ const SchedulesSidepane: React.FC<SchedulesSidepaneProps> = ({
                 const isFailed = executionState === 'failed';
                 const isInterrupted = executionState === 'interrupted';
                 const isUnread = session.readStatus !== 'read' && !isActive;
-                const titleColor = isUnread ? '#272320' : '#6C6C70';
+                const titleColor = isUnread ? 'var(--si-ink)' : '#6C6C70';
                 const titleFontWeight = isUnread ? 600 : 410;
 
                 return (

@@ -71,9 +71,14 @@ const ResearchResizableDivider: React.FC<ResearchResizableDividerProps> = ({
   onDragEnd,
   invert = false,
 }) => {
+  // Local drag flag keeps the accent lit for the whole drag gesture, even
+  // when the pointer drifts off the 1px line. Hover alone can't do that
+  // because the cursor leaves the thin element as the pane resizes.
+  const [dragging, setDragging] = useState(false);
   const handleMouseDown = useCallback(
     (e: React.MouseEvent) => {
       e.preventDefault();
+      setDragging(true);
       onDragStart?.();
       const startX = e.clientX;
       const startWidth = currentWidth;
@@ -85,6 +90,7 @@ const ResearchResizableDivider: React.FC<ResearchResizableDividerProps> = ({
       const onUp = () => {
         document.removeEventListener('mousemove', onMove);
         document.removeEventListener('mouseup', onUp);
+        setDragging(false);
         onDragEnd?.();
       };
       document.addEventListener('mousemove', onMove);
@@ -93,19 +99,19 @@ const ResearchResizableDivider: React.FC<ResearchResizableDividerProps> = ({
     [onResize, minWidth, maxWidth, currentWidth, onDragStart, onDragEnd, invert],
   );
 
-  // The visible separator is just a 1px line tinted with --rw-border so the
-  // L/M/R panes appear flush. The drag hit area is expanded via a ::before
-  // pseudo-element (see research-theme.css `.rw-resizable-divider::before`)
-  // so users still have a comfortable click target without rendering a wide
-  // white band between the panes.
+  // The seam is invisible at rest: the element is a 1px-wide transparent flex
+  // item, so the L/M/R panes read as flush. A ::before pseudo-element widens
+  // the drag hit area, and a ::after pseudo-element fades in a thin terracotta
+  // accent bar on hover/drag. All visuals live in research-theme.css under
+  // `.rw-resizable-divider`; the `is-dragging` class drives the active state.
   return (
     <div
-      className="rw-resizable-divider"
+      className={`rw-resizable-divider ${dragging ? 'is-dragging' : ''}`}
       style={{
         width: 1,
         cursor: 'col-resize',
         flexShrink: 0,
-        background: 'var(--rw-border, #e5e7eb)',
+        background: 'transparent',
         position: 'relative',
         zIndex: 10,
       }}
@@ -327,6 +333,90 @@ export const ResearchPage: React.FC = () => {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, []);
+
+  // Overlay scrollbars: show the thumb only while actively scrolling, then
+  // fade out after a short idle delay (native macOS behavior). We listen in
+  // the capture phase on the research root so a single handler covers every
+  // nested scroll container (left tree, center doc, right chat). The
+  // `rw-scrolling` class on the root drives the CSS opacity (see
+  // research-theme.css scrollbar rules).
+  //
+  // The scroll-to-reveal overlay is gated to macOS via the `data-os` attr.
+  // On Windows/Linux users expect an always-visible scrollbar, so the CSS
+  // falls back to a persistent faint thumb there. We only tag `darwin`
+  // explicitly; unknown platforms stay untagged so they get the visible
+  // (safer) fallback rather than an invisible bar.
+  const researchOs =
+    (typeof window !== 'undefined' && window.electronAPI?.platform) === 'darwin'
+      ? 'darwin'
+      : undefined;
+  // Overlay scrollbars: show the thumb only while actively scrolling, then
+  // fade out after a short idle delay (native macOS behavior). We attach the
+  // capture-phase scroll listener via a CALLBACK REF rather than a
+  // useEffect(..., []) reading rootRef.current.
+  //
+  // Why a callback ref: the research root <div> is not in the DOM on the very
+  // first commit — usePortfolio() is still `loading`, so an early render path
+  // is shown and the ref node does not exist yet. A useEffect([]) that reads
+  // rootRef.current then hits `if (!root) return` and, because its deps are
+  // [], never re-runs once the real node mounts — so the scroll listener was
+  // never attached and the scrollbar never revealed. A callback ref is invoked
+  // by React exactly when the node enters (node) or leaves (null) the DOM, so
+  // the listener is attached the moment the node actually exists, every time.
+  //
+  // The `rw-scrolling` class is added to the ACTUAL scrolled element
+  // (e.target), NOT the root. Each pane (center doc, right chat, left tree)
+  // scrolls independently, so each must reveal only its OWN scrollbar — adding
+  // the class to the shared root made all panes' scrollbars flash together.
+  // Each element gets its own idle timer (tracked in a Map) so one pane's
+  // fade-out timer cannot reset another's.
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const scrollIdleTimersRef = useRef<Map<Element, ReturnType<typeof setTimeout>>>(
+    new Map(),
+  );
+  const handleRootScroll = useCallback((e: Event) => {
+    const el = e.target as Element | null;
+    if (!el || !(el instanceof Element) || typeof el.classList === 'undefined') return;
+    const timers = scrollIdleTimersRef.current;
+    el.classList.add('rw-scrolling');
+    const existing = timers.get(el);
+    if (existing) clearTimeout(existing);
+    timers.set(
+      el,
+      setTimeout(() => {
+        el.classList.remove('rw-scrolling');
+        timers.delete(el);
+      }, 400),
+    );
+  }, []);
+  const setRootRef = useCallback(
+    (node: HTMLDivElement | null) => {
+      const prev = rootRef.current;
+      if (prev) {
+        // Detaching: clean up listener + all pending idle timers.
+        prev.removeEventListener('scroll', handleRootScroll, {
+          capture: true,
+        } as EventListenerOptions);
+        const timers = scrollIdleTimersRef.current;
+        timers.forEach((timer, el) => {
+          clearTimeout(timer);
+          el.classList.remove('rw-scrolling');
+        });
+        timers.clear();
+      }
+      rootRef.current = node;
+      if (node) {
+        // Capture phase: scroll does not bubble, so a root-level non-capture
+        // listener would miss inner containers (center doc, left tree, right
+        // chat). Passive: we never preventDefault.
+        node.addEventListener('scroll', handleRootScroll, {
+          capture: true,
+          passive: true,
+        });
+      }
+    },
+    [handleRootScroll],
+  );
 
   // When un-collapsing a pane, clamp its restored width against current
   // window + opposite pane so the center pane never gets squeezed below
@@ -764,14 +854,14 @@ export const ResearchPage: React.FC = () => {
         text = result.content;
         if (typeof result.mtime === 'number') mtime = result.mtime;
       } else {
-        const errMsg = result?.error ?? '请求失败';
-        text = `(无法读取文件: ${errMsg})`;
+        const errMsg = result?.error ?? 'Request failed';
+        text = `(Cannot read file: ${errMsg})`;
       }
       fileContentCacheRef.current.set(absPath, { content: text, mtime });
     } catch (err: any) {
       const msg = err?.message ?? String(err);
       fileContentCacheRef.current.set(absPath, {
-        content: `(无法读取文件: ${msg})`,
+        content: `(Cannot read file: ${msg})`,
         mtime: 0,
       });
     } finally {
@@ -957,7 +1047,7 @@ export const ResearchPage: React.FC = () => {
     const c = code.trim();
     const n = name.trim();
     if (!n) {
-      setAddError('请输入名称');
+      setAddError('Please enter a name');
       return;
     }
     setAddBusy(true);
@@ -967,7 +1057,7 @@ export const ResearchPage: React.FC = () => {
     const result = await initTarget(c, n);
     setAddBusy(false);
     if (!result.success) {
-      setAddError(result.error || '添加失败');
+      setAddError(result.error || 'Add failed');
       return;
     }
     // Layer 2 of the anti-bug defense: even if a previous delete didn't flush
@@ -1375,7 +1465,7 @@ export const ResearchPage: React.FC = () => {
   return (
     <LayoutProvider>
     <PasteToWorkspaceProvider>
-    <div data-theme="research" className="flex h-full w-full">
+    <div ref={setRootRef} data-theme="research" data-os={researchOs} className="flex h-full w-full">
       {leftCollapsed ? (
         <div
           className="rw-pane-left rw-pane-left--collapsed"
@@ -1480,6 +1570,7 @@ export const ResearchPage: React.FC = () => {
           onTabSelect={handleTabSelect}
           onTabClose={handleTabClose}
           onTabSaved={handleTabSaved}
+          leftCollapsed={leftCollapsed}
         />
       )}
       {!rightCollapsed && activeMode === 'workspace' && (
@@ -1510,17 +1601,6 @@ export const ResearchPage: React.FC = () => {
             ? 'Ask Stella'
             : (selectedCode ? (targets.find((t) => t.stock_code === selectedCode)?.name ?? null) : null)}
           targetCode={activeMode === 'stella' ? null : selectedCode}
-          chatTitle={(() => {
-            if (activeMode === 'stella') {
-              const sid = stella.active?.chatSessionId;
-              if (!sid || !stella.chats) return null;
-              return stella.chats.find((c) => c.chatSession_id === sid)?.title ?? null;
-            }
-            const sid = targetChats.active?.chatSessionId;
-            if (!sid || !selectedCode) return null;
-            const list = targetChats.chatsByCode[selectedCode];
-            return list?.find((c) => c.chatSession_id === sid)?.title ?? null;
-          })()}
           width={activeMode === 'stella' ? undefined : rightWidth}
           fill={activeMode === 'stella'}
           collapsed={activeMode === 'stella' ? false : rightCollapsed}

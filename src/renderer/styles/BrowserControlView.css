@@ -11,7 +11,7 @@
   display: flex;
   flex-direction: column;
   height: 100%;
-  background: #FFFFFF;
+  background: var(--si-paper);
 }
 
 /* ===========================
@@ -74,14 +74,14 @@
 
 .browser-control-setting-item .setting-label {
   display: block;
-  color: #272320;
+  color: var(--si-ink);
   font-size: 14px;
   font-weight: 400;
 }
 
 .browser-control-setting-item .setting-sublabel {
   display: block;
-  color: #6b7280;
+  color: var(--si-muted);
   font-size: 12px;
   font-weight: 400;
   margin-top: 2px;
@@ -114,7 +114,7 @@
 .browser-control-toggle-track {
   width: 36px;
   height: 20px;
-  background-color: #e5e7eb;
+  background-color: var(--si-border);
   border-radius: 9999px;
   position: relative;
   transition: background-color 0.2s;
@@ -128,13 +128,13 @@
   width: 16px;
   height: 16px;
   background-color: white;
-  border: 1px solid #d1d5db;
+  border: 1px solid var(--si-border);
   border-radius: 9999px;
   transition: transform 0.2s;
 }
 
 .browser-control-toggle-wrapper input:checked + .browser-control-toggle-track {
-  background-color: #272320;
+  background-color: var(--si-ink);
 }
 
 .browser-control-toggle-wrapper input:checked + .browser-control-toggle-track::after {
@@ -143,7 +143,7 @@
 }
 
 .browser-control-toggle-wrapper:hover input:checked + .browser-control-toggle-track {
-  background-color: #3d3935;
+  background-color: var(--si-ink-hover);
 }
 
 /* Disabled state */
@@ -169,21 +169,21 @@
 
 .browser-control-inline-progress-label {
   font-size: 12px;
-  color: #6b7280;
+  color: var(--si-muted);
   white-space: nowrap;
 }
 
 .browser-control-inline-progress-bar-container {
   width: 80px;
   height: 6px;
-  background-color: #e5e7eb;
+  background-color: var(--si-border);
   border-radius: 3px;
   overflow: hidden;
 }
 
 .browser-control-inline-progress-bar {
   height: 100%;
-  background-color: #272320;
+  background-color: var(--si-ink);
   border-radius: 3px;
   transition: width 0.15s ease-out;
 }
@@ -208,7 +208,7 @@
 
 .browser-control-inline-progress-percent {
   font-size: 12px;
-  color: #6b7280;
+  color: var(--si-muted);
   min-width: 32px;
   text-align: right;
 }
@@ -224,8 +224,8 @@
   padding: 6px 16px;
   font-size: 13px;
   font-weight: 500;
-  color: #272320;
-  background-color: #f5f5f5;
+  color: var(--si-ink);
+  background-color: var(--si-code-bg);
   border: 1px solid rgba(0, 0, 0, 0.12);
   border-radius: 8px;
   cursor: pointer;

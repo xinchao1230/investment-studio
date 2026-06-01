@@ -11,7 +11,7 @@
   display: flex;
   flex-direction: column;
   height: 100%;
-  background: #FFFFFF;
+  background: var(--si-paper);
 }
 
 /* ===========================
@@ -144,7 +144,7 @@
 
 .toolbar-setting-item .setting-label {
   display: block;
-  color: #272320;
+  color: var(--si-ink);
   font-size: 14px;
   font-weight: 400;
 }
@@ -176,7 +176,7 @@
 .toolbar-toggle-track {
   width: 36px;
   height: 20px;
-  background-color: #e5e7eb;
+  background-color: var(--si-border);
   border-radius: 9999px;
   position: relative;
   transition: background-color 0.2s;
@@ -190,13 +190,13 @@
   width: 16px;
   height: 16px;
   background-color: white;
-  border: 1px solid #d1d5db;
+  border: 1px solid var(--si-border);
   border-radius: 9999px;
   transition: transform 0.2s;
 }
 
 .toolbar-toggle-wrapper input:checked + .toolbar-toggle-track {
-  background-color: #272320;
+  background-color: var(--si-gold);
 }
 
 .toolbar-toggle-wrapper input:checked + .toolbar-toggle-track::after {
@@ -205,7 +205,7 @@
 }
 
 .toolbar-toggle-wrapper:hover input:checked + .toolbar-toggle-track {
-  background-color: #3d3935;
+  background-color: var(--si-accent-strong);
 }
 
 /* ===========================
@@ -222,11 +222,11 @@
 .toolbar-select {
   appearance: none;
   background-color: #FFFFFF;
-  border: 1px solid #d1d5db;
+  border: 1px solid var(--si-border);
   border-radius: 0.5rem;
   padding: 0.25rem 2rem 0.25rem 0.75rem;
   font-size: 14px;
-  color: #272320;
+  color: var(--si-ink);
   cursor: pointer;
   outline: none;
   transition: all 0.2s;
@@ -238,12 +238,12 @@
 }
 
 .toolbar-select:hover {
-  border-color: #272320;
+  border-color: var(--si-ink);
 }
 
 .toolbar-select:focus {
-  border-color: #272320;
-  box-shadow: 0 0 0 1px #272320;
+  border-color: var(--si-ink);
+  box-shadow: 0 0 0 1px var(--si-gold);
 }
 
 /* ===========================
@@ -252,7 +252,7 @@
 
 .toolbar-shortcut-section .shortcut-label {
   display: block;
-  color: #272320;
+  color: var(--si-ink);
   font-size: 14px;
   font-weight: 400;
   padding: 10px 4px;
@@ -272,7 +272,7 @@
 .toolbar-agent-visibility-title {
   font-size: 14px;
   font-weight: 400;
-  color: #272320;
+  color: var(--si-ink);
   display: flex;
   align-items: center;
   gap: 0.5rem;
@@ -280,7 +280,7 @@
 
 .toolbar-agent-visibility-title .title-icon {
   padding: 0.375rem;
-  background-color: #F8F4F1;
+  background-color: var(--si-paper);
   border-radius: 0.5rem;
   display: flex;
   align-items: center;
@@ -290,23 +290,23 @@
 .toolbar-agent-visibility-title .title-icon svg {
   width: 1rem;
   height: 1rem;
-  color: #272320;
+  color: var(--si-ink);
 }
 
 .toolbar-toggle-all-btn {
   padding: 0.25rem 0.75rem;
   font-size: 12px;
   font-weight: 400;
-  background-color: #272320;
+  background-color: var(--si-gold);
   color: white;
   border-radius: 0.75rem;
-  border: 1px solid #272320;
+  border: 1px solid var(--si-gold);
   cursor: pointer;
   transition: background-color 0.2s;
 }
 
 .toolbar-toggle-all-btn:hover {
-  background-color: #3d3935;
+  background-color: var(--si-accent-strong);
 }
 
 /* ===========================
@@ -322,7 +322,7 @@
   width: 2rem;
   height: 2rem;
   border: 2px solid transparent;
-  border-bottom-color: #272320;
+  border-bottom-color: var(--si-border-strong);
   border-radius: 9999px;
   margin: 0 auto;
   animation: toolbar-spin 1s linear infinite;
@@ -338,7 +338,7 @@
 }
 
 .toolbar-loading-state .loading-text {
-  color: #272320;
+  color: var(--si-ink);
   margin-top: 0.75rem;
   font-size: 14px;
   font-weight: 400;
@@ -355,7 +355,7 @@
 
 .toolbar-empty-state .empty-icon-container {
   padding: 1rem;
-  background-color: #f3f4f6;
+  background-color: var(--si-code-bg);
   border-radius: 9999px;
   width: fit-content;
   margin: 0 auto 0.75rem auto;
@@ -367,18 +367,18 @@
 .toolbar-empty-state .empty-icon-container svg {
   width: 2rem;
   height: 2rem;
-  color: #9ca3af;
+  color: var(--si-faint);
 }
 
 .toolbar-empty-state .empty-title {
-  color: #272320;
+  color: var(--si-ink);
   font-size: 14px;
   font-weight: 400;
 }
 
 .toolbar-empty-state .empty-description {
   font-size: 12px;
-  color: #6b7280;
+  color: var(--si-muted);
   margin-top: 0.25rem;
 }
 
@@ -418,7 +418,7 @@
 }
 
 .toolbar-agent-item .agent-name {
-  color: #272320;
+  color: var(--si-ink);
   font-size: 14px;
   font-weight: 400;
 }
@@ -446,7 +446,7 @@
 .toolbar-agent-checkbox {
   width: 1.25rem;
   height: 1.25rem;
-  border: 2px solid #d1d5db;
+  border: 2px solid var(--si-border);
   border-radius: 0.25rem;
   background-color: white;
   transition: all 0.2s;
@@ -467,8 +467,8 @@
 }
 
 .toolbar-agent-checkbox-wrapper input:checked + .toolbar-agent-checkbox {
-  background-color: #272320;
-  border-color: #272320;
+  background-color: var(--si-ink);
+  border-color: var(--si-ink);
 }
 
 .toolbar-agent-checkbox-wrapper input:checked + .toolbar-agent-checkbox::after {
@@ -476,7 +476,7 @@
 }
 
 .toolbar-agent-checkbox-wrapper:hover .toolbar-agent-checkbox {
-  border-color: #272320;
+  border-color: var(--si-ink);
 }
 
 /* ===========================
