@@ -80,7 +80,18 @@ export async function runPostLoginSeeders(
     seedLog(`[builtin-skills] EXCEPTION: ${e instanceof Error ? e.message : String(e)}`);
   }
 
-  // 3) Ensure portfolio/_shared/ subdirs exist
+  // 3) Seed builtin agents (sub-agents pre-installed for the brand)
+  if (brand === BRAND_INVESTMENT_STUDIO) {
+    try {
+      const { seedBuiltinAgents } = await import('../lib/subAgent/builtinAgentSeeder');
+      const r = await seedBuiltinAgents(userLogin, brand);
+      seedLog(`[builtin-agents] installed=[${r.installed.join(',')}] skipped=[${r.skipped.join(',')}] failed=[${r.failed.map(f => `${f.name}:${f.error}`).join('|')}]`);
+    } catch (e) {
+      seedLog(`[builtin-agents] EXCEPTION: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }
+
+  // 4) Ensure portfolio/_shared/ subdirs exist
   if (brand === BRAND_INVESTMENT_STUDIO) {
     try {
       const sharedRoot = path.join(app.getPath('userData'), 'portfolio', '_shared');
@@ -104,7 +115,7 @@ export async function runPostLoginSeeders(
     }
   }
 
-  // 4) Auto-install research-mcp Python venv in background
+  // 5) Auto-install research-mcp Python venv in background
   if (brand === BRAND_INVESTMENT_STUDIO) {
     setImmediate(() => { void autoInstallResearchMcpVenv(); });
   }

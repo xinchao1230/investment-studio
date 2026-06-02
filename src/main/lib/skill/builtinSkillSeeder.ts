@@ -10,6 +10,7 @@ import * as path from 'path';
 import { skillManager } from './skillManager';
 import { profileCacheManager } from '../userDataADO/profileCacheManager';
 import { getBuiltinSkillNamesForBrand } from '../../../shared/constants/builtinSkills';
+import { SUBAGENT_EXCLUSIVE_SKILLS } from '../../../shared/constants/builtinAgents';
 import { isBuiltinAgent } from '../userDataADO/types/profile';
 import { createLogger } from '../unifiedLogger';
 
@@ -112,7 +113,7 @@ export async function seedBuiltinSkills(
     }
   }
 
-  // Attach newly installed skills to builtin agents
+  // Attach newly installed skills to builtin agents (excluding sub-agent exclusive skills)
   if (result.installed.length > 0) {
     try {
       const profile = profileCacheManager.getCachedProfile(userAlias) as any;
@@ -121,7 +122,9 @@ export async function seedBuiltinSkills(
         for (const chat of profile.chats) {
           if (chat.agent && isBuiltinAgent(chat.agent.name, brandName)) {
             const agentSkills: string[] = Array.isArray(chat.agent.skills) ? chat.agent.skills : [];
-            const missing = result.installed.filter(s => !agentSkills.includes(s));
+            const missing = result.installed.filter(s =>
+              !agentSkills.includes(s) && !SUBAGENT_EXCLUSIVE_SKILLS.includes(s)
+            );
             if (missing.length > 0) {
               chat.agent.skills = [...agentSkills, ...missing];
               changed = true;
@@ -135,6 +138,30 @@ export async function seedBuiltinSkills(
     } catch {
       // best effort
     }
+  }
+
+  // Remove sub-agent exclusive skills from main agent if previously attached
+  try {
+    const profile = profileCacheManager.getCachedProfile(userAlias) as any;
+    if (profile && Array.isArray(profile.chats)) {
+      let changed = false;
+      for (const chat of profile.chats) {
+        if (chat.agent && isBuiltinAgent(chat.agent.name, brandName)) {
+          const agentSkills: string[] = Array.isArray(chat.agent.skills) ? chat.agent.skills : [];
+          const filtered = agentSkills.filter(s => !SUBAGENT_EXCLUSIVE_SKILLS.includes(s));
+          if (filtered.length < agentSkills.length) {
+            chat.agent.skills = filtered;
+            changed = true;
+          }
+        }
+      }
+      if (changed) {
+        await profileCacheManager.forceNotifyProfileDataManager(userAlias);
+        logger.info('[BuiltinSkillSeeder] Removed sub-agent exclusive skills from main agent');
+      }
+    }
+  } catch {
+    // best effort
   }
 
   logger.info(

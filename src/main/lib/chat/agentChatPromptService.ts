@@ -8,6 +8,7 @@ import { getGlobalSystemPromptAsMessages } from './globalSystemPrompt';
 import { skillManager } from '../skill/skillManager';
 import { isFeatureEnabled } from '../featureFlags';
 import { SubAgentFileManager } from '../subAgent/subAgentFileManager';
+import { SUBAGENT_EXCLUSIVE_SKILLS } from '../../../shared/constants/builtinAgents';
 import { buildChatSkillSnapshot } from './skillSnapshotBuilder';
 import { createLogger } from '../unifiedLogger';
 import { wrapInSystemReminder } from './systemReminderUtils';
@@ -270,7 +271,8 @@ export class AgentChatPromptService {
             const claudeSkillsDir = path.join(knowledgeBasePath, '.claude', 'skills');
             if (fs.existsSync(claudeSkillsDir)) {
               const entries: any[] = fs.readdirSync(claudeSkillsDir, { withFileTypes: true });
-              const skillDirs = entries.filter((entry: any) => entry.isDirectory());
+              const skillDirs = entries.filter((entry: any) => entry.isDirectory()
+                && !SUBAGENT_EXCLUSIVE_SKILLS.includes(entry.name));
 
               if (skillDirs.length > 0) {
                 const fsSkillsSections: string[] = [];

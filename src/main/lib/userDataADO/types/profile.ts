@@ -1135,8 +1135,14 @@ export const WHISPER_MODELS: Record<WhisperModelSize, WhisperModelInfo> = {
 /** Built-in agent list for openkosmos branding (Kobi only) */
 export const BUILTIN_AGENT_NAMES_OpenKosmos: string[] = ['Kobi'];
 
-/** Built-in agent list for investment-studio branding (Stella only) */
-export const BUILTIN_AGENT_NAMES_INVESTMENT_STUDIO: string[] = ['Stella'];
+/** Built-in agent list for investment-studio branding */
+export const BUILTIN_AGENT_NAMES_INVESTMENT_STUDIO: string[] = [
+  'Stella',
+  'research-assistant',
+  'market-researcher',
+  'model-builder',
+  'earnings-reviewer',
+];
 
 /**
  * Get the built-in agent name list for the given brand.

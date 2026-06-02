@@ -68,12 +68,12 @@ export const FEATURE_FLAG_DEFINITIONS: FeatureFlagConfig[] = [
   {
     name: 'openkosmosFeatureSubAgent',
     description: 'Named Sub-Agent system — AGENT.md management, settings UI, agent editor tab, delegation prompt',
-    defaultValue: false,
+    defaultValue: true,
   },
   {
     name: 'openkosmosFeatureSubAgentAutoWake',
     description: 'Auto-wake parent session when background sub-agent results are ready',
-    defaultValue: (ctx) => ctx.isDev,
+    defaultValue: true,
   },
 
   // ============== Sync ==============
