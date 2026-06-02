@@ -340,8 +340,8 @@ Content.
       expect(md).toContain('model: sonnet');
       expect(md).not.toContain('maxTurns');
 
-      // Verify x-openkosmos fields
-      expect(md).toContain('x-openkosmos:');
+      // Verify x-kosmos fields (canonical namespace; x-openkosmos still parsed for legacy)
+      expect(md).toContain('x-kosmos:');
       expect(md).toContain('inherit_mcp_servers: false');
 
       // Verify system_prompt as body
@@ -487,8 +487,9 @@ Content.
       expect(md).toContain('description: Export test');
       expect(md).toContain('model: sonnet');
 
-      // Should NOT contain x-openkosmos fields
+      // Should NOT contain Kosmos extension namespace fields
       expect(md).not.toContain('x-openkosmos');
+      expect(md).not.toContain('x-kosmos');
       expect(md).not.toContain('display_name');
       expect(md).not.toContain('emoji');
       expect(md).not.toContain('builtin_tools');

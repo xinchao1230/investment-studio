@@ -214,8 +214,15 @@ export class SubAgentFileManager {
         ? content.substring(frontMatterEnd + 4).trim()
         : '';
 
-      // Extract x-openkosmos extension fields
-      const xOpenKosmos = (yamlData['x-openkosmos'] as Record<string, unknown>) || {};
+      // Extract Kosmos extension fields.
+      // Canonical namespace is `x-kosmos`; `x-openkosmos` is kept as a legacy alias
+      // so older files (and Claude Code imports written by previous versions) keep working.
+      const xKosmosRaw = yamlData['x-kosmos'];
+      const xOpenKosmosRaw = yamlData['x-openkosmos'];
+      const xKosmos: Record<string, unknown> = {
+        ...((xOpenKosmosRaw && typeof xOpenKosmosRaw === 'object') ? xOpenKosmosRaw as Record<string, unknown> : {}),
+        ...((xKosmosRaw && typeof xKosmosRaw === 'object') ? xKosmosRaw as Record<string, unknown> : {}),
+      };
 
       // Parse tools (supports comma-separated string or array)
       const tools = this.parseToolsList(yamlData.tools);
@@ -240,11 +247,24 @@ export class SubAgentFileManager {
         skills: skills.length > 0 ? skills : [],
         mcpServers: mcpServers.length > 0 ? mcpServers : [],
 
-        // OpenKosmos extension fields (read from x-openkosmos namespace, fallback to defaults)
-        builtin_tools: this.parseStringArray(xOpenKosmos.builtin_tools),
-        disallow_builtin_tools: this.parseStringArray(xOpenKosmos.disallow_builtin_tools),
-        inherit_mcp_servers: xOpenKosmos.inherit_mcp_servers != null ? Boolean(xOpenKosmos.inherit_mcp_servers) : true,
-        inherit_skills: xOpenKosmos.inherit_skills != null ? Boolean(xOpenKosmos.inherit_skills) : true,
+        // Kosmos extension fields (read from x-kosmos / x-openkosmos namespace, fallback to defaults)
+        builtin_tools: this.parseStringArray(xKosmos.builtin_tools),
+        disallow_builtin_tools: this.parseStringArray(xKosmos.disallow_builtin_tools),
+        inherit_mcp_servers: xKosmos.inherit_mcp_servers != null ? Boolean(xKosmos.inherit_mcp_servers) : true,
+        inherit_skills: xKosmos.inherit_skills != null ? Boolean(xKosmos.inherit_skills) : true,
+        display_name: typeof xKosmos.display_name === 'string' && xKosmos.display_name.trim()
+          ? xKosmos.display_name.trim()
+          : undefined,
+        emoji: typeof xKosmos.emoji === 'string' && xKosmos.emoji.trim()
+          ? xKosmos.emoji.trim()
+          : undefined,
+        version: xKosmos.version != null ? String(xKosmos.version) : undefined,
+        context_access: typeof xKosmos.context_access === 'string' && xKosmos.context_access.trim()
+          ? xKosmos.context_access.trim()
+          : undefined,
+        max_turns: typeof xKosmos.max_turns === 'number' && Number.isFinite(xKosmos.max_turns)
+          ? xKosmos.max_turns
+          : (typeof yamlData.maxTurns === 'number' && Number.isFinite(yamlData.maxTurns) ? yamlData.maxTurns as number : undefined),
 
         // Runtime fields
         system_prompt: markdownBody,
@@ -318,26 +338,41 @@ export class SubAgentFileManager {
       );
     }
 
-    // Build x-openkosmos extension fields
-    const xOpenKosmos: Record<string, unknown> = {};
+    // Build x-kosmos extension fields (canonical namespace)
+    const xKosmos: Record<string, unknown> = {};
 
+    if (config.display_name && config.display_name.trim()) {
+      xKosmos.display_name = config.display_name.trim();
+    }
+    if (config.emoji && config.emoji.trim()) {
+      xKosmos.emoji = config.emoji.trim();
+    }
+    if (config.version != null && String(config.version).trim()) {
+      xKosmos.version = String(config.version);
+    }
+    if (config.context_access && config.context_access.trim()) {
+      xKosmos.context_access = config.context_access.trim();
+    }
+    if (typeof config.max_turns === 'number' && Number.isFinite(config.max_turns)) {
+      xKosmos.max_turns = config.max_turns;
+    }
     if (config.builtin_tools && config.builtin_tools.length > 0) {
-      xOpenKosmos.builtin_tools = config.builtin_tools;
+      xKosmos.builtin_tools = config.builtin_tools;
     }
     if (config.disallow_builtin_tools && config.disallow_builtin_tools.length > 0) {
-      xOpenKosmos.disallow_builtin_tools = config.disallow_builtin_tools;
+      xKosmos.disallow_builtin_tools = config.disallow_builtin_tools;
     }
     if (config.inherit_mcp_servers === false) {
-      xOpenKosmos.inherit_mcp_servers = false;
+      xKosmos.inherit_mcp_servers = false;
     }
     if (config.inherit_skills === false) {
-      xOpenKosmos.inherit_skills = false;
+      xKosmos.inherit_skills = false;
     }
 
     // Merge into top-level YAML object
     const yamlObj: Record<string, unknown> = { ...standardFields };
-    if (Object.keys(xOpenKosmos).length > 0) {
-      yamlObj['x-openkosmos'] = xOpenKosmos;
+    if (Object.keys(xKosmos).length > 0) {
+      yamlObj['x-kosmos'] = xKosmos;
     }
 
     // Render YAML (no flow style, for readability)
@@ -523,7 +558,7 @@ export class SubAgentFileManager {
   }
 
   /**
-   * Export as Claude Code standard format (strips x-openkosmos namespace)
+   * Export as Claude Code standard format (strips x-kosmos / x-openkosmos namespace)
    */
   exportAsClaudeCodeFormat(config: SubAgentConfig): string {
     // Keep only Claude Code standard fields

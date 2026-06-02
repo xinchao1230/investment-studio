@@ -65,10 +65,11 @@ export const BUILTIN_SKILL_CHANGELOG: Record<number, string[]> = {
   1: ['docx', 'frontend-design', 'pptx', 'skill-creator'],
   2: ['dcf-model', 'comps-analysis', '3-statement-model', 'competitive-analysis', 'initiating-coverage', 'idea-generation', 'sector-overview'],
   3: ['earnings-preview', 'thesis-tracker', 'catalyst-calendar', 'model-update'],
+  4: ['earnings-analysis', 'audit-xls', 'morning-note'],
 };
 
 /** Current migration version — must equal the highest key in BUILTIN_SKILL_CHANGELOG. */
-export const BUILTIN_DEFAULTS_VERSION = 3;
+export const BUILTIN_DEFAULTS_VERSION = 4;
 
 /**
  * Check if a skill is a built-in skill
@@ -87,7 +88,6 @@ const INVESTMENT_STUDIO_SKILL_NAMES: string[] = [
   'key-drivers',
   'xlsx',
   'earnings-forecast',
-  'earnings-review',
   'industry-comparison',
   'marginal-tracking',
   'stock-screening',
@@ -104,6 +104,10 @@ const INVESTMENT_STUDIO_SKILL_NAMES: string[] = [
   'thesis-tracker',
   'catalyst-calendar',
   'model-update',
+  // FSI imports — earnings-reviewer agent skills
+  'earnings-analysis',
+  'audit-xls',
+  'morning-note',
 ];
 
 /**
