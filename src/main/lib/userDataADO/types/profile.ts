@@ -1138,10 +1138,16 @@ export const BUILTIN_AGENT_NAMES_OpenKosmos: string[] = ['Kobi'];
 /** Built-in agent list for investment-studio branding */
 export const BUILTIN_AGENT_NAMES_INVESTMENT_STUDIO: string[] = [
   'Stella',
-  'research-assistant',
   'market-researcher',
   'model-builder',
   'earnings-reviewer',
+  'pitch-agent',
+  'meeting-prep-agent',
+  'valuation-reviewer',
+  'gl-reconciler',
+  'month-end-closer',
+  'statement-auditor',
+  'kyc-screener',
 ];
 
 /**

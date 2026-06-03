@@ -102,6 +102,13 @@ async function main() {
     fs.cpSync(resourcesSrc, path.join(VITE_PACK, 'resources'), { recursive: true });
   }
 
+  // Copy skills/ → vite-pack/skills/  (top-level skill bundles consumed by builtinSkillSeeder)
+  const skillsSrc = path.join(ROOT, 'skills');
+  if (fs.existsSync(skillsSrc)) {
+    console.log('  Copying skills/ → vite-pack/skills/');
+    fs.cpSync(skillsSrc, path.join(VITE_PACK, 'skills'), { recursive: true });
+  }
+
   // Generate vite-pack/package.json
   console.log('  Generating vite-pack/package.json');
   const rootPkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf-8'));

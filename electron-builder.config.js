@@ -34,6 +34,9 @@ module.exports = {
     'dist/**/*',
     'resources/**/*',
     '!resources/python',
+    // Top-level skills/ is the source-of-truth for builtin skill bundles
+    // (read by builtinSkillSeeder at app.getAppPath()/skills/<name>).
+    'skills/**/*',
     'package.json',
     '!**/*.map',
     '!**/*.ts',
