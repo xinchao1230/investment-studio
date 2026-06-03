@@ -445,12 +445,23 @@ export const ResearchPage: React.FC = () => {
   }, [leftCollapsed, leftWidth]);
   // ----------------------------------------------------------------------
 
-  // First-use / empty-state UX: auto-open the add-target entry whenever the
-  // list is empty (initial load with no targets, or after the user clears the
-  // last one). Equivalent to the user clicking the "+" button automatically.
+  // First-use / empty-state UX: auto-open the add-target entry when the list
+  // becomes empty (initial load with no targets, or after the user deletes the
+  // last one). One-shot per empty→non-empty cycle: once the user dismisses the
+  // form via Cancel, we don't re-open it until targets go non-empty and back to
+  // empty again. Without this guard the Cancel button was a no-op — the effect
+  // would immediately re-set showAddForm to true on the same render cycle.
+  const autoShowedForEmptyRef = useRef(false);
   useEffect(() => {
     if (loading) return;
-    if (targets.length === 0 && !showAddForm) {
+    if (targets.length > 0) {
+      // Reset the guard so the next time targets goes empty we auto-show again.
+      autoShowedForEmptyRef.current = false;
+      return;
+    }
+    // targets.length === 0
+    if (!autoShowedForEmptyRef.current && !showAddForm) {
+      autoShowedForEmptyRef.current = true;
       setAddError(null);
       setShowAddForm(true);
     }

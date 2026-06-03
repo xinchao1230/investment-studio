@@ -116,7 +116,7 @@ const CreateSubAgentView: React.FC = () => {
               <path d="M20 11H7.83L13.42 5.41L12 4L4 12L12 20L13.41 18.59L7.83 13H20V11Z" fill="var(--si-ink)"/>
             </svg>
           </button>
-          <span className="header-name">Create Sub-Agent</span>
+          <span className="header-name">Create Agent</span>
         </div>
         <div className="header-actions" />
       </div>
@@ -128,7 +128,7 @@ const CreateSubAgentView: React.FC = () => {
           errors={errors}
           isNameEditable={true}
           isSubmitting={isSubmitting}
-          submitLabel="Create Sub-Agent"
+          submitLabel="Create Agent"
           submittingLabel="Creating..."
           onUpdateField={updateField}
           onUpdateFormData={setFormData}

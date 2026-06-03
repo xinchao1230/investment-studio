@@ -193,10 +193,10 @@ const SubAgentsView: React.FC = () => {
       <div className="unified-header">
         <div className="header-title">
           <SubAgentsIcon />
-          <span className="header-name">Sub-Agents</span>
+          <span className="header-name">Financial Services Agents</span>
           <div className="mcp-status-badges">
             <Badge variant="normal" className="text-xs">
-              available sub-agents: {stats.total}
+              available agents: {stats.total}
             </Badge>
           </div>
         </div>

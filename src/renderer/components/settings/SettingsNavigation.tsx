@@ -198,6 +198,16 @@ const SettingsNavigation: React.FC<SettingsNavigationProps> = ({ onBack }) => {
             ariaLabel="Application settings"
           />
 
+          {subAgentEnabled && (
+            <NavItem
+              icon={<SubAgentIcon />}
+              label="Financial Services Agents"
+              isActive={activeView === 'sub-agents'}
+              onClick={() => navigate('/settings/sub-agents')}
+              ariaLabel="Financial Services Agents"
+            />
+          )}
+
           {isInvestmentStudio && (
             <NavItem
               icon={<Key size={18} />}
@@ -239,16 +249,6 @@ const SettingsNavigation: React.FC<SettingsNavigationProps> = ({ onBack }) => {
               isActive={activeView === 'plugins'}
               onClick={() => navigate('/settings/plugins')}
               ariaLabel="Plugin Management"
-            />
-          )}
-
-          {subAgentEnabled && (
-            <NavItem
-              icon={<SubAgentIcon />}
-              label="Financial Services Agents"
-              isActive={activeView === 'sub-agents'}
-              onClick={() => navigate('/settings/sub-agents')}
-              ariaLabel="Financial Services Agents"
             />
           )}
 

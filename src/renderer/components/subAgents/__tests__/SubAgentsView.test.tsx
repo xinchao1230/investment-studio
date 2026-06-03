@@ -90,16 +90,16 @@ describe('SubAgentsView', () => {
       expect(container.querySelector('.unified-header')).toBeInTheDocument();
     });
 
-    it('should render header name "Sub-Agents"', () => {
+    it('should render header name "Financial Services Agents"', () => {
       mockUseSubAgents.mockReturnValue({ subAgents: [], stats: { total: 0 }, isLoading: false });
       render(<SubAgentsView />);
-      expect(screen.getByText('Sub-Agents')).toBeInTheDocument();
+      expect(screen.getByText('Financial Services Agents')).toBeInTheDocument();
     });
 
     it('should render Badge with total count', () => {
       mockUseSubAgents.mockReturnValue({ subAgents: [], stats: { total: 5 }, isLoading: false });
       render(<SubAgentsView />);
-      expect(screen.getByText('available sub-agents: 5')).toBeInTheDocument();
+      expect(screen.getByText('available agents: 5')).toBeInTheDocument();
     });
 
     it('should render .sub-agents-content-view', () => {
