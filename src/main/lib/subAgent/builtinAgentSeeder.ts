@@ -44,8 +44,13 @@ function findAgentSourceDir(agentName: string): string | null {
   const appPath = app.getAppPath();
   const resourcesPath = (process as any).resourcesPath;
 
+  // app.getAppPath() resolves to <repo-root> in webpack dev / asar in packaged,
+  // but to <repo-root>/dist-vite/main in electron-vite dev — hence the extra
+  // two-level-up candidates so seeding works in both dev flows.
   candidates.push(path.join(appPath, 'resources', 'examples', 'agents', agentName));
   candidates.push(path.join(appPath, 'agents', agentName));
+  candidates.push(path.join(appPath, '..', '..', 'resources', 'examples', 'agents', agentName));
+  candidates.push(path.join(appPath, '..', '..', 'agents', agentName));
   if (resourcesPath) {
     candidates.push(path.join(resourcesPath, 'examples', 'agents', agentName));
     candidates.push(path.join(resourcesPath, 'agents', agentName));
