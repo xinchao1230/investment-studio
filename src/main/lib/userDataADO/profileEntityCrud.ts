@@ -14,6 +14,7 @@ import {
 } from './types/profile';
 import { clearSkillSnapshotsForAffectedChats } from './profileSanitizer';
 import { SubAgentFileManager } from "../subAgent/subAgentFileManager";
+import { builtinAgentRegistry } from "../subAgent/builtinAgentRegistry";
 
 const logger = createConsoleLogger();
 
@@ -275,6 +276,8 @@ export async function deleteSkill(ctx: EntityCrudContext, alias: string, skillNa
 // ═══════ Sub-Agent CRUD ═══════
 
 export async function getSubAgents(ctx: EntityCrudContext): Promise<SubAgentConfig[]> {
+  const builtins = builtinAgentRegistry.list();
+
   try {
     const fileManager = SubAgentFileManager.getInstance();
 
@@ -286,15 +289,15 @@ export async function getSubAgents(ctx: EntityCrudContext): Promise<SubAgentConf
         const configs = await fileManager.scanAllAgents(profileDir);
         fileManager.markCacheWarmed(alias);
         if (configs.length > 0) {
-          return configs;
+          return mergeBuiltinsWithUser(builtins, configs);
         }
         if (Array.isArray(profile.sub_agents) && profile.sub_agents.length > 0) {
           const first = profile.sub_agents[0] as any;
           if ('system_prompt' in first) {
-            return profile.sub_agents as SubAgentConfig[];
+            return mergeBuiltinsWithUser(builtins, profile.sub_agents as SubAgentConfig[]);
           }
         }
-        return [];
+        return mergeBuiltinsWithUser(builtins, []);
       }
 
       const index = getSubAgentIndex(ctx, alias);
@@ -305,18 +308,33 @@ export async function getSubAgents(ctx: EntityCrudContext): Promise<SubAgentConf
           configs.push(config);
         }
       }
-      return configs;
+      return mergeBuiltinsWithUser(builtins, configs);
     }
-    return [];
+    return mergeBuiltinsWithUser(builtins, []);
   } catch (error) {
     logger.error(`[ProfileCacheManager] getSubAgents error:`, error instanceof Error ? error.message : String(error));
     for (const [, profile] of ctx.cache) {
       if (isProfileV2(profile) && Array.isArray(profile.sub_agents)) {
-        return profile.sub_agents as SubAgentConfig[];
+        return mergeBuiltinsWithUser(builtins, profile.sub_agents as SubAgentConfig[]);
       }
     }
-    return [];
+    return mergeBuiltinsWithUser(builtins, []);
   }
+}
+
+/**
+ * Built-ins win on name collision. A pre-B profile may still contain seeded
+ * built-in entries under `profile.sub_agents`; filtering them out here makes
+ * those on-disk duplicates harmless.
+ */
+function mergeBuiltinsWithUser(
+  builtins: ReadonlyArray<SubAgentConfig>,
+  user: SubAgentConfig[],
+): SubAgentConfig[] {
+  if (builtins.length === 0) return user;
+  const reserved = new Set(builtins.map(b => b.name));
+  const userOnly = user.filter(u => !reserved.has(u.name));
+  return [...builtins, ...userOnly];
 }
 
 export function getSubAgentIndex(ctx: EntityCrudContext, alias?: string): SubAgentIndex[] {
@@ -336,6 +354,10 @@ export function getSubAgentIndex(ctx: EntityCrudContext, alias?: string): SubAge
 }
 
 export async function addSubAgent(ctx: EntityCrudContext, alias: string, config: SubAgentConfig): Promise<boolean> {
+  if (builtinAgentRegistry.has(config.name)) {
+    logger.warn(`[ProfileCacheManager] addSubAgent rejected: "${config.name}" is a reserved built-in agent name`);
+    return false;
+  }
   try {
     let profile = ctx.cache.get(alias);
     if (!profile) {
@@ -389,6 +411,10 @@ export async function addSubAgent(ctx: EntityCrudContext, alias: string, config:
 }
 
 export async function updateSubAgent(ctx: EntityCrudContext, alias: string, name: string, updates: Partial<SubAgentConfig>): Promise<boolean> {
+  if (builtinAgentRegistry.has(name)) {
+    logger.warn(`[ProfileCacheManager] updateSubAgent rejected: "${name}" is a read-only built-in agent`);
+    return false;
+  }
   try {
     let profile = ctx.cache.get(alias);
     if (!profile) {
@@ -451,6 +477,10 @@ export async function updateSubAgent(ctx: EntityCrudContext, alias: string, name
 }
 
 export async function deleteSubAgent(ctx: EntityCrudContext, alias: string, name: string): Promise<boolean> {
+  if (builtinAgentRegistry.has(name)) {
+    logger.warn(`[ProfileCacheManager] deleteSubAgent rejected: "${name}" is a read-only built-in agent`);
+    return false;
+  }
   try {
     let profile = ctx.cache.get(alias);
     if (!profile) {

@@ -6,6 +6,7 @@ import { getProfileCacheManager } from '../lazy';
 
 import type { Context } from './shared';
 import { SubAgentFileManager } from "../../lib/subAgent/subAgentFileManager";
+import { builtinAgentRegistry } from "../../lib/subAgent/builtinAgentRegistry";
 import { SubAgentTaskStore } from "../../lib/subAgent/subAgentTaskStore";
 import { SubAgentTaskWatcherRegistry } from "../../lib/subAgent/subAgentTaskWatcherRegistry";
 
@@ -115,6 +116,12 @@ export default function(ctx: Context) {
       // Import: parse .md → write AGENT.md
       const config = await fileManager.importClaudeCodeAgent(profileDir, filePath);
 
+      if (builtinAgentRegistry.has(config.name)) {
+        // Roll back: delete the just-written file so we don't shadow a built-in name on disk.
+        try { await fileManager.deleteAgentDirectory(profileDir, config.name); } catch { /* best effort */ }
+        return { success: false, error: `"${config.name}" is a reserved built-in agent name` };
+      }
+
       // Add index entry to profile
       await pcManager.addSubAgent(ctx.currentUserAlias, config);
 
@@ -139,7 +146,7 @@ export default function(ctx: Context) {
       const appPath = app.getPath('userData');
       const profileDir = path.join(appPath, 'profiles', ctx.currentUserAlias);
 
-      const config = await fileManager.readAgentConfig(profileDir, name);
+      const config = builtinAgentRegistry.get(name) ?? await fileManager.readAgentConfig(profileDir, name);
       if (!config) {
         return { success: false, error: `Sub-agent "${name}" not found` };
       }
@@ -165,7 +172,18 @@ export default function(ctx: Context) {
 
       const appPath = app.getPath('userData');
       const profileDir = path.join(appPath, 'profiles', ctx.currentUserAlias);
-      const agentDir = fileManager.getAgentDirectory(profileDir, name);
+
+      // For built-ins, open the shipped resource directory (read-only).
+      let agentDir: string;
+      if (builtinAgentRegistry.has(name)) {
+        const file = builtinAgentRegistry.resolveAgentFile(name);
+        if (!file) {
+          return { success: false, error: `Built-in agent "${name}" source not found on disk` };
+        }
+        agentDir = path.dirname(file);
+      } else {
+        agentDir = fileManager.getAgentDirectory(profileDir, name);
+      }
 
       await shell.openPath(agentDir);
       return { success: true };

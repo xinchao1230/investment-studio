@@ -23,6 +23,7 @@ import { createConsoleLogger } from '../unifiedLogger';
 import * as path from 'path';
 import { app } from 'electron';
 import { SubAgentFileManager } from "./subAgentFileManager";
+import { builtinAgentRegistry } from "./builtinAgentRegistry";
 import {
   resolveSubAgentModel,
   getParentAgentConfig,
@@ -180,14 +181,16 @@ export class SubAgentManager extends EventEmitter {
     }
 
     try {
-      // ── 2. Get sub-agent config (read from file system) ──
+      // ── 2. Get sub-agent config (built-in registry first, then user file system) ──
       const fileManager = SubAgentFileManager.getInstance();
 
-      // Get profileDir to locate agents/{name}/AGENT.md
       const appPath = app.getPath('userData');
       const profileDir = path.join(appPath, 'profiles', params.userAlias);
 
-      const subAgentConfig = await fileManager.readAgentConfig(profileDir, params.subAgentName);
+      let subAgentConfig = builtinAgentRegistry.get(params.subAgentName);
+      if (!subAgentConfig) {
+        subAgentConfig = await fileManager.readAgentConfig(profileDir, params.subAgentName) ?? undefined;
+      }
 
       if (!subAgentConfig) {
         return {

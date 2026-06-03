@@ -8,6 +8,7 @@ import { getGlobalSystemPromptAsMessages } from './globalSystemPrompt';
 import { skillManager } from '../skill/skillManager';
 import { isFeatureEnabled } from '../featureFlags';
 import { SubAgentFileManager } from '../subAgent/subAgentFileManager';
+import { builtinAgentRegistry } from '../subAgent/builtinAgentRegistry';
 import { SUBAGENT_EXCLUSIVE_SKILLS } from '../../../shared/constants/builtinAgents';
 import { buildChatSkillSnapshot } from './skillSnapshotBuilder';
 import { createLogger } from '../unifiedLogger';
@@ -323,9 +324,12 @@ export class AgentChatPromptService {
     try {
       if (isFeatureEnabled('openkosmosFeatureSubAgent') && currentUserAlias && chatId) {
         const chatConfig = profileCacheManager.getChatConfig(currentUserAlias, chatId);
-        const subAgentNames = chatConfig?.agent?.sub_agents || [];
-        if (subAgentNames.length > 0) {
-          subAgentsInfo = this.buildSubAgentsSystemPrompt(subAgentNames);
+        const userSubAgentNames = chatConfig?.agent?.sub_agents || [];
+        // Built-ins are always available regardless of per-chat allowlist.
+        const builtinNames = builtinAgentRegistry.list().map(b => b.name);
+        const merged = Array.from(new Set([...builtinNames, ...userSubAgentNames]));
+        if (merged.length > 0) {
+          subAgentsInfo = this.buildSubAgentsSystemPrompt(merged);
         }
       }
     } catch (err) {
@@ -348,8 +352,15 @@ export class AgentChatPromptService {
 
   buildSubAgentsSystemPrompt(subAgentNames: string[]): string {
     const fileManager = SubAgentFileManager.getInstance();
-    const allSubAgents: import('../userDataADO/types/profile').SubAgentConfig[] = fileManager.getCachedConfigs();
-    const enabledSubAgents = allSubAgents.filter((sa) => subAgentNames.includes(sa.name));
+    const userConfigs = fileManager.getCachedConfigs();
+    const builtinConfigs = builtinAgentRegistry.list();
+    // Built-ins win on name collision.
+    const byName = new Map<string, import('../userDataADO/types/profile').SubAgentConfig>();
+    for (const u of userConfigs) byName.set(u.name, u);
+    for (const b of builtinConfigs) byName.set(b.name, b);
+    const enabledSubAgents = subAgentNames
+      .map(n => byName.get(n))
+      .filter((sa): sa is import('../userDataADO/types/profile').SubAgentConfig => !!sa);
 
     if (enabledSubAgents.length === 0) {
       return '';

@@ -72,6 +72,7 @@ import { userInputPlaceholderParser, UserInputField } from '../userDataADO/userI
 import { profileCacheManager } from '../userDataADO/profileCacheManager';
 import { featureFlagManager, isFeatureEnabled } from '../featureFlags';
 import { SubAgentFileManager } from '../subAgent/subAgentFileManager';
+import { builtinAgentRegistry } from '../subAgent/builtinAgentRegistry';
 import { AgentChatPromptService } from './agentChatPromptService';
 import { AgentChatSessionService } from './agentChatSessionService';
 import { AgentChatContextService } from './agentChatContextService';
@@ -1164,9 +1165,15 @@ export class AgentChat {
 
   /**
    * 🔥 New: Get the sub-agent config bound to the current Agent by name
-   * Steps: 1) Confirm reference from ChatAgent.sub_agents (name list); 2) Return config from ProfileV2.sub_agents (global registry)
+   * Steps: 1) Built-in agents are always available regardless of ChatAgent.sub_agents allowlist;
+   *        2) For user agents, confirm reference from ChatAgent.sub_agents (name list);
+   *        3) Return config from file system cache (sync, cache is pre-warmed at startup).
    */
   getSubAgentConfig(name: string): import('../userDataADO/types/profile').SubAgentConfig | undefined {
+    // Built-ins are always invokable (no per-chat allowlist).
+    const builtin = builtinAgentRegistry.get(name);
+    if (builtin) return builtin;
+
     if (!this.currentUserAlias || !this.chatId) return undefined;
     // Get current ChatConfig -> ChatAgent
     const chatConfig = profileCacheManager.getChatConfig(this.currentUserAlias, this.chatId);
