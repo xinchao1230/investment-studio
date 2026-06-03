@@ -233,8 +233,10 @@ export class SubAgentFileManager {
       // Parse mcpServers (supports Claude Code string references and OpenKosmos inline config)
       const mcpServers = this.parseMcpServers(yamlData.mcpServers || yamlData.mcp_servers);
 
-      // Parse skills
-      const skills = this.parseStringArray(yamlData.skills);
+      // Parse skills. Accept both top-level (Claude Code-style) and the
+      // x-kosmos namespace — brand-shipped AGENT.md files declare them under
+      // x-kosmos because `skills` is a Kosmos extension, not a Claude Code field.
+      const skills = this.parseStringArray(yamlData.skills ?? xKosmos.skills);
 
       // Build SubAgentConfig
       const config: SubAgentConfig = {
