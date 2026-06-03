@@ -655,19 +655,39 @@ export class TerminalInstance extends EventEmitter implements ITerminalInstance 
     // NOT the entire command string including arguments.
     let commandToExecute = this.config.command;
 
-    // Parse the command to separate executable from inline arguments
-    // e.g., "python scripts/download.py url" -> executable: "python", inlineArgs: "scripts/download.py url"
-    const { executable: cmdExecutable, inlineArgs } = this.parseCommandString(commandToExecute);
+    // For mcp_transport, command is an ATOMIC executable path (like spawn's
+    // first arg), never a human-typed "cmd arg arg" string. It must NOT be run
+    // through parseCommandString, which splits on the first space — that
+    // truncated paths like ".../Library/Application Support/.../uv" at the space
+    // and made zsh exec ".../Library/Application" (code 127). Quote it whole
+    // when it contains spaces, cross-platform.
+    const isAtomicExecutable = this.config.type === 'mcp_transport';
 
-    // Only quote the executable path if it contains spaces and path separators
-    let quotedExecutable = cmdExecutable;
-    const execHasSpaces = cmdExecutable.includes(' ');
-    const execHasPathSep = cmdExecutable.includes('\\') || cmdExecutable.includes('/');
-    const execIsQuoted = cmdExecutable.startsWith('"') || cmdExecutable.startsWith("'");
+    let quotedExecutable: string;
+    let inlineArgs = '';
 
-    if (process.platform === 'win32' && execHasSpaces && execHasPathSep && !execIsQuoted) {
-        // Only quote executable paths with spaces like "C:\Program Files\App\bin.exe"
-        quotedExecutable = `"${cmdExecutable}"`;
+    if (isAtomicExecutable) {
+      const execIsQuoted = commandToExecute.startsWith('"') || commandToExecute.startsWith("'");
+      quotedExecutable = commandToExecute.includes(' ') && !execIsQuoted
+        ? `"${commandToExecute}"`
+        : commandToExecute;
+    } else {
+      // Parse the command to separate executable from inline arguments
+      // e.g., "python scripts/download.py url" -> executable: "python", inlineArgs: "scripts/download.py url"
+      const parsed = this.parseCommandString(commandToExecute);
+      const cmdExecutable = parsed.executable;
+      inlineArgs = parsed.inlineArgs;
+
+      // Only quote the executable path if it contains spaces and path separators
+      quotedExecutable = cmdExecutable;
+      const execHasSpaces = cmdExecutable.includes(' ');
+      const execHasPathSep = cmdExecutable.includes('\\') || cmdExecutable.includes('/');
+      const execIsQuoted = cmdExecutable.startsWith('"') || cmdExecutable.startsWith("'");
+
+      if (process.platform === 'win32' && execHasSpaces && execHasPathSep && !execIsQuoted) {
+          // Only quote executable paths with spaces like "C:\Program Files\App\bin.exe"
+          quotedExecutable = `"${cmdExecutable}"`;
+      }
     }
 
     // Rebuild command: quoted executable + inline args (if any)
