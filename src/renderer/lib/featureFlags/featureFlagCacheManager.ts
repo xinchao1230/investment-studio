@@ -23,6 +23,7 @@ class FeatureFlagCacheManager {
   private flags: FeatureFlagsValues = {};
   private initialized: boolean = false;
   private initPromise: Promise<void> | null = null;
+  private listeners = new Set<() => void>();
 
   private constructor() {}
 
@@ -81,6 +82,14 @@ class FeatureFlagCacheManager {
       // If sync fails, attempt to load old cache from localStorage
       this.loadFromLocalStorage();
       this.initialized = true;
+    }
+
+    // Wake up any components that mounted before init completed.
+    // Iterate over a snapshot in case a listener unsubscribes itself.
+    for (const listener of [...this.listeners]) {
+      try { listener(); } catch (err) {
+        logger.error('[FeatureFlagsCache] Listener threw:', err);
+      }
     }
   }
 
@@ -167,6 +176,15 @@ class FeatureFlagCacheManager {
    */
   public get isInitialized(): boolean {
     return this.initialized;
+  }
+
+  /**
+   * Subscribe to cache state changes. The listener fires once when `initialize()`
+   * completes (success or fallback). Returns an unsubscribe function.
+   */
+  public subscribe(listener: () => void): () => void {
+    this.listeners.add(listener);
+    return () => { this.listeners.delete(listener); };
   }
 }
 

@@ -8,12 +8,18 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 const mockIsEnabled = vi.fn().mockReturnValue(false);
 const mockGetAllFlags = vi.fn().mockReturnValue({});
 let mockIsInitialized = false;
+const subscribers = new Set<() => void>();
+const notifySubscribers = () => { for (const fn of [...subscribers]) fn(); };
 
 vi.mock('../featureFlagCacheManager', () => ({
   featureFlagCacheManager: {
     get isInitialized() { return mockIsInitialized; },
     isEnabled: (...args: unknown[]) => mockIsEnabled(...args),
     getAllFlags: (...args: unknown[]) => mockGetAllFlags(...args),
+    subscribe: (listener: () => void) => {
+      subscribers.add(listener);
+      return () => { subscribers.delete(listener); };
+    },
   },
 }));
 
@@ -25,6 +31,7 @@ describe('useFeatureFlag', () => {
     vi.clearAllMocks();
     mockIsInitialized = false;
     mockIsEnabled.mockReturnValue(false);
+    subscribers.clear();
   });
 
   it('returns false when flag is disabled', () => {
@@ -56,21 +63,19 @@ describe('useFeatureFlag', () => {
     expect(result.current).toBe(true);
   });
 
-  it('does not re-check when manager is not yet initialized', () => {
+  it('updates flag when manager initializes after mount', () => {
     mockIsInitialized = false;
     mockIsEnabled.mockReturnValue(false);
 
-    const { result, rerender } = renderHook(
-      ({ name }: { name: string }) => useFeatureFlag(name),
-      { initialProps: { name: 'flagA' } }
-    );
+    const { result } = renderHook(() => useFeatureFlag('flagA'));
     expect(result.current).toBe(false);
 
-    // Even if isEnabled would now return true, no re-check happens because not initialized
+    // Simulate async init completing: flag becomes true and listeners are notified.
+    mockIsInitialized = true;
     mockIsEnabled.mockReturnValue(true);
-    act(() => { rerender({ name: 'flagA' }); });
-    // The effect won't call setEnabled because isInitialized is false
-    expect(result.current).toBe(false);
+    act(() => { notifySubscribers(); });
+
+    expect(result.current).toBe(true);
   });
 });
 
@@ -79,6 +84,7 @@ describe('useFeatureFlags', () => {
     vi.clearAllMocks();
     mockIsInitialized = false;
     mockGetAllFlags.mockReturnValue({});
+    subscribers.clear();
   });
 
   it('returns empty flags object initially', () => {

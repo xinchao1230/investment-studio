@@ -98,6 +98,39 @@ export const ContextMenu: React.FC = () => {
       );
     }
 
+    // SubAgent type option display (mirrors Skill layout: bold name + muted description)
+    if (option.type === ContextMenuOptionType.SubAgent) {
+      return (
+        <div
+          style={{
+            flex: 1,
+            overflow: 'hidden',
+            display: 'flex',
+            gap: '0.5em',
+            whiteSpace: 'nowrap',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            textAlign: 'left',
+          }}>
+          <span style={{ fontSize: '13px', fontWeight: 500 }}>{option.fileName}</span>
+          {option.description && (
+            <span
+              style={{
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                textAlign: 'right',
+                flex: 1,
+                opacity: 0.65,
+                fontSize: '11px',
+              }}>
+              {option.description}
+            </span>
+          )}
+        </div>
+      );
+    }
+
     if (option.type === ContextMenuOptionType.File || option.type === ContextMenuOptionType.Folder
         || option.type === ContextMenuOptionType.KnowledgeBase || option.type === ContextMenuOptionType.ChatSession) {
       if (hasValue) {
@@ -188,6 +221,11 @@ export const ContextMenu: React.FC = () => {
     // 🆕 ChatSession type icon
     if (option.type === ContextMenuOptionType.ChatSession) {
       return '💬';
+    }
+
+    // 🆕 SubAgent type icon
+    if (option.type === ContextMenuOptionType.SubAgent) {
+      return '🤖';
     }
 
     if (option.type === ContextMenuOptionType.File) {

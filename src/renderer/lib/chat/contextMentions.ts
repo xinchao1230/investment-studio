@@ -13,6 +13,9 @@ export const knowledgeBaseMentionRegex = /\[@knowledge-base:([^\]]+)\]/g;
 // Regex: matches [@chat-session:relative-path] format (supports spaces in paths)
 export const chatSessionMentionRegex = /\[@chat-session:([^\]]+)\]/g;
 
+// Regex: matches [@agent:sub-agent-name] format
+export const subAgentMentionRegex = /\[@agent:([^\]]+)\]/g;
+
 // Regex: matches [#skill:skill-name] format (supports spaces in names)
 // 🔧 FIX: matches the complete [...] bracket content, supports spaces in names
 export const skillMentionRegex = /\[#skill:([^\]]+)\]/g;
@@ -30,13 +33,15 @@ export enum ContextMenuOptionType {
   Skill = 'skill',
   KnowledgeBase = 'knowledgeBase',   // 🆕 Knowledge Base file
   ChatSession = 'chatSession',       // 🆕 Chat Session file
+  SubAgent = 'subAgent',             // 🆕 Sub-agent routing hint
   NoResults = 'no-results'
 }
 
 // 🆕 Mention source type (used to distinguish @ mention insertion formats)
 export enum MentionSourceType {
   KnowledgeBase = 'knowledgeBase',
-  ChatSession = 'chatSession'
+  ChatSession = 'chatSession',
+  SubAgent = 'subAgent'
 }
 
 // Context option interface
@@ -97,8 +102,13 @@ export function getContextMenuTriggerType(text: string, cursorPos: number): Cont
   // Check @ trigger (workspace mention)
   if (lastAtIndex !== -1) {
     const textAfterAt = beforeCursor.slice(lastAtIndex + 1);
-    // If workspace:, knowledge-base:, or chat-session: is already present, do not trigger again
-    if (textAfterAt.startsWith('workspace:') || textAfterAt.startsWith('knowledge-base:') || textAfterAt.startsWith('chat-session:')) return null;
+    // If workspace:, knowledge-base:, chat-session:, or agent: is already present, do not trigger again
+    if (
+      textAfterAt.startsWith('workspace:') ||
+      textAfterAt.startsWith('knowledge-base:') ||
+      textAfterAt.startsWith('chat-session:') ||
+      textAfterAt.startsWith('agent:')
+    ) return null;
     // No spaces allowed after @
     if (!/\s/.test(textAfterAt)) {
       return ContextMenuTriggerType.Workspace;
@@ -194,6 +204,9 @@ export function insertMention(
     } else if (mentionValue.startsWith('@chat-session:')) {
       prefix = '@chat-session:';
       path = mentionValue.substring('@chat-session:'.length);
+    } else if (mentionValue.startsWith('@agent:')) {
+      prefix = '@agent:';
+      path = mentionValue.substring('@agent:'.length);
     } else if (mentionValue.startsWith('@workspace:')) {
       // Backward compatible with old format
       prefix = '@workspace:';
@@ -204,6 +217,8 @@ export function insertMention(
         prefix = '@knowledge-base:';
       } else if (sourceType === MentionSourceType.ChatSession) {
         prefix = '@chat-session:';
+      } else if (sourceType === MentionSourceType.SubAgent) {
+        prefix = '@agent:';
       } else {
         prefix = '@workspace:';
       }
@@ -262,7 +277,7 @@ export function removeMention(
 ): { newText: string; newCursorPos: number } {
   const beforeCursor = text.slice(0, cursorPos);
   // 🔧 FIX: match bracket mention format (supports all types)
-  const match = beforeCursor.match(/\[@(?:workspace|knowledge-base|chat-session):[^\]]+\]$/);
+  const match = beforeCursor.match(/\[@(?:workspace|knowledge-base|chat-session|agent):[^\]]+\]$/);
 
   if (match) {
     const mentionLength = match[0].length;
@@ -360,5 +375,46 @@ export function filterSkillsByQuery(
       fileName: skill.name,
       description: skill.description || '',
       value: skill.name
+    }));
+}
+
+/**
+ * Extract all [@agent:...] mentions from a message
+ * @param text text content
+ * @returns array of sub-agent names
+ */
+export function extractSubAgentMentions(text: string): string[] {
+  const mentions: string[] = [];
+  const regex = new RegExp(subAgentMentionRegex);
+  let match;
+
+  while ((match = regex.exec(text)) !== null) {
+    mentions.push(match[1]);
+  }
+
+  return mentions;
+}
+
+/**
+ * Filter the sub-agent list by search query. Matches against both the canonical
+ * name (used in the token) and the human-readable display_name.
+ */
+export function filterSubAgentsByQuery(
+  subAgents: Array<{ name: string; display_name?: string; description?: string; emoji?: string }>,
+  query: string
+): ContextOption[] {
+  const lowerQuery = query.toLowerCase().trim();
+
+  return subAgents
+    .filter(sa => {
+      if (!lowerQuery) return true;
+      const haystack = `${sa.name} ${sa.display_name || ''}`.toLowerCase();
+      return haystack.includes(lowerQuery);
+    })
+    .map(sa => ({
+      type: ContextMenuOptionType.SubAgent,
+      fileName: sa.display_name || sa.name,
+      description: sa.description || '',
+      value: `@agent:${sa.name}`,
     }));
 }
