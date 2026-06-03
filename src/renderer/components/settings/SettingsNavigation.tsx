@@ -245,10 +245,10 @@ const SettingsNavigation: React.FC<SettingsNavigationProps> = ({ onBack }) => {
           {subAgentEnabled && (
             <NavItem
               icon={<SubAgentIcon />}
-              label="Sub-Agents"
+              label="Financial Services Agents"
               isActive={activeView === 'sub-agents'}
               onClick={() => navigate('/settings/sub-agents')}
-              ariaLabel="Sub-Agent Management"
+              ariaLabel="Financial Services Agents"
             />
           )}
 
