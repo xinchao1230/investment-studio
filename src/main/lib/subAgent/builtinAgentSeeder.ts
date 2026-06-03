@@ -119,6 +119,9 @@ export async function seedBuiltinAgents(
         continue;
       }
 
+      // Register in profile.sub_agents index so renderer sees it immediately
+      await profileCacheManager.addSubAgent(userAlias, parsed.data);
+
       result.installed.push(agentName);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
