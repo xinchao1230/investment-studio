@@ -254,15 +254,19 @@ export const ContextMenuAtom = atom(zeroContextMenuState, (get, set) => {
           const knowledgeBasePath = currentChatConfig?.agent?.knowledge?.knowledgeBase ?? currentChatConfig?.agent?.knowledgeBase;
           const workspacePath = currentChatConfig?.agent?.workspace;
 
-          // Sub-agents enabled for the current primary agent
+          // Sub-agents enabled for the current primary agent. Built-in agents
+          // (source==='BUILTIN') are app-level and always available regardless
+          // of the per-chat allowlist; user agents must be in `agent.sub_agents`.
           const subAgentOptions: ContextOption[] = (() => {
             if (!isFeatureEnabled('openkosmosFeatureSubAgent')) return [];
             const enabledNames: string[] = Array.isArray(currentChatConfig?.agent?.sub_agents)
               ? currentChatConfig.agent.sub_agents
               : [];
-            if (enabledNames.length === 0) return [];
             const allSubAgents = profileDataManager.getSubAgents?.() || [];
-            const enabled = allSubAgents.filter((sa: any) => enabledNames.includes(sa.name));
+            const enabled = allSubAgents.filter(
+              (sa: any) => sa.source === 'BUILTIN' || enabledNames.includes(sa.name),
+            );
+            if (enabled.length === 0) return [];
             return filterSubAgentsByQuery(enabled, query);
           })();
 

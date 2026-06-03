@@ -269,17 +269,14 @@ export class ProfileDataManager {
         this.cache.skills = data.profile.skills || []
 
         // 🆕 Update sub-agents configurations
-        // Profile push contains SubAgentIndex[] (lightweight: name, version, source only).
-        // We need to fetch full SubAgentConfig[] via IPC to get display_name, emoji, description, etc.
+        // Profile push contains SubAgentIndex[] (lightweight: name, version, source only)
+        // and only covers user-authored agents. Built-ins are surfaced by the
+        // main process's subAgent:getAll IPC (BuiltinAgentRegistry), so always
+        // fetch full configs to pick them up — even when the per-user index is
+        // empty (e.g. fresh skip-login profile).
         const subAgentIndex = data.profile.sub_agents || []
-        if (subAgentIndex.length > 0) {
-          // Set lightweight data first so the count is visible immediately
-          this.cache.subAgents = subAgentIndex as SubAgentConfig[]
-          // Then fetch full configs asynchronously
-          this.fetchFullSubAgentConfigs()
-        } else {
-          this.cache.subAgents = []
-        }
+        this.cache.subAgents = subAgentIndex as SubAgentConfig[]
+        this.fetchFullSubAgentConfigs()
 
         // 🆕 Refactored: MCP server config sync to mcpClientCacheManager
         // profileDataManager is no longer responsible for MCP config
@@ -730,10 +727,13 @@ export class ProfileDataManager {
    * Updates cache and notifies listeners so UI gets display_name, emoji, description, etc.
    */
   private fetchFullSubAgentConfigs(): void {
-    if (!window.electronAPI?.subAgent?.getAll) return
-    window.electronAPI.subAgent.getAll()
+    const getAll = window.electronAPI?.subAgent?.getAll
+    if (typeof getAll !== 'function') return
+    const ret = getAll()
+    if (!ret || typeof (ret as Promise<unknown>).then !== 'function') return
+    ret
       .then((result: { success: boolean; data?: SubAgentConfig[]; error?: string }) => {
-        if (result.success && Array.isArray(result.data)) {
+        if (result?.success && Array.isArray(result.data)) {
           this.cache.subAgents = result.data
           this.notifyListeners(false) // Debounced notification to refresh UI
         }

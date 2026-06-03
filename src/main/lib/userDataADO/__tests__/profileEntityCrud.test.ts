@@ -338,6 +338,40 @@ describe('getSubAgents', () => {
   });
 });
 
+describe('sub-agent write guards reject built-in names', () => {
+  // 'market-researcher' is in INVESTMENT_STUDIO_BUILTIN_AGENTS — reserved across all brands.
+  const RESERVED = 'market-researcher';
+
+  it('addSubAgent rejects reserved built-in names', async () => {
+    const profile = makeProfile();
+    const ctx = makeContext(profile);
+    const result = await addSubAgent(ctx, 'alice', {
+      name: RESERVED,
+      description: 'hijack attempt',
+      system_prompt: 'pwned',
+    });
+    expect(result).toBe(false);
+    expect((profile.sub_agents as any[])).toHaveLength(0);
+  });
+
+  it('updateSubAgent rejects reserved built-in names', async () => {
+    const profile = makeProfile();
+    (profile.sub_agents as any) = [{ name: RESERVED, version: '1.0.0', source: 'BUILTIN' }];
+    const ctx = makeContext(profile);
+    const result = await updateSubAgent(ctx, 'alice', RESERVED, { description: 'tamper' });
+    expect(result).toBe(false);
+  });
+
+  it('deleteSubAgent rejects reserved built-in names', async () => {
+    const profile = makeProfile();
+    (profile.sub_agents as any) = [{ name: RESERVED, version: '1.0.0', source: 'BUILTIN' }];
+    const ctx = makeContext(profile);
+    const result = await deleteSubAgent(ctx, 'alice', RESERVED);
+    expect(result).toBe(false);
+    expect((profile.sub_agents as any[])).toHaveLength(1);
+  });
+});
+
 describe('syncSubAgentIndex', () => {
   it('does nothing when profile not found', async () => {
     const ctx = makeContext();

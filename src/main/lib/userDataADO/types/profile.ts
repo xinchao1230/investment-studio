@@ -69,8 +69,8 @@ export interface SubAgentIndex {
   name: string;
   /** Local version number */
   version: string;
-  /** Source: locally created or plugin */
-  source: 'ON-DEVICE' | 'PLUGIN';
+  /** Source: locally created, plugin-supplied, or app-shipped built-in. */
+  source: 'ON-DEVICE' | 'PLUGIN' | 'BUILTIN';
 }
 
 /**
@@ -161,8 +161,8 @@ export interface SubAgentConfig {
   max_turns?: number;
   /** Version string for tracking updates */
   version?: string;
-  /** Source origin: ON-DEVICE (local file), PLUGIN (MCP-installed) */
-  source?: 'ON-DEVICE' | 'PLUGIN';
+  /** Source origin: ON-DEVICE (local file), PLUGIN (MCP-installed), BUILTIN (app-shipped, read-only). */
+  source?: 'ON-DEVICE' | 'PLUGIN' | 'BUILTIN';
 }
 
 /**
