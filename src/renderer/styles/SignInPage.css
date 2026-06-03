@@ -179,21 +179,31 @@
 }
 .si-code-row {
   display: flex;
-  align-items: center;
+  align-items: stretch;
   justify-content: center;
   gap: 8px;
   margin-bottom: 18px;
 }
 .si-code-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   font-family: var(--font-mono, 'SF Mono', Consolas, monospace);
   font-size: 22px;
   font-weight: 700;
   letter-spacing: 3px;
+  line-height: 1;
   color: var(--si-ink);
   background: var(--si-code-bg);
   border: 1px solid var(--si-border);
   border-radius: 4px;
-  padding: 8px 14px;
+  height: 44px;
+  padding: 0 14px;
+}
+.si-code-row .si-btn-secondary {
+  width: auto;
+  height: 44px;
+  padding: 0 14px;
 }
 
 .si-status {
