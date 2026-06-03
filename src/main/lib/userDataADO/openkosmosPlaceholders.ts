@@ -11,11 +11,29 @@
  * @OPENKOSMOS_PROFILE_WORKSPACES_FOLDER -> {OpenKosmos app user data folder}/profiles/{alias}/chat_workspaces
  */
 
+import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import { getUserDataPath } from './pathUtils';
 import { createLogger } from '../unifiedLogger';
 const logger = createLogger();
+
+// In webpack dev, app.getAppPath() === <repo-root>. In electron-vite dev it
+// resolves to <repo-root>/dist-vite/main (the dir containing the built main.js).
+// Pick the first candidate where the expected sub-path exists.
+function resolveDevRepoResource(...segments: string[]): string {
+  const { app } = require('electron');
+  const appPath: string = app.getAppPath();
+  const candidates = [
+    path.join(appPath, ...segments),
+    path.join(appPath, '..', '..', ...segments),
+    path.join(process.cwd(), ...segments),
+  ];
+  for (const c of candidates) {
+    if (fs.existsSync(c)) return c;
+  }
+  return candidates[0];
+}
 
 /**
  * Enum of OpenKosmos placeholder variable names
@@ -116,7 +134,7 @@ export class OpenKosmosPlaceholderManager {
         const { app } = require('electron');
         value = app.isPackaged
           ? path.join((process as any).resourcesPath, 'mcp', 'research')
-          : path.join(app.getAppPath(), 'resources', 'mcp', 'research');
+          : resolveDevRepoResource('resources', 'mcp', 'research');
         break;
       }
       case OpenKosmosPlaceholder.RESEARCH_TUSHARE_TOKEN: {

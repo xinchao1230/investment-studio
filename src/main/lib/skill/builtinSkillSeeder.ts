@@ -28,9 +28,14 @@ function findSourceDir(skillName: string): string | null {
   const resourcesPath = (process as any).resourcesPath;
 
   // Primary layout: top-level skills/ and resources/examples/skills/ bundled via electron-builder `files`.
-  // app.getAppPath() resolves to <repo-root> in dev and <app.asar> when packaged.
+  // app.getAppPath() resolves to:
+  //   - <repo-root> in webpack dev and packaged builds (asar)
+  //   - <repo-root>/dist-vite/main in electron-vite dev (containing the built main.js)
+  // so the second pair of candidates climbs two levels for the vite-dev case.
   candidates.push(path.join(appPath, 'skills', skillName));
   candidates.push(path.join(appPath, 'resources', 'examples', 'skills', skillName));
+  candidates.push(path.join(appPath, '..', '..', 'skills', skillName));
+  candidates.push(path.join(appPath, '..', '..', 'resources', 'examples', 'skills', skillName));
   // extraResources fallback (not currently used for skills, kept for safety).
   if (resourcesPath) {
     candidates.push(path.join(resourcesPath, 'skills', skillName));
