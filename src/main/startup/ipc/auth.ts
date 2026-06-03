@@ -35,16 +35,18 @@ export default function(ctx: Context) {
 
       const authManager = await getMainAuthManager();
 
-      // Skip Login is only valid when a non-GitHub provider is already configured.
-      // Validate that before accepting the placeholder auth data as the current session.
+      // Skip Login no longer requires a pre-configured provider. Initialize the
+      // _local profile so its provider config (if any) is loaded; if none exists,
+      // the user is routed to Settings → Providers by the renderer. Initialization
+      // is best-effort and must never block or fail the sign-in transition.
       if (userLogin === SKIP_LOGIN_ALIAS) {
         try {
           await providerManager.initializeForSkipLogin();
-        } catch {
-          return {
-            success: false,
-            error: 'Skip Login requires at least one enabled non-GitHub LLM provider with credentials. Configure a provider first, or sign in with GitHub.',
-          };
+        } catch (err) {
+          logger.warn(
+            `[Startup] Skip-login provider init failed (non-fatal): ${err instanceof Error ? err.message : String(err)}`,
+            'auth:setCurrentSession',
+          );
         }
       }
 

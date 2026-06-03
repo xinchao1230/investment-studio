@@ -363,6 +363,29 @@ describe('SignInPage', () => {
       });
     });
 
+    it('routes skip-login to /settings/providers when no provider is configured', async () => {
+      // No non-Copilot provider configured: skip-login still proceeds, but the
+      // user is redirected to Settings -> Providers to set one up (instead of
+      // the old inline setup modal).
+      (window as any).electronAPI.provider.hasApiKeyProvider = vi
+        .fn()
+        .mockResolvedValue({ success: true, data: false });
+      mockSetCurrentAuth.mockResolvedValue(undefined);
+      mockIsAuthenticated.mockReturnValue(true);
+      mockIsInitialized.mockReturnValue(true);
+
+      render(<SignInPage />);
+
+      const btn = await screen.findByText(/Use your own API key/i);
+      await act(async () => {
+        fireEvent.click(btn);
+      });
+
+      await waitFor(() => {
+        expect(mockNavigate).toHaveBeenCalledWith('/settings/providers');
+      });
+    });
+
     it('does NOT navigate while the gate is closed (isInitialized false)', async () => {
       mockSetCurrentAuth.mockResolvedValue(undefined);
       mockIsAuthenticated.mockReturnValue(true);

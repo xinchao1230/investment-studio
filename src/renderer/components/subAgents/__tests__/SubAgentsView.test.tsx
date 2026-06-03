@@ -7,7 +7,7 @@
  *
  * Tests the correctness of the refactored CSS class layout (based on SkillsView):
  * - unified-header rendering (icon, title, Badge, + button)
- * - Empty state display (Create Custom button)
+ * - Empty state display (Create Custom Agent button)
  * - List rendering (SubAgentListItem)
  * - Loading state
  */
@@ -129,17 +129,17 @@ describe('SubAgentsView', () => {
       expect(container.querySelector('.sub-agents-empty-state')).toBeInTheDocument();
     });
 
-    it('should show "No sub-agents configured yet." text', () => {
+    it('should show "No custom agents configured yet." text', () => {
       mockUseSubAgents.mockReturnValue({ subAgents: [], stats: { total: 0 }, isLoading: false });
       render(<SubAgentsView />);
-      expect(screen.getByText('No sub-agents configured yet.')).toBeInTheDocument();
+      expect(screen.getByText('No custom agents configured yet.')).toBeInTheDocument();
     });
 
-    it('should show Create Custom button that navigates to new', () => {
+    it('should show Create Custom Agent button that navigates to new', () => {
       mockUseSubAgents.mockReturnValue({ subAgents: [], stats: { total: 0 }, isLoading: false });
       render(<SubAgentsView />);
 
-      const createBtn = screen.getByText('Create Custom');
+      const createBtn = screen.getByText('Create Custom Agent');
       fireEvent.click(createBtn);
       expect(mockNavigate).toHaveBeenCalledWith('/settings/sub-agents/new');
     });

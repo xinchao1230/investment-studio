@@ -16,6 +16,14 @@ const ACTIVE_PILL_STYLE: React.CSSProperties = {
   color: 'var(--si-gold)',
 };
 
+/** Non-active pill tint — neutral grey, so only the active provider carries the
+ *  brand accent. Uses --si-* neutral tokens to follow the app theme. Overrides
+ *  the default unified-badge-normal fill, which is itself a soft brand tint. */
+const INACTIVE_PILL_STYLE: React.CSSProperties = {
+  backgroundColor: 'var(--si-code-bg)',
+  color: 'var(--si-muted)',
+};
+
 type ProviderId = 'openai' | 'deepseek' | 'ollama' | 'custom-openai';
 
 interface ProviderSpec {
@@ -101,6 +109,9 @@ export const ProviderSettingsView: React.FC = () => {
   // rendered as a header action button on the right (like MCP's "+").
   const { signOut, authData } = useAuthContext();
   const [isSigningOut, setIsSigningOut] = useState(false);
+  // Gates the "enable a provider" guidance banner so it never flashes before the
+  // initial provider config has loaded (we don't yet know if any are enabled).
+  const [configLoaded, setConfigLoaded] = useState(false);
   const isCopilotUser = authData?.ghcAuth?.alias !== SKIP_LOGIN_ALIAS;
 
   const handleSignOut = useCallback(async () => {
@@ -159,6 +170,7 @@ export const ProviderSettingsView: React.FC = () => {
         }
       });
       setCards(newCards);
+      setConfigLoaded(true);
     })();
 
     // Listen for provider switch events
@@ -275,18 +287,44 @@ export const ProviderSettingsView: React.FC = () => {
     return title.replace(/\s*\(.*\)\s*$/, '').trim();
   }, []);
 
-  // Status pills: one per enabled provider, plus the active provider even if its
-  // enable toggle is off (so the header always reflects what is actually serving).
-  const enabledProviderIds = PROVIDERS.filter((p) => cards[p.id].enabled).map((p) => p.id as string);
-  if (isCopilotAvailable && !enabledProviderIds.includes('copilot')) {
-    // Copilot has no enable toggle; treat it as available when signed in.
-    enabledProviderIds.push('copilot');
+  // A provider is "eligible" when it could be set as the active provider right
+  // now: enabled AND holding a usable credential (a saved API key, or none
+  // required). This mirrors the "Set as Active" button gate below, but counts
+  // only persisted keys (apiKeyHasValue) — a key typed but not yet saved does
+  // not qualify. The header pills reflect this eligibility, not the raw toggle.
+  const isEligibleToActivate = (id: string): boolean => {
+    if (id === 'copilot') return isCopilotAvailable; // credential is the GitHub login
+    const spec = PROVIDERS.find((p) => p.id === id);
+    const c = cards[id as ProviderId];
+    if (!spec || !c) return false;
+    return c.enabled && (c.apiKeyHasValue || !spec.requiresApiKey);
+  };
+
+  // Status pills: one per eligible provider, plus the active provider even if it
+  // is not currently eligible (so the header always reflects what is actually
+  // serving requests).
+  const eligibleProviderIds = PROVIDERS.filter((p) => isEligibleToActivate(p.id)).map((p) => p.id as string);
+  if (isCopilotAvailable && !eligibleProviderIds.includes('copilot')) {
+    // Copilot has no enable toggle; signed-in IS eligible.
+    eligibleProviderIds.push('copilot');
   }
+
+  // Guidance banner: a skip-login user has no usable model until a non-Copilot
+  // provider is eligible (enabled AND has a saved key) AND set as the active
+  // provider. This mirrors the "Back to workspace" button gate in
+  // SettingsNavigation, so the banner disappears at the same instant that button
+  // un-greys. Self-healing (no manual dismiss — its absence IS the confirmation
+  // of success). Gated on configLoaded so it never flashes during the initial
+  // async load.
+  const showEnableProviderHint =
+    configLoaded &&
+    !isCopilotUser &&
+    (activeProvider === 'copilot' || eligibleProviderIds.length === 0);
   // Always include the active provider, then sort it to the front so the
   // terracotta active pill leads the row.
-  const withActive = enabledProviderIds.includes(activeProvider)
-    ? enabledProviderIds
-    : [...enabledProviderIds, activeProvider];
+  const withActive = eligibleProviderIds.includes(activeProvider)
+    ? eligibleProviderIds
+    : [...eligibleProviderIds, activeProvider];
   const pillProviderIds = [
     ...withActive.filter((id) => id === activeProvider),
     ...withActive.filter((id) => id !== activeProvider),
@@ -301,21 +339,23 @@ export const ProviderSettingsView: React.FC = () => {
           <div className="mcp-status-badges">
             {pillProviderIds.length === 0 ? (
               <Badge variant="normal" className="text-xs">
-                no providers enabled
+                no active provider
               </Badge>
             ) : (
               pillProviderIds.map((id) => {
                 const isActive = id === activeProvider;
+                // Pills show only the provider name to avoid confusion. The
+                // status word survives as a hover tooltip for discoverability.
                 const statusWord = id === 'copilot' ? 'Signed in' : 'Enabled';
                 return (
                   <Badge
                     key={id}
                     variant="normal"
                     className="text-xs"
-                    style={isActive ? ACTIVE_PILL_STYLE : undefined}
+                    style={isActive ? ACTIVE_PILL_STYLE : INACTIVE_PILL_STYLE}
                     title={isActive ? 'Active provider' : statusWord}
                   >
-                    {providerLabel(id)} {statusWord}
+                    {providerLabel(id)}
                   </Badge>
                 );
               })
@@ -346,6 +386,27 @@ export const ProviderSettingsView: React.FC = () => {
 
       <div className="content-view-container">
         <div className="settings-form-centered">
+          {showEnableProviderHint && (
+            <div
+              className="flex items-start gap-2.5 rounded-md p-3 mb-4 text-xs"
+              style={{
+                backgroundColor: 'var(--si-accent-soft)',
+                border: '1px solid var(--si-gold)',
+                color: 'var(--si-ink)',
+              }}
+              role="status"
+            >
+              <AlertCircle
+                size={16}
+                style={{ color: 'var(--si-gold)', flexShrink: 0, marginTop: 1 }}
+              />
+              <div>
+                <div className="font-medium" style={{ color: 'var(--si-gold)' }}>
+                  Configure a LLM provider and then click left bottom button to start.
+                </div>
+              </div>
+            </div>
+          )}
           <p className="text-xs text-[var(--si-muted)] mb-4">
             Configure API keys for LLM providers. The active provider is used for all chat and agent interactions.
           </p>
