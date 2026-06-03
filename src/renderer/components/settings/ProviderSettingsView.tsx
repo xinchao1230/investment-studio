@@ -320,11 +320,18 @@ export const ProviderSettingsView: React.FC = () => {
     configLoaded &&
     !isCopilotUser &&
     (activeProvider === 'copilot' || eligibleProviderIds.length === 0);
-  // Always include the active provider, then sort it to the front so the
-  // terracotta active pill leads the row.
+  // Include the active provider so its pill leads the row — but only when it is
+  // actually usable right now. A persisted activeProvider ('copilot' by default)
+  // must NOT surface a pill while signed out / without a credential, otherwise
+  // the header advertises a provider that cannot serve requests (e.g. the
+  // "GitHub Copilot" badge lingering after sign-out). When the active provider
+  // is not eligible and not already in the list, the header falls back to the
+  // "no active provider" empty state.
   const withActive = eligibleProviderIds.includes(activeProvider)
     ? eligibleProviderIds
-    : [...eligibleProviderIds, activeProvider];
+    : isEligibleToActivate(activeProvider)
+      ? [...eligibleProviderIds, activeProvider]
+      : eligibleProviderIds;
   const pillProviderIds = [
     ...withActive.filter((id) => id === activeProvider),
     ...withActive.filter((id) => id !== activeProvider),
@@ -337,12 +344,10 @@ export const ProviderSettingsView: React.FC = () => {
           <Cpu size={20} />
           <span className="header-name">LLM Providers</span>
           <div className="mcp-status-badges">
-            {pillProviderIds.length === 0 ? (
-              <Badge variant="normal" className="text-xs">
-                no active provider
-              </Badge>
-            ) : (
-              pillProviderIds.map((id) => {
+            {/* A badge means "this provider is usable". When nothing is usable
+                we render nothing — an empty badge row is honest by absence, no
+                "no active provider" placeholder noise. */}
+            {pillProviderIds.map((id) => {
                 const isActive = id === activeProvider;
                 // Pills show only the provider name to avoid confusion. The
                 // status word survives as a hover tooltip for discoverability.
@@ -358,8 +363,7 @@ export const ProviderSettingsView: React.FC = () => {
                     {providerLabel(id)}
                   </Badge>
                 );
-              })
-            )}
+              })}
           </div>
         </div>
         {/* Right-aligned header action (like MCP's "+"): GitHub Copilot
