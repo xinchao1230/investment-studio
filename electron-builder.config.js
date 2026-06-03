@@ -34,6 +34,8 @@ module.exports = {
     'dist/**/*',
     'resources/**/*',
     '!resources/python',
+    // resources/mcp ships outside asar via extraResources (uv reads it directly).
+    '!resources/mcp',
     // Top-level skills/ is the source-of-truth for builtin skill bundles
     // (read by builtinSkillSeeder at app.getAppPath()/skills/<name>).
     'skills/**/*',
@@ -88,6 +90,14 @@ module.exports = {
     {
       from: 'resources/scripts',
       to: 'scripts',
+      filter: ['**/*'],
+    },
+    // research-mcp is launched by uv (external process) and cannot read from
+    // inside asar. Extract it to <resourcesPath>/mcp so the packaged-build
+    // branch in openkosmosPlaceholders.ts / researchMcp/index.ts can find it.
+    {
+      from: 'resources/mcp',
+      to: 'mcp',
       filter: ['**/*'],
     },
   ],
