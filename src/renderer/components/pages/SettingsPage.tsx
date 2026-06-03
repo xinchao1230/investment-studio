@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import SettingsNavigation from '../settings/SettingsNavigation';
 import { AgentContextType } from '../../types/agentContextTypes';
+import { getWorkspaceRoute } from '@shared/constants/branding';
 import {
   McpServerDropdownMenu,
   McpAddMenuDropdown,
@@ -598,8 +599,10 @@ const SettingsPage: React.FC = () => {
       // Get previously stored path from sessionStorage
       const storedPreviousPath = sessionStorage.getItem('previousPath');
       if (!storedPreviousPath) {
-        // If no stored path, use default path
-        sessionStorage.setItem('settingsReturnPath', '/agent/chat');
+        // If no stored path, use the brand's workspace home (Research for
+        // investment-studio). Hardcoding '/agent/chat' here bounced
+        // investment-studio users to the agent chat instead of Research.
+        sessionStorage.setItem('settingsReturnPath', getWorkspaceRoute());
       } else {
         // Use stored path
         sessionStorage.setItem('settingsReturnPath', storedPreviousPath);
@@ -630,8 +633,9 @@ const SettingsPage: React.FC = () => {
       // Navigate to return path
       navigate(returnPath);
     } else {
-      // Default: navigate back to agent page chat view
-      navigate('/agent/chat');
+      // Default: navigate back to the brand's workspace home (Research for
+      // investment-studio, agent chat otherwise).
+      navigate(getWorkspaceRoute());
     }
   };
 

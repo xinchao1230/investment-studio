@@ -23,3 +23,17 @@ export const BRAND_CONFIG: Record<string, string> = {
 };
 
 export const getWindowTitle = () => BRAND_CONFIG.windowTitle;
+
+/**
+ * The brand's "workspace" home route — where users land after sign-in and
+ * where "Back to workspace" returns them. investment-studio's home is the
+ * Research workspace (/research); other brands use the agent chat (/agent/chat).
+ *
+ * Single source of truth: any default/fallback navigation back to "home" must
+ * use this instead of hardcoding '/agent/chat', otherwise investment-studio
+ * users get bounced to the agent chat instead of Research. Mirrors the
+ * sign-in fork in SignInPage.
+ */
+export const getWorkspaceRoute = (): string =>
+  BRAND_NAME === 'investment-studio' ? '/research' : '/agent/chat';
+

@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { Camera, Terminal, Archive, Key, Cpu, LayoutGrid, SlidersHorizontal } from 'lucide-react';
 import NavItem from '../ui/navigation/NavItem';
 import '../../styles/LeftNavigation.css';
-import { APP_NAME, BRAND_NAME, BRAND_CONFIG } from '@shared/constants/branding';
+import { APP_NAME, BRAND_NAME, BRAND_CONFIG, getWorkspaceRoute } from '@shared/constants/branding';
 import { useFeatureFlag } from '../../lib/featureFlags';
 import { LeftNavSizeAtom } from '@renderer/states/left-nav.atom';
 import { useAuthContext } from '../auth/AuthProvider';
@@ -146,8 +146,9 @@ const SettingsNavigation: React.FC<SettingsNavigationProps> = ({ onBack }) => {
     if (onBack) {
       onBack();
     } else {
-      // Default: navigate back to agent page
-      navigate('/agent/chat');
+      // Default: navigate back to the brand's workspace home (Research for
+      // investment-studio, agent chat otherwise).
+      navigate(getWorkspaceRoute());
     }
   };
 
