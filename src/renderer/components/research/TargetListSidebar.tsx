@@ -780,7 +780,12 @@ export const TargetListSidebar: React.FC<TargetListSidebarProps> = ({
       return;
     }
     sessionStorage.setItem('previousPath', window.location.hash.replace(/^#/, '') || '/research');
-    navigate('/settings');
+    // Re-enter the last settings tab the user was on, not the index tab. The
+    // bare '/settings' route always redirects to the brand index tab
+    // (research-api for investment-studio), so navigating there directly lost
+    // the user's place. SettingsPage records lastSettingsPath on every tab.
+    const lastSettingsPath = sessionStorage.getItem('lastSettingsPath');
+    navigate(lastSettingsPath && lastSettingsPath.startsWith('/settings') ? lastSettingsPath : '/settings');
   }, [navigate]);
 
   return (

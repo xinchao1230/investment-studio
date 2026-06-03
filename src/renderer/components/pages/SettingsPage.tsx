@@ -607,6 +607,20 @@ const SettingsPage: React.FC = () => {
         // Use stored path
         sessionStorage.setItem('settingsReturnPath', storedPreviousPath);
       }
+
+      // Remember which settings tab the user is on, so re-entering settings
+      // (e.g. Research → settings round-trip) returns to the last tab instead
+      // of always redirecting to the index tab. Only record concrete tabs
+      // (/settings/xxx), never the bare '/settings' index — recording the
+      // index would feed it back into the redirect and defeat the memory.
+      if (currentPath !== '/settings') {
+        // Normalize to the top-level tab: '/settings/mcp/new' -> '/settings/mcp'.
+        // Transient sub-pages (mcp/new, sub-agents/edit/:id) must not become the
+        // remembered tab — restoring an edit page with a since-deleted :id breaks.
+        const segments = currentPath.split('/').filter(Boolean); // ['settings','mcp','new']
+        const topLevelTab = segments.length >= 2 ? `/${segments[0]}/${segments[1]}` : currentPath;
+        sessionStorage.setItem('lastSettingsPath', topLevelTab);
+      }
     }
   }, [location.pathname]);
 
