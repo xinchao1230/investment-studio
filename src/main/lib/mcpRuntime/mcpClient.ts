@@ -61,9 +61,22 @@ export class MCPClient {
 
     // Mac/Linux needs sandbox adaptation - generic command resolution for uvx, pip, uv, python, npm, node, etc.
 
+    // If the command is already an absolute path that exists, use it as-is and skip `which`.
+    // This also avoids word-splitting issues when the path contains spaces (e.g. "~/Library/Application Support/...").
+    if (command.startsWith('/')) {
+      try {
+        if (fs.existsSync(command) && fs.statSync(command).isFile()) {
+          return command;
+        }
+      } catch { /* fall through */ }
+    }
+
+    // Quote command so spaces in the path don't get word-split by /bin/sh.
+    const quotedCommand = `'${command.replace(/'/g, `'\\''`)}'`;
+
     // First try using the `which` command - this is the most reliable method
     try {
-      const result = execSync(`which ${command}`, {
+      const result = execSync(`which ${quotedCommand}`, {
         encoding: 'utf8',
         env: this.getEnhancedEnvironment() as NodeJS.ProcessEnv,
         timeout: 5000 // 5-second timeout

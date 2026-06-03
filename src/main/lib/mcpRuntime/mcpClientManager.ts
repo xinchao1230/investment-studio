@@ -1316,6 +1316,23 @@ export class MCPClientManager {
       headers: resolvedConfig.headers,
     };
 
+    // research-mcp's command is the uv binary inside the current brand's userData/bin.
+    // The seeded config stores a literal path baked at seed time, which goes stale
+    // whenever userData moves (brand rename, Electron-default-name vs branded-name in
+    // dev, etc). Always re-resolve from RuntimeManager so we follow the live binPath.
+    if (
+      serverName === 'research-mcp' &&
+      (process.env.BRAND_NAME || 'openkosmos') === 'investment-studio'
+    ) {
+      try {
+        const { RuntimeManager } = require('../runtime/RuntimeManager');
+        const freshUvPath = RuntimeManager.getInstance().getBinaryPath('uv');
+        if (freshUvPath && freshUvPath !== serverConfig.command) {
+          serverConfig.command = freshUvPath;
+        }
+      } catch { /* fall through with stored command */ }
+    }
+
     // 🔥 Handle OpenKosmos placeholders: replace placeholders in url and env
     if (this.currentUserAlias) {
       // Replace placeholders in url
