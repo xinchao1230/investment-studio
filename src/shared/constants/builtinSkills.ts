@@ -66,10 +66,20 @@ export const BUILTIN_SKILL_CHANGELOG: Record<number, string[]> = {
   2: ['dcf-model', 'comps-analysis', '3-statement-model', 'competitive-analysis', 'initiating-coverage', 'idea-generation', 'sector-overview'],
   3: ['earnings-preview', 'thesis-tracker', 'catalyst-calendar', 'model-update'],
   4: ['earnings-analysis', 'audit-xls', 'morning-note'],
+  // v5 — FSI remaining 7 agents: investment banking, fund operations, compliance
+  // Sub-agent-exclusive skills (kyc-*, gl-recon, break-trace, accrual-schedule, roll-forward, nav-tieout) are installed but NOT attached to Stella per SUBAGENT_EXCLUSIVE_SKILLS.
+  5: [
+    'pitch-deck', 'ib-check-deck', 'deck-refresh', 'lbo-model', 'pptx-author', 'xlsx-author',
+    'client-review', 'client-report', 'investment-proposal',
+    'ic-memo', 'portfolio-monitoring', 'returns-analysis',
+    'accrual-schedule', 'roll-forward', 'variance-commentary',
+    'gl-recon', 'break-trace', 'nav-tieout',
+    'kyc-doc-parse', 'kyc-rules',
+  ],
 };
 
 /** Current migration version — must equal the highest key in BUILTIN_SKILL_CHANGELOG. */
-export const BUILTIN_DEFAULTS_VERSION = 4;
+export const BUILTIN_DEFAULTS_VERSION = 5;
 
 /**
  * Check if a skill is a built-in skill
@@ -108,6 +118,31 @@ const INVESTMENT_STUDIO_SKILL_NAMES: string[] = [
   'earnings-analysis',
   'audit-xls',
   'morning-note',
+  // FSI imports v5 — investment banking (pitch-agent)
+  'pitch-deck',
+  'ib-check-deck',
+  'deck-refresh',
+  'lbo-model',
+  'pptx-author',
+  'xlsx-author',
+  // FSI imports v5 — wealth management (meeting-prep-agent)
+  'client-review',
+  'client-report',
+  'investment-proposal',
+  // FSI imports v5 — private equity (valuation-reviewer)
+  'ic-memo',
+  'portfolio-monitoring',
+  'returns-analysis',
+  // FSI imports v5 — fund admin (gl-reconciler, month-end-closer, statement-auditor)
+  'accrual-schedule',
+  'roll-forward',
+  'variance-commentary',
+  'gl-recon',
+  'break-trace',
+  'nav-tieout',
+  // FSI imports v5 — compliance operations (kyc-screener)
+  'kyc-doc-parse',
+  'kyc-rules',
 ];
 
 /**
