@@ -780,7 +780,6 @@ export const SignInPage: React.FC<SignInPageProps> = ({ startupResult }) => {
                 <Button
                   onClick={handleCopyCode}
                   className="si-btn-secondary"
-                  style={{ width: 'auto', padding: '6px 10px' }}
                 >
                   {copied ? 'Copied' : 'Copy'}
                 </Button>
