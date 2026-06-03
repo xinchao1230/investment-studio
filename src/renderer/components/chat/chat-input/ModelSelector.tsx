@@ -12,9 +12,9 @@ import { agentChatSessionCacheManager } from '@/lib/chat/agentChatSessionCacheMa
 const PROVIDER_LABELS: Record<string, string> = {
   copilot: 'Copilot',
   openai: 'OpenAI',
-  deepseek: 'DeepSeek',
-  ollama: 'Ollama',
-  'custom-openai': 'Custom',
+  anthropic: 'Anthropic',
+  gemini: 'Gemini',
+  'custom-dynamic': 'Custom',
 };
 
 /** Hook to track the active LLM provider */

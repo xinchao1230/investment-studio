@@ -4,8 +4,6 @@
  *
  * Handles any API that follows the OpenAI /v1/chat/completions format:
  * - OpenAI (api.openai.com)
- * - DeepSeek (api.deepseek.com)
- * - Ollama (localhost:11434/v1)
  * - Any custom OpenAI-compatible endpoint
  *
  * This is the primary provider for users who bring their own API keys.
@@ -33,17 +31,7 @@ const PROVIDER_PRESETS: Record<string, { displayName: string; baseUrl: string; d
     baseUrl: 'https://api.openai.com/v1',
     description: 'GPT-4o, GPT-4.1, o3, o4-mini and more',
   },
-  deepseek: {
-    displayName: 'DeepSeek',
-    baseUrl: 'https://api.deepseek.com/v1',
-    description: 'DeepSeek-V3, DeepSeek-R1',
-  },
-  ollama: {
-    displayName: 'Ollama (Local)',
-    baseUrl: 'http://localhost:11434/v1',
-    description: 'Local models via Ollama',
-  },
-  'custom-openai': {
+  'custom-dynamic': {
     displayName: 'Custom (OpenAI-Compatible)',
     baseUrl: '',
     description: 'Any OpenAI-compatible API endpoint',
@@ -58,12 +46,12 @@ export class OpenAICompatibleProvider implements ILlmProvider {
   private readonly MODEL_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
   constructor(providerId: ProviderId) {
-    const preset = PROVIDER_PRESETS[providerId] || PROVIDER_PRESETS['custom-openai'];
+    const preset = PROVIDER_PRESETS[providerId] || PROVIDER_PRESETS['custom-dynamic'];
     this.info = {
       id: providerId,
       displayName: preset.displayName,
       requiresGitHubAuth: false,
-      requiresApiKey: providerId !== 'ollama', // Ollama doesn't need a key
+      requiresApiKey: true,
       defaultBaseUrl: preset.baseUrl,
       description: preset.description,
     };
@@ -233,7 +221,7 @@ export class OpenAICompatibleProvider implements ILlmProvider {
     if (id.includes('claude-haiku')) return { context: 200_000, output: 8_192 };
     // Gemini
     if (id.includes('gemini-2') || id.includes('gemini-1.5')) return { context: 1_000_000, output: 8_192 };
-    // Llama / Mistral / Qwen via Ollama — conservative
+    // Llama / Mistral / Qwen (open-weight models via custom endpoints) — conservative
     if (id.includes('llama') || id.includes('mistral') || id.includes('qwen') || id.includes('gemma')) {
       return { context: 32_768, output: 4_096 };
     }

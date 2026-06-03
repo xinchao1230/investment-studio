@@ -16,28 +16,6 @@ export const OpenAIIcon: React.FC<IconProps> = ({ size = 16 }) => (
   </svg>
 );
 
-// DeepSeek — official brand whale mark
-export const DeepSeekIcon: React.FC<IconProps> = ({ size = 16 }) => (
-  <img
-    src={new URL('../../../assets/providers/deepseek.svg', import.meta.url).href}
-    width={size}
-    height={size}
-    alt="DeepSeek"
-    style={{ display: 'inline-block', verticalAlign: 'middle' }}
-  />
-);
-
-// Ollama — llama face, using the downloaded official PNG asset
-export const OllamaIcon: React.FC<IconProps> = ({ size = 16 }) => (
-  <img
-    src={new URL('../../../assets/providers/ollama.png', import.meta.url).href}
-    width={size}
-    height={size}
-    alt="Ollama"
-    style={{ display: 'inline-block', verticalAlign: 'middle' }}
-  />
-);
-
 // Custom OpenAI-compatible endpoint — "AI" monogram badge.
 // Inlined (not an <img> asset) so the badge background inherits the
 // surrounding text color and follows the active accent theme.
@@ -59,11 +37,43 @@ export const CustomProviderIcon: React.FC<IconProps> = ({ size = 16 }) => (
   </svg>
 );
 
+// Anthropic — the official "burst" / asterisk mark. Inlined so it follows the
+// surrounding text color (currentColor) and the active accent theme, matching
+// the self-coloring pattern used by CustomProviderIcon.
+export const AnthropicIcon: React.FC<IconProps> = ({ size = 16 }) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="currentColor"
+    xmlns="http://www.w3.org/2000/svg"
+    aria-hidden="true"
+  >
+    <path d="M16.84 3h-3.2l5.66 18h3.2L16.84 3zm-9.68 0L1.5 21h3.27l1.15-3.74h6.07L13.14 21h3.27L10.74 3H7.16zm-.88 11.24L8.1 7.06l2.82 7.18H6.28z" />
+  </svg>
+);
+
+// Google Gemini — the official four-point "spark" mark. Inlined so it follows
+// the surrounding text color (currentColor) and the active accent theme,
+// matching the self-coloring pattern used by AnthropicIcon and CustomProviderIcon.
+export const GeminiIcon: React.FC<IconProps> = ({ size = 16 }) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="currentColor"
+    xmlns="http://www.w3.org/2000/svg"
+    aria-hidden="true"
+  >
+    <path d="M12 0c.28 6.46 5.54 11.72 12 12-6.46.28-11.72 5.54-12 12-.28-6.46-5.54-11.72-12-12C6.46 11.72 11.72 6.46 12 0z" />
+  </svg>
+);
+
 /** Map provider ID to icon component. */
 export const PROVIDER_ICONS: Record<string, React.FC<IconProps>> = {
   copilot: GitHubIcon,
   openai: OpenAIIcon,
-  deepseek: DeepSeekIcon,
-  ollama: OllamaIcon,
-  'custom-openai': CustomProviderIcon,
+  anthropic: AnthropicIcon,
+  gemini: GeminiIcon,
+  'custom-dynamic': CustomProviderIcon,
 };

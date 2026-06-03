@@ -24,7 +24,7 @@ const INACTIVE_PILL_STYLE: React.CSSProperties = {
   color: 'var(--si-muted)',
 };
 
-type ProviderId = 'openai' | 'deepseek' | 'ollama' | 'custom-openai';
+type ProviderId = 'openai' | 'anthropic' | 'gemini' | 'custom-dynamic';
 
 interface ProviderSpec {
   id: ProviderId;
@@ -39,31 +39,31 @@ const PROVIDERS: ProviderSpec[] = [
   {
     id: 'openai',
     title: 'OpenAI',
-    description: 'GPT-4o, GPT-4.1, o3, o4-mini and more',
+    description: 'GPT-5.5, GPT-5.4, o-series reasoning models',
     requiresApiKey: true,
     showBaseUrl: false,
     defaultBaseUrl: 'https://api.openai.com/v1',
   },
   {
-    id: 'deepseek',
-    title: 'DeepSeek',
-    description: 'DeepSeek-V3, DeepSeek-R1',
+    id: 'anthropic',
+    title: 'Anthropic (Claude)',
+    description: 'Claude Opus 4.8, Sonnet 4.6, Haiku 4.5',
     requiresApiKey: true,
     showBaseUrl: false,
-    defaultBaseUrl: 'https://api.deepseek.com/v1',
+    defaultBaseUrl: 'https://api.anthropic.com',
   },
   {
-    id: 'ollama',
-    title: 'Ollama (Local)',
-    description: 'Run open-source models locally',
-    requiresApiKey: false,
-    showBaseUrl: true,
-    defaultBaseUrl: 'http://localhost:11434/v1',
+    id: 'gemini',
+    title: 'Google (Gemini)',
+    description: 'Gemini 3.1 Pro, 3.5 Flash, 2.5 Pro',
+    requiresApiKey: true,
+    showBaseUrl: false,
+    defaultBaseUrl: 'https://generativelanguage.googleapis.com',
   },
   {
-    id: 'custom-openai',
-    title: 'Custom (OpenAI-Compatible)',
-    description: 'Any OpenAI-compatible API endpoint',
+    id: 'custom-dynamic',
+    title: 'Custom (Auto-Detected)',
+    description: 'Any OpenAI-, Anthropic-, or Gemini-compatible endpoint — protocol auto-detected',
     requiresApiKey: true,
     showBaseUrl: true,
     defaultBaseUrl: '',
@@ -79,6 +79,8 @@ interface CardState {
   saving: boolean;
   testing: boolean;
   status: { ok: boolean; error?: string; latencyMs?: number; models?: string[] } | null;
+  /** custom-dynamic only: the auto-detected wire protocol, if known. */
+  detectedProtocol?: 'openai' | 'anthropic' | 'gemini';
 }
 
 const emptyCard = (): CardState => ({
@@ -90,14 +92,38 @@ const emptyCard = (): CardState => ({
   saving: false,
   testing: false,
   status: null,
+  detectedProtocol: undefined,
 });
+
+/** Display metadata for the auto-detected protocol badge (custom-dynamic). */
+const PROTOCOL_BADGE: Record<'openai' | 'anthropic' | 'gemini', { label: string; Icon: React.FC<{ size?: number }> }> = {
+  openai: { label: 'OAI Compatible', Icon: PROVIDER_ICONS['openai'] },
+  anthropic: { label: 'Claude Compatible', Icon: PROVIDER_ICONS['anthropic'] },
+  gemini: { label: 'Gemini Compatible', Icon: PROVIDER_ICONS['gemini'] },
+};
+
+/**
+ * Format a model list for the one-line "Connected" status row. When an endpoint
+ * returns many models, the full comma-joined list overflows the card width
+ * (e.g. http://localhost:4141/ returning dozens of claude-* variants). Show the
+ * first few names in full, then summarize the remainder as "+X more".
+ *
+ * @param models  Full list of model IDs from the connection test.
+ * @param maxShown  How many leading models to render in full (default 3).
+ * @returns  A single human-readable string for inline display.
+ */
+const formatModelList = (models: string[], maxShown = 3): string => {
+  if (models.length <= maxShown) return models.join(', ');
+  const shown = models.slice(0, maxShown).join(', ');
+  return `${shown} +${models.length - maxShown} more`;
+};
 
 export const ProviderSettingsView: React.FC = () => {
   const [cards, setCards] = useState<Record<ProviderId, CardState>>({
     openai: emptyCard(),
-    deepseek: emptyCard(),
-    ollama: emptyCard(),
-    'custom-openai': emptyCard(),
+    anthropic: emptyCard(),
+    gemini: emptyCard(),
+    'custom-dynamic': emptyCard(),
   });
   const [activeProvider, setActiveProvider] = useState<string>('copilot');
   /** True when the user is signed in with a real GitHub account (not skip-login) */
@@ -166,6 +192,7 @@ export const ProviderSettingsView: React.FC = () => {
             enabled: cfg.data.enabled || false,
             apiKeyHasValue: cfg.data.apiKey === '••••••••',
             baseUrl: cfg.data.baseUrl || '',
+            detectedProtocol: cfg.data.detectedProtocol,
           };
         }
       });
@@ -241,6 +268,7 @@ export const ProviderSettingsView: React.FC = () => {
       const testResult = result.data;
       updateCard(id, {
         testing: false,
+        ...(testResult.detectedProtocol ? { detectedProtocol: testResult.detectedProtocol } : {}),
         status: {
           ok: testResult.success,
           error: testResult.error,
@@ -279,10 +307,10 @@ export const ProviderSettingsView: React.FC = () => {
 
   // Resolve a provider id to a short pill label (covers Copilot, which isn't in
   // PROVIDERS). Strips any "(...)" qualifier so pills stay compact, e.g.
-  // "Ollama (Local)" -> "Ollama". The custom endpoint reads "Custom LLM".
+  // "Custom (OpenAI-Compatible)" -> "Custom". The custom endpoint reads "Custom LLM".
   const providerLabel = useCallback((id: string): string => {
     if (id === 'copilot') return 'GitHub Copilot';
-    if (id === 'custom-openai') return 'Custom LLM';
+    if (id === 'custom-dynamic') return 'Custom LLM';
     const title = PROVIDERS.find((p) => p.id === id)?.title || id;
     return title.replace(/\s*\(.*\)\s*$/, '').trim();
   }, []);
@@ -494,7 +522,7 @@ export const ProviderSettingsView: React.FC = () => {
           return (
             <div
               key={spec.id}
-              className={`border rounded-md p-3 bg-[var(--si-card)] ${isActive ? 'border-[var(--si-gold)] ring-1 ring-[var(--si-accent-soft)]' : 'border-[var(--si-border)]'}`}
+              className={`relative border rounded-md p-3 bg-[var(--si-card)] ${isActive ? 'border-[var(--si-gold)] ring-1 ring-[var(--si-accent-soft)]' : 'border-[var(--si-border)]'}`}
             >
               {/* Header */}
               <div className="flex items-center justify-between mb-2">
@@ -530,7 +558,7 @@ export const ProviderSettingsView: React.FC = () => {
                         <input
                           type={c.showKey ? 'text' : 'password'}
                           value={c.apiKey}
-                          onChange={(e) => updateCard(spec.id, { apiKey: e.target.value, status: null })}
+                          onChange={(e) => updateCard(spec.id, { apiKey: e.target.value, status: null, detectedProtocol: undefined })}
                           placeholder={c.apiKeyHasValue ? 'Key saved (enter new to replace)' : 'Paste your API key'}
                           className="w-full border border-[var(--si-border)] rounded px-3 py-1.5 text-sm pr-10 focus:outline-none focus:border-[var(--si-ink)]"
                           autoComplete="off"
@@ -554,7 +582,7 @@ export const ProviderSettingsView: React.FC = () => {
                       <input
                         type="text"
                         value={c.baseUrl}
-                        onChange={(e) => updateCard(spec.id, { baseUrl: e.target.value, status: null })}
+                        onChange={(e) => updateCard(spec.id, { baseUrl: e.target.value, status: null, detectedProtocol: undefined })}
                         placeholder={spec.defaultBaseUrl || 'https://your-api.example.com/v1'}
                         className="w-full border border-[var(--si-border)] rounded px-3 py-1.5 text-sm focus:outline-none focus:border-[var(--si-ink)]"
                         autoComplete="off"
@@ -565,23 +593,16 @@ export const ProviderSettingsView: React.FC = () => {
                   {/* Action buttons */}
                   <div className="flex gap-2">
                     <button
-                      disabled={c.saving}
-                      onClick={() => handleSave(spec.id)}
+                      disabled={c.saving || c.testing || (!c.apiKeyHasValue && !c.apiKey && spec.requiresApiKey)}
+                      onClick={() => handleTest(spec.id)}
                       className="px-3 py-1.5 text-sm rounded bg-[var(--si-gold)] text-white disabled:bg-[var(--si-border)] disabled:cursor-not-allowed hover:bg-[var(--si-accent-strong)]"
                     >
-                      {c.saving ? 'Saving...' : 'Save'}
-                    </button>
-                    <button
-                      disabled={c.testing || (!c.apiKeyHasValue && !c.apiKey && spec.requiresApiKey)}
-                      onClick={() => handleTest(spec.id)}
-                      className="px-3 py-1.5 text-sm rounded border border-[var(--si-border)] disabled:opacity-50 disabled:cursor-not-allowed hover:bg-[var(--si-paper)]"
-                    >
-                      {c.testing ? (
+                      {c.saving || c.testing ? (
                         <span className="flex items-center gap-1">
-                          <Loader2 size={12} className="animate-spin" /> Testing...
+                          <Loader2 size={12} className="animate-spin" /> {c.saving ? 'Saving...' : 'Connecting...'}
                         </span>
                       ) : (
-                        'Test Connection'
+                        'Save and Connect'
                       )}
                     </button>
                     {!isActive && c.enabled && (c.apiKeyHasValue || c.apiKey || !spec.requiresApiKey) && (
@@ -598,12 +619,12 @@ export const ProviderSettingsView: React.FC = () => {
                   {c.status && (
                     <div className={`mt-1 text-xs flex items-start gap-1 ${c.status.ok ? 'text-green-600' : 'text-red-600'}`}>
                       {c.status.ok ? <Check size={12} className="mt-0.5 flex-shrink-0" /> : <AlertCircle size={12} className="mt-0.5 flex-shrink-0" />}
-                      <div>
+                      <div className="min-w-0 truncate">
                         {c.status.ok ? (
                           <>
                             Connected ({c.status.latencyMs}ms)
                             {c.status.models && c.status.models.length > 0 && (
-                              <span className="text-[var(--si-muted)]"> — Models: {c.status.models.join(', ')}</span>
+                              <span className="text-[var(--si-muted)]" title={c.status.models.join(', ')}> — Models: {formatModelList(c.status.models)}</span>
                             )}
                           </>
                         ) : (
@@ -614,6 +635,25 @@ export const ProviderSettingsView: React.FC = () => {
                   )}
                 </div>
               )}
+
+              {/* Auto-detected protocol badge (custom-dynamic only) — bottom-right corner */}
+              {spec.id === 'custom-dynamic' && c.detectedProtocol && (() => {
+                const badge = PROTOCOL_BADGE[c.detectedProtocol];
+                return (
+                  <span
+                    className="absolute bottom-2 right-2 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium border"
+                    style={{
+                      backgroundColor: 'var(--si-accent-soft)',
+                      color: 'var(--si-gold)',
+                      borderColor: 'var(--si-accent-strong)',
+                    }}
+                    title={`Endpoint auto-detected as ${badge.label}`}
+                  >
+                    {badge.Icon && <badge.Icon size={11} />}
+                    {badge.label}
+                  </span>
+                );
+              })()}
             </div>
           );
         })}

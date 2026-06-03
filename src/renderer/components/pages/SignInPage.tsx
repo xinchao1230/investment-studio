@@ -736,7 +736,7 @@ export const SignInPage: React.FC<SignInPageProps> = ({ startupResult }) => {
                 {spinningKey === 'skip' ? 'Signing in…' : 'Use your own API key'}
               </Button>
               <p className="si-footnote">
-                Configure OpenAI, DeepSeek &amp; others in Settings
+                Configure OpenAI, Anthropic &amp; others in Settings
               </p>
             </CardContent>
           </Card>
