@@ -445,17 +445,6 @@ export const ResearchPage: React.FC = () => {
   }, [leftCollapsed, leftWidth]);
   // ----------------------------------------------------------------------
 
-  // First-use / empty-state UX: auto-open the add-target entry whenever the
-  // list is empty (initial load with no targets, or after the user clears the
-  // last one). Equivalent to the user clicking the "+" button automatically.
-  useEffect(() => {
-    if (loading) return;
-    if (targets.length === 0 && !showAddForm) {
-      setAddError(null);
-      setShowAddForm(true);
-    }
-  }, [loading, targets.length, showAddForm]);
-
   // Restore the last-active target on mount (after targets load). One-shot:
   // only fires when nothing is selected yet so user navigation is never overridden.
   const restoredTargetRef = useRef(false);

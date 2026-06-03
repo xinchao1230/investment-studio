@@ -102,6 +102,13 @@ class TestableTerminalInstance extends TerminalInstance {
     return (this as any).parseCommandString(command);
   }
 
+  public async testPrepareCommandWithProfile(
+    profile: { command: string; args: string[] },
+    shellType: string,
+  ): Promise<{ executable: string; args: string[]; shell: boolean }> {
+    return (this as any).prepareCommand('', profile, shellType);
+  }
+
   public testCreateShellWrapper(command: string, shellType?: string): string {
     return (this as any).createShellWrapper(command, shellType);
   }
@@ -258,6 +265,47 @@ describe('TerminalInstance PowerShell command handling', () => {
 
       expect(fullCommand).not.toMatch(/^& "/);
       expect(fullCommand).toBe('python --version');
+    });
+  });
+
+  describe('mcp_transport executable path with spaces (regression)', () => {
+    // Real failure: research-mcp on macOS. The executable lives at
+    // "/Users/<u>/Library/Application Support/Electron/bin/uv" — the space in
+    // "Application Support" caused parseCommandString to split the path at the
+    // first space, so zsh tried to exec "/Users/<u>/Library/Application" and
+    // failed with code 127.
+    const SPACED_UV = '/Users/michaelfei_0/Library/Application Support/Electron/bin/uv';
+
+    function mcpConfig(): TerminalConfig {
+      return {
+        command: SPACED_UV,
+        args: ['--directory', '/repo/research', 'run', 'python', '-m', 'research_mcp'],
+        cwd: '/Users/michaelfei_0',
+        type: 'mcp_transport',
+        shell: 'zsh',
+      };
+    }
+
+    it('keeps the spaced executable path intact in the zsh -c command', async () => {
+      Object.defineProperty(process, 'platform', { value: 'darwin' });
+      const instance = new TestableTerminalInstance(mcpConfig());
+
+      const result = await instance.testPrepareCommandWithProfile(
+        { command: '/bin/zsh', args: ['-l', '-c'] },
+        'zsh',
+      );
+
+      // The wrapper script is the last arg passed to zsh.
+      const wrapper = result.args[result.args.length - 1];
+
+      // The full path must survive as a single shell token — i.e. the segment
+      // before "Support" must not become a standalone, unquoted word.
+      expect(wrapper).toContain(SPACED_UV);
+      // It must NOT appear as a bare unquoted path that zsh would word-split.
+      expect(wrapper).not.toMatch(/(^|\s)\/Users\/michaelfei_0\/Library\/Application Support\/Electron\/bin\/uv(\s|$)/);
+      // Args must all be present after the executable.
+      expect(wrapper).toContain('--directory');
+      expect(wrapper).toContain('research_mcp');
     });
   });
 

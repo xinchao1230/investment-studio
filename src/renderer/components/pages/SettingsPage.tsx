@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import SettingsNavigation from '../settings/SettingsNavigation';
 import { AgentContextType } from '../../types/agentContextTypes';
+import { getWorkspaceRoute } from '@shared/constants/branding';
 import {
   McpServerDropdownMenu,
   McpAddMenuDropdown,
@@ -598,11 +599,27 @@ const SettingsPage: React.FC = () => {
       // Get previously stored path from sessionStorage
       const storedPreviousPath = sessionStorage.getItem('previousPath');
       if (!storedPreviousPath) {
-        // If no stored path, use default path
-        sessionStorage.setItem('settingsReturnPath', '/agent/chat');
+        // If no stored path, use the brand's workspace home (Research for
+        // investment-studio). Hardcoding '/agent/chat' here bounced
+        // investment-studio users to the agent chat instead of Research.
+        sessionStorage.setItem('settingsReturnPath', getWorkspaceRoute());
       } else {
         // Use stored path
         sessionStorage.setItem('settingsReturnPath', storedPreviousPath);
+      }
+
+      // Remember which settings tab the user is on, so re-entering settings
+      // (e.g. Research → settings round-trip) returns to the last tab instead
+      // of always redirecting to the index tab. Only record concrete tabs
+      // (/settings/xxx), never the bare '/settings' index — recording the
+      // index would feed it back into the redirect and defeat the memory.
+      if (currentPath !== '/settings') {
+        // Normalize to the top-level tab: '/settings/mcp/new' -> '/settings/mcp'.
+        // Transient sub-pages (mcp/new, sub-agents/edit/:id) must not become the
+        // remembered tab — restoring an edit page with a since-deleted :id breaks.
+        const segments = currentPath.split('/').filter(Boolean); // ['settings','mcp','new']
+        const topLevelTab = segments.length >= 2 ? `/${segments[0]}/${segments[1]}` : currentPath;
+        sessionStorage.setItem('lastSettingsPath', topLevelTab);
       }
     }
   }, [location.pathname]);
@@ -630,8 +647,9 @@ const SettingsPage: React.FC = () => {
       // Navigate to return path
       navigate(returnPath);
     } else {
-      // Default: navigate back to agent page chat view
-      navigate('/agent/chat');
+      // Default: navigate back to the brand's workspace home (Research for
+      // investment-studio, agent chat otherwise).
+      navigate(getWorkspaceRoute());
     }
   };
 

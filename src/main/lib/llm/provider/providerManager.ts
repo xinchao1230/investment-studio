@@ -127,7 +127,13 @@ export class ProviderManager {
         this.config.activeProvider = fallbackProvider;
         await this.saveConfig(this.config);
       } else {
-        throw new Error('Skip Login requires at least one enabled non-GitHub LLM provider with credentials.');
+        // No non-Copilot provider configured yet. Rather than blocking sign-in,
+        // allow skip-login to proceed into a transitional state: the user is
+        // routed to Settings → Providers to configure one. activeProviderId
+        // stays 'copilot' (unusable under skip-login, but harmless until the
+        // user picks a real provider). Chat is gated by hasApiKeyProvider()
+        // downstream, so no LLM call fires before a key exists.
+        logger.warn('[ProviderManager] Skip-login has no non-Copilot provider; entering transitional state (user must configure one in Settings)');
       }
     }
 

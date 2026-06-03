@@ -601,6 +601,21 @@
   border-top: 1px solid rgba(0, 0, 0, 0.08);
 }
 
+/* Override the global blue .btn-primary to use the app accent color. */
+.sub-agent-form-actions .btn-primary {
+  background: var(--si-gold);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+}
+
+.sub-agent-form-actions .btn-primary:hover:not(:disabled) {
+  background: var(--si-accent-strong);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18);
+}
+
+.sub-agent-form-actions .btn-primary:active:not(:disabled) {
+  background: #1a1715;
+}
+
 /* Sub-Agent list loading state */
 .sub-agent-list-loading {
   display: flex;

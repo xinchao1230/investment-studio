@@ -193,10 +193,10 @@ const SubAgentsView: React.FC = () => {
       <div className="unified-header">
         <div className="header-title">
           <SubAgentsIcon />
-          <span className="header-name">Sub-Agents</span>
+          <span className="header-name">Financial Services Agents</span>
           <div className="mcp-status-badges">
             <Badge variant="normal" className="text-xs">
-              available sub-agents: {stats.total}
+              available agents: {stats.total}
             </Badge>
           </div>
         </div>
@@ -230,16 +230,16 @@ const SubAgentsView: React.FC = () => {
         ) : subAgents.length === 0 ? (
           <div className="sub-agents-empty-state">
             <div className="sub-agents-empty-content">
-              <p className="sub-agents-empty-text">No sub-agents configured yet.</p>
+              <p className="sub-agents-empty-text">No custom agents configured yet.</p>
               <p className="sub-agents-empty-hint">
-                Sub-agents allow your agents to delegate specialized tasks to other configured agents.
+                Custom financial services agents allow you to delegate specialized tasks.
               </p>
               <div className="sub-agents-empty-actions">
                 <button
                   className="sub-agents-empty-btn sub-agents-empty-btn-primary"
                   onClick={() => navigate('/settings/sub-agents/new')}
                 >
-                  Create Custom
+                  Create Custom Agent
                 </button>
                 <button
                   className="sub-agents-empty-btn sub-agents-empty-btn-secondary"

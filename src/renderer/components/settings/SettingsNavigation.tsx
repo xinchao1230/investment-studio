@@ -1,11 +1,13 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Camera, Terminal, Archive, Key, Cpu, LayoutGrid, SlidersHorizontal } from 'lucide-react';
 import NavItem from '../ui/navigation/NavItem';
 import '../../styles/LeftNavigation.css';
-import { APP_NAME, BRAND_NAME, BRAND_CONFIG } from '@shared/constants/branding';
+import { APP_NAME, BRAND_NAME, BRAND_CONFIG, getWorkspaceRoute } from '@shared/constants/branding';
 import { useFeatureFlag } from '../../lib/featureFlags';
 import { LeftNavSizeAtom } from '@renderer/states/left-nav.atom';
+import { useAuthContext } from '../auth/AuthProvider';
+import { SKIP_LOGIN_ALIAS } from '@shared/constants/auth';
 
 // MCP icon - from McpHeaderView
 const McpIcon = () => (
@@ -95,12 +97,58 @@ const SettingsNavigation: React.FC<SettingsNavigationProps> = ({ onBack }) => {
 
   const { width } = LeftNavSizeAtom.useData();
 
+  // Workspace reachability gate. A skip-login user has no usable model until a
+  // non-Copilot provider is both enabled (hasApiKeyProvider) AND set active
+  // (activeProvider !== 'copilot'). Entering the workspace before then lands on
+  // a broken UI, so the bottom-left "Back to workspace" button is disabled until
+  // the provider is live. Copilot users are always allowed.
+  const { authData } = useAuthContext();
+  const isSkipLoginUser = authData?.ghcAuth?.alias === SKIP_LOGIN_ALIAS;
+  const [workspaceReady, setWorkspaceReady] = useState(true);
+
+  useEffect(() => {
+    if (!isSkipLoginUser) {
+      setWorkspaceReady(true);
+      return;
+    }
+    const api = window.electronAPI?.provider;
+    if (!api) return;
+
+    let alive = true;
+    const evaluate = async () => {
+      try {
+        const [activeRes, hasKeyRes] = await Promise.all([
+          api.getActive(),
+          api.hasApiKeyProvider(),
+        ]);
+        if (!alive) return;
+        const activeIsReal = activeRes?.success && activeRes.data && activeRes.data !== 'copilot';
+        const hasUsableProvider = hasKeyRes?.success && hasKeyRes.data === true;
+        setWorkspaceReady(!!activeIsReal && !!hasUsableProvider);
+      } catch {
+        // Be permissive on probe failure — don't trap the user out of the workspace.
+        if (alive) setWorkspaceReady(true);
+      }
+    };
+
+    evaluate();
+    // Re-evaluate instantly when the active provider changes (e.g. the user just
+    // hit "Set as active" on the Providers page), so the button un-greys live.
+    const unsub = api.onProviderSwitched?.(() => evaluate());
+    return () => {
+      alive = false;
+      unsub?.();
+    };
+  }, [isSkipLoginUser]);
+
   const handleBack = () => {
+    if (!workspaceReady) return;
     if (onBack) {
       onBack();
     } else {
-      // Default: navigate back to agent page
-      navigate('/agent/chat');
+      // Default: navigate back to the brand's workspace home (Research for
+      // investment-studio, agent chat otherwise).
+      navigate(getWorkspaceRoute());
     }
   };
 
@@ -198,6 +246,16 @@ const SettingsNavigation: React.FC<SettingsNavigationProps> = ({ onBack }) => {
             ariaLabel="Application settings"
           />
 
+          {subAgentEnabled && (
+            <NavItem
+              icon={<SubAgentIcon />}
+              label="Financial Services Agents"
+              isActive={activeView === 'sub-agents'}
+              onClick={() => navigate('/settings/sub-agents')}
+              ariaLabel="Financial Services Agents"
+            />
+          )}
+
           {isInvestmentStudio && (
             <NavItem
               icon={<Key size={18} />}
@@ -239,16 +297,6 @@ const SettingsNavigation: React.FC<SettingsNavigationProps> = ({ onBack }) => {
               isActive={activeView === 'plugins'}
               onClick={() => navigate('/settings/plugins')}
               ariaLabel="Plugin Management"
-            />
-          )}
-
-          {subAgentEnabled && (
-            <NavItem
-              icon={<SubAgentIcon />}
-              label="Financial Services Agents"
-              isActive={activeView === 'sub-agents'}
-              onClick={() => navigate('/settings/sub-agents')}
-              ariaLabel="Financial Services Agents"
             />
           )}
 
@@ -342,8 +390,13 @@ const SettingsNavigation: React.FC<SettingsNavigationProps> = ({ onBack }) => {
           <button
             type="button"
             onClick={handleBack}
+            disabled={!workspaceReady}
             aria-label="Back to workspace"
-            title="Back to workspace"
+            title={
+              workspaceReady
+                ? 'Back to workspace'
+                : 'Enable and activate an LLM provider first'
+            }
             className="settings-back-btn"
             style={{
               display: 'flex',
@@ -354,7 +407,8 @@ const SettingsNavigation: React.FC<SettingsNavigationProps> = ({ onBack }) => {
               borderRadius: '8px',
               color: 'var(--si-ink)',
               flexShrink: 0,
-              cursor: 'pointer',
+              cursor: workspaceReady ? 'pointer' : 'not-allowed',
+              opacity: workspaceReady ? 1 : 0.4,
             }}
           >
             <LayoutGrid size={20} />

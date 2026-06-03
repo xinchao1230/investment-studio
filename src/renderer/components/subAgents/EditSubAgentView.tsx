@@ -159,7 +159,7 @@ const EditSubAgentView: React.FC = () => {
               <path d="M20 11H7.83L13.42 5.41L12 4L4 12L12 20L13.41 18.59L7.83 13H20V11Z" fill="var(--si-ink)"/>
             </svg>
           </button>
-          <span className="header-name">Edit Sub-Agent: {existing?.name || decodedName}</span>
+          <span className="header-name">Edit Agent: {existing?.name || decodedName}</span>
         </div>
         <div className="header-actions" />
       </div>
