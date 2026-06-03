@@ -513,6 +513,7 @@ export interface ElectronAPI {
     testConnection: (id?: string) => Promise<{ success: boolean; data?: any; error?: string }>;
     listModels: (id?: string) => Promise<{ success: boolean; data?: any[]; error?: string }>;
     hasApiKeyProvider: () => Promise<{ success: boolean; data?: boolean; error?: string }>;
+    isActiveProviderUsable: () => Promise<{ success: boolean; data?: boolean; error?: string }>;
     onProviderSwitched: (callback: (data: { activeProvider: string }) => void) => () => void;
   };
 
@@ -2033,6 +2034,7 @@ export const electronAPI: ElectronAPI = {
     testConnection: (id?: string) => ipcRenderer.invoke('provider:testConnection', id),
     listModels: (id?: string) => ipcRenderer.invoke('provider:listModels', id),
     hasApiKeyProvider: () => ipcRenderer.invoke('provider:hasApiKeyProvider'),
+    isActiveProviderUsable: () => ipcRenderer.invoke('provider:isActiveProviderUsable'),
     onProviderSwitched: (callback: (data: { activeProvider: string }) => void) => {
       const listener = (_event: any, data: any) => callback(data);
       ipcRenderer.on('provider:switched', listener);

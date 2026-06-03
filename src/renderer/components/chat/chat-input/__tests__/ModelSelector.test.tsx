@@ -105,6 +105,37 @@ describe('ModelSelector', () => {
     expect(screen.getByText('Select Model')).toBeTruthy();
   });
 
+  it('shows "No models found" (not a stale model id) when the list is empty', () => {
+    // Persisted selection is a leftover id from a previous provider...
+    vi.mocked(profileDataManager.getSelectedModel).mockReturnValue('claude-sonnet-4.6');
+    vi.mocked(getModelById).mockReturnValue(undefined as any);
+    // ...but the active provider returns NO models and is done loading.
+    vi.mocked(useAvailableModels).mockReturnValue({ models: [], isLoading: false } as any);
+    renderSelector();
+    expect(screen.getByText('No models found')).toBeTruthy();
+    // The stale id must NOT be advertised on the button.
+    expect(screen.queryByText('claude-sonnet-4.6')).toBeNull();
+  });
+
+  it('shows "Loading models…" while the empty list is still loading', () => {
+    vi.mocked(getModelById).mockReturnValue(undefined as any);
+    vi.mocked(useAvailableModels).mockReturnValue({ models: [], isLoading: true } as any);
+    renderSelector();
+    expect(screen.getByText('Loading models…')).toBeTruthy();
+  });
+
+  it('disables the button (no dropdown) when there are no models', () => {
+    vi.mocked(getModelById).mockReturnValue(undefined as any);
+    vi.mocked(useAvailableModels).mockReturnValue({ models: [], isLoading: false } as any);
+    renderSelector();
+    const button = screen.getByTitle('Select AI Model') as HTMLButtonElement;
+    expect(button.disabled).toBe(true);
+    // Clicking a disabled button must not open the dropdown — only the button's
+    // own "No models found" label exists, no second (dropdown) instance.
+    fireEvent.click(button);
+    expect(screen.queryAllByText('No models found').length).toBe(1);
+  });
+
   it('shows dropdown on button click', () => {
     renderSelector();
     expect(screen.queryByText('GPT-4.1')).toBeNull();

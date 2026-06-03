@@ -184,14 +184,14 @@ export const AppRoutes: React.FC = () => {
 
         {/* Settings Routes - separate from agent */}
         <Route path="/settings" element={<SettingsPage />}>
-          {/* Investment-studio lands on the Research API tab (users come here
-              to set up tushare/yfinance keys). Other brands keep the legacy
-              MCP landing. */}
+          {/* Investment-studio lands on the LLM Providers tab (users come here
+              to configure their model provider / API keys). Other brands keep
+              the legacy MCP landing. */}
           <Route
             index
             element={
               <Navigate
-                to={BRAND_NAME === 'investment-studio' ? 'research-api' : 'mcp'}
+                to={BRAND_NAME === 'investment-studio' ? 'providers' : 'mcp'}
                 replace
               />
             }

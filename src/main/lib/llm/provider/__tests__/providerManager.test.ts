@@ -101,6 +101,78 @@ describe('ProviderManager', () => {
     expect(manager.hasApiKeyProvider()).toBe(false);
   });
 
+  it('redirects the active pointer to custom-dynamic for a skip-login user with no configured provider', async () => {
+    // A _local (skip-login) user cannot use Copilot. With no non-Copilot
+    // provider configured yet, the active pointer must NOT stay at 'copilot'
+    // (which would make the UI show the Copilot icon next to "No models found").
+    // It should default to the 'custom-dynamic' slot the user will configure.
+    //
+    // It must ALSO NOT warm the model cache for that empty slot: warming an
+    // unconfigured endpoint fires listModels() against a blank base URL on every
+    // init (a guaranteed failed HTTP request + log noise). Spy on the slot's
+    // listModels to assert it is never called.
+    const customDynamic = manager.getProvider('custom-dynamic');
+    const listModelsSpy = vi.spyOn(customDynamic!, 'listModels');
+
+    await manager.initialize('_local');
+
+    expect(manager.getActiveProviderId()).toBe('custom-dynamic');
+    // In-memory only — the on-disk default must remain 'copilot' so the next
+    // init re-evaluates from a clean slate.
+    expect((manager as any).config.activeProvider).toBe('copilot');
+    // No credentials → not usable → must NOT warm the cache.
+    expect(listModelsSpy).not.toHaveBeenCalled();
+  });
+
+  describe('isActiveProviderUsable', () => {
+    it('returns false when the active provider is copilot (needs GitHub auth, not a key)', () => {
+      (manager as any).config = {
+        version: '1.0.0',
+        activeProvider: 'copilot',
+        providers: { copilot: { enabled: true } },
+      };
+      (manager as any).activeProviderId = 'copilot';
+      expect(manager.isActiveProviderUsable()).toBe(false);
+    });
+
+    it('returns false when the active pointer aims at a DISABLED provider (stale-pointer bug)', () => {
+      // Reproduces the real bug: activeProvider was left pointing at custom-dynamic
+      // after the user disabled it. The old gate combined `active !== copilot`
+      // (true here) with a separate key check and let the workspace button stay
+      // clickable; this verdict must be false.
+      (manager as any).config = {
+        version: '1.0.0',
+        activeProvider: 'custom-dynamic',
+        providers: {
+          copilot: { enabled: true },
+          'custom-dynamic': { enabled: false, apiKey: 'enc:stale', baseUrl: 'http://localhost:4141/', detectedProtocol: 'openai' },
+        },
+      };
+      (manager as any).activeProviderId = 'custom-dynamic';
+      expect(manager.isActiveProviderUsable()).toBe(false);
+    });
+
+    it('returns false when the active provider is enabled but has no API key', () => {
+      (manager as any).config = {
+        version: '1.0.0',
+        activeProvider: 'anthropic',
+        providers: { anthropic: { enabled: true } },
+      };
+      (manager as any).activeProviderId = 'anthropic';
+      expect(manager.isActiveProviderUsable()).toBe(false);
+    });
+
+    it('returns true when the active provider is non-copilot, enabled, and has a key', () => {
+      (manager as any).config = {
+        version: '1.0.0',
+        activeProvider: 'anthropic',
+        providers: { anthropic: { enabled: true, apiKey: 'enc:real' } },
+      };
+      (manager as any).activeProviderId = 'anthropic';
+      expect(manager.isActiveProviderUsable()).toBe(true);
+    });
+  });
+
   it('should return provider info with correct metadata', () => {
     const infos = manager.getAllProviderInfos();
     const openai = infos.find(i => i.id === 'openai');

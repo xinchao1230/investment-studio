@@ -162,13 +162,20 @@ export class ProviderManager {
         this.config.activeProvider = fallbackProvider;
         await this.saveConfig(this.config);
       } else {
-        // No non-Copilot provider configured yet. Rather than blocking sign-in,
-        // allow skip-login to proceed into a transitional state: the user is
-        // routed to Settings → Providers to configure one. activeProviderId
-        // stays 'copilot' (unusable under skip-login, but harmless until the
-        // user picks a real provider). Chat is gated by hasApiKeyProvider()
-        // downstream, so no LLM call fires before a key exists.
-        logger.warn('[ProviderManager] Skip-login has no non-Copilot provider; entering transitional state (user must configure one in Settings)');
+        // No non-Copilot provider configured yet. A skip-login (_local) user can
+        // NOT use Copilot (it needs GitHub auth), so leaving the active pointer
+        // at 'copilot' would make the UI advertise an unusable provider — e.g.
+        // the model selector showing the GitHub/Copilot icon next to
+        // "No models found". Point the active provider at the 'custom-dynamic'
+        // slot instead (the "My LLM Provider" endpoint this user will configure):
+        // its instance is always registered, so getActiveProvider() is safe, and
+        // getActive() now reports a provider that matches what the user can
+        // actually use. This is an IN-MEMORY redirect only — we deliberately do
+        // NOT persist it (config.activeProvider stays 'copilot'), so the next
+        // init re-evaluates from a clean slate. Chat remains gated by
+        // hasApiKeyProvider() downstream, so no LLM call fires before a key exists.
+        this.activeProviderId = 'custom-dynamic';
+        logger.warn('[ProviderManager] Skip-login has no non-Copilot provider; defaulting active pointer to custom-dynamic (user must configure it in Settings)');
       }
     }
 
@@ -186,10 +193,19 @@ export class ProviderManager {
       this.notifyRenderer('provider:switched', { activeProvider: 'copilot' });
     }
 
-    // For non-Copilot providers, warm the model cache in background so that
+    // Warm the model cache for a USABLE non-Copilot active provider, so that
     // subsequent IPC calls (getModelById, getModelCapabilities, etc.) hit cache
     // instead of each firing a separate HTTP request to the provider.
-    if (this.activeProviderId !== 'copilot') {
+    //
+    // Gate on isActiveProviderUsable() (non-Copilot + enabled + credentialed) so
+    // we NEVER warm an unconfigured endpoint. A skip-login user with no provider
+    // configured has the active pointer redirected to an empty 'custom-dynamic'
+    // (above); warming it would fire listModels() against a blank base URL on
+    // every init — a guaranteed failed HTTP request plus log noise. The
+    // models:updated push is gated too: with no usable provider there are no
+    // models to surface, and the renderer reads its (empty) cache to show
+    // "No models found" without needing a push.
+    if (this.isActiveProviderUsable()) {
       this.getActiveProvider().listModels().catch((err) => {
         logger.warn(`[ProviderManager] Model cache warm failed: ${err instanceof Error ? err.message : String(err)}`);
       });
@@ -712,6 +728,33 @@ export class ProviderManager {
       }
     }
     return false;
+  }
+
+  /**
+   * Authoritative "is the workspace usable right now" check for the active
+   * provider. Returns true only when the ACTIVE provider is a non-Copilot
+   * provider that is itself enabled and credential-ready.
+   *
+   * This is stricter than hasApiKeyProvider(): that one answers "does ANY
+   * provider have a key" (used by the sign-in skip gate), whereas this answers
+   * "is the provider we'd actually route to usable". They diverge in exactly the
+   * bug case this guards against — a stale `activeProvider` pointer left aimed at
+   * a provider the user has since DISABLED (e.g. activeProvider 'custom-dynamic'
+   * with custom-dynamic.enabled === false). hasApiKeyProvider() would say false
+   * there too, but the old UI gate combined `active !== 'copilot'` (true, from
+   * the stale pointer) with hasApiKeyProvider() as separate signals; collapsing
+   * both into this single active-scoped check removes that gap.
+   *
+   * Never throws — it backs a UI enable/disable gate.
+   */
+  isActiveProviderUsable(): boolean {
+    if (!this.config) return false;
+    const activeId = this.activeProviderId;
+    if (activeId === 'copilot') return false; // Copilot needs GitHub auth, not a key
+    const activeConfig = this.config.providers[activeId];
+    if (!activeConfig?.enabled) return false; // active points at a disabled provider
+    const provider = this.providers.get(activeId);
+    return !provider?.info.requiresApiKey || !!activeConfig.apiKey;
   }
 
   private getFirstConfiguredNonCopilotProvider(): ProviderId | undefined {
