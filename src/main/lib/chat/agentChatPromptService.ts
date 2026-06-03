@@ -393,6 +393,9 @@ Add \`run_in_background: true\` to run the sub-agent asynchronously without bloc
 - Results will be delivered as \`<task-notification>\` user messages at your next turn
 - Use \`get_subagent_status\` to check on running background tasks
 - Best for: long-running research, parallel independent tasks, non-urgent work
+
+### User-directed delegation via \`[@agent:NAME]\`
+If the user's message contains a token of the form \`[@agent:<name>]\` (for example \`[@agent:earnings-reviewer]\`), it is an explicit routing hint. Prefer dispatching the request to that specific sub-agent via the \`sub_agent\` tool (passing \`subagent_type: "<name>"\`) unless the request is clearly outside that sub-agent's scope. If multiple \`[@agent:...]\` tokens appear, treat them as a request to dispatch in parallel.
 - **Auto-promotion**: Sync sub-agents that run longer than 120 seconds are automatically promoted to background
 
 ### Communicating with Background Agents

@@ -106,6 +106,7 @@ vi.mock('../../../lib/chat/contextMentions', async () => ({
   workspaceMentionRegex: /\[@workspace:[^\]]+\]/g,
   knowledgeBaseMentionRegex: /\[@knowledge-base:[^\]]+\]/g,
   chatSessionMentionRegex: /\[@chat-session:[^\]]+\]/g,
+  subAgentMentionRegex: /\[@agent:[^\]]+\]/g,
   skillMentionRegex: /\[#skill:[^\]]+\]/g,
 }));
 

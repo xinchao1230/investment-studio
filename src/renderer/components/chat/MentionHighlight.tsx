@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { workspaceMentionRegex, knowledgeBaseMentionRegex, chatSessionMentionRegex, skillMentionRegex } from '../../lib/chat/contextMentions';
+import { workspaceMentionRegex, knowledgeBaseMentionRegex, chatSessionMentionRegex, subAgentMentionRegex, skillMentionRegex } from '../../lib/chat/contextMentions';
 
 interface MentionHighlightProps {
   text: string;
@@ -90,6 +90,12 @@ export const MentionHighlight: React.FC<MentionHighlightProps> = ({ text, textar
     // 🆕 Replace [@chat-session:...] mentions with highlight markup
     result = result.replace(
       /\[@chat-session:([^\]]+)\]/g,
+      (match) => `<mark class="mention-highlight workspace-mention">${match}</mark>`
+    );
+
+    // 🆕 Replace [@agent:...] mentions with highlight markup (sub-agent routing hint)
+    result = result.replace(
+      /\[@agent:([^\]]+)\]/g,
       (match) => `<mark class="mention-highlight workspace-mention">${match}</mark>`
     );
 

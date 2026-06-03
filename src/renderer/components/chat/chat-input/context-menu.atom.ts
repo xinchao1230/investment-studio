@@ -1,8 +1,9 @@
 import { atom } from '@/atom';
-import { ContextOption, ContextMenuOptionType, ContextMenuTriggerType, filterSkillsByQuery, MentionSourceType, getDefaultMenuOptions } from '@/lib/chat/contextMentions';
+import { ContextOption, ContextMenuOptionType, ContextMenuTriggerType, filterSkillsByQuery, filterSubAgentsByQuery, MentionSourceType, getDefaultMenuOptions } from '@/lib/chat/contextMentions';
 import { searchWorkspaceFiles } from '@/lib/workspace/workspaceSearchService';
 import { agentChatSessionCacheManager } from '@/lib/chat/agentChatSessionCacheManager';
 import { profileDataManager } from '@/lib/userData';
+import { isFeatureEnabled } from '@/lib/featureFlags/featureFlagCacheManager';
 
 
 interface ContextMenuState {
@@ -248,10 +249,22 @@ export const ContextMenuAtom = atom(zeroContextMenuState, (get, set) => {
 
           resetOptions(options);
         } else {
-          // @ trigger: search Knowledge Base and Chat Session Files
+          // @ trigger: search Knowledge Base and Chat Session Files, plus sub-agents
           const currentChatConfig: any = profileDataManager.getCurrentChat?.();
           const knowledgeBasePath = currentChatConfig?.agent?.knowledge?.knowledgeBase ?? currentChatConfig?.agent?.knowledgeBase;
           const workspacePath = currentChatConfig?.agent?.workspace;
+
+          // Sub-agents enabled for the current primary agent
+          const subAgentOptions: ContextOption[] = (() => {
+            if (!isFeatureEnabled('openkosmosFeatureSubAgent')) return [];
+            const enabledNames: string[] = Array.isArray(currentChatConfig?.agent?.sub_agents)
+              ? currentChatConfig.agent.sub_agents
+              : [];
+            if (enabledNames.length === 0) return [];
+            const allSubAgents = profileDataManager.getSubAgents?.() || [];
+            const enabled = allSubAgents.filter((sa: any) => enabledNames.includes(sa.name));
+            return filterSubAgentsByQuery(enabled, query);
+          })();
 
           // Compute chat session files path
           let chatSessionFilesPath = '';
@@ -330,10 +343,11 @@ export const ContextMenuAtom = atom(zeroContextMenuState, (get, set) => {
               }];
             }
 
-            resetOptions(options);
+            // Prepend sub-agent matches (they're typically a smaller set)
+            resetOptions([...subAgentOptions, ...options]);
           } else {
-            // No search term (just typed @): show default options
-            resetOptions(getDefaultMenuOptions());
+            // No search term (just typed @): show default options + any sub-agents
+            resetOptions([...subAgentOptions, ...getDefaultMenuOptions()]);
           }
         }
       } catch (error) {
