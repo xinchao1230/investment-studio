@@ -24,15 +24,17 @@ export interface SeedResult {
 
 function findSourceDir(skillName: string): string | null {
   const candidates: string[] = [];
+  const appPath = app.getAppPath();
   const resourcesPath = (process as any).resourcesPath;
 
-  if (app.isPackaged && resourcesPath) {
+  // Primary layout: top-level skills/ and resources/examples/skills/ bundled via electron-builder `files`.
+  // app.getAppPath() resolves to <repo-root> in dev and <app.asar> when packaged.
+  candidates.push(path.join(appPath, 'skills', skillName));
+  candidates.push(path.join(appPath, 'resources', 'examples', 'skills', skillName));
+  // extraResources fallback (not currently used for skills, kept for safety).
+  if (resourcesPath) {
     candidates.push(path.join(resourcesPath, 'skills', skillName));
     candidates.push(path.join(resourcesPath, 'examples', 'skills', skillName));
-  } else {
-    const appPath = app.getAppPath();
-    candidates.push(path.join(appPath, 'skills', skillName));
-    candidates.push(path.join(appPath, 'resources', 'examples', 'skills', skillName));
   }
 
   for (const dir of candidates) {

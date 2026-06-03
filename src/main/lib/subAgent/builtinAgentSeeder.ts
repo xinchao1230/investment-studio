@@ -27,19 +27,28 @@ export interface AgentSeedResult {
 
 /**
  * Find the source directory for a builtin agent.
- * Searches both packaged and development paths.
+ *
+ * Resolution order (try every candidate; first hit wins):
+ *  1. app.getAppPath()/resources/examples/agents/<name>
+ *     - Dev: <repo-root>/resources/examples/agents/<name>
+ *     - Packaged: <app.asar>/resources/examples/agents/<name> (Vite build copies resources/ into asar)
+ *  2. app.getAppPath()/agents/<name>            — alt layout, kept for safety
+ *  3. process.resourcesPath/examples/agents/<name>  — extraResources fallback (not currently used)
+ *  4. process.resourcesPath/agents/<name>           — extraResources fallback (not currently used)
+ *
+ * The previous packaged branch checked only (3)/(4), which fail in the Vite build because
+ * resources/ is bundled into asar via the `files` config, not copied via extraResources.
  */
 function findAgentSourceDir(agentName: string): string | null {
   const candidates: string[] = [];
+  const appPath = app.getAppPath();
   const resourcesPath = (process as any).resourcesPath;
 
-  if (app.isPackaged && resourcesPath) {
-    candidates.push(path.join(resourcesPath, 'agents', agentName));
+  candidates.push(path.join(appPath, 'resources', 'examples', 'agents', agentName));
+  candidates.push(path.join(appPath, 'agents', agentName));
+  if (resourcesPath) {
     candidates.push(path.join(resourcesPath, 'examples', 'agents', agentName));
-  } else {
-    const appPath = app.getAppPath();
-    candidates.push(path.join(appPath, 'agents', agentName));
-    candidates.push(path.join(appPath, 'resources', 'examples', 'agents', agentName));
+    candidates.push(path.join(resourcesPath, 'agents', agentName));
   }
 
   for (const dir of candidates) {
