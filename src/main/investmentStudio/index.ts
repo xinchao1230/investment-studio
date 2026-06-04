@@ -10,6 +10,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { PortfolioTools } from '../lib/mcpRuntime/builtinTools/portfolioTools';
 import { ExcelService } from './excelService';
+import { agentChatManager } from '../lib/chat/agentChatManager';
 
 export interface InvestmentStudioDeps {
   getCurrentUserAlias: () => string | null;
@@ -464,9 +465,10 @@ function registerResearchChatIpc(deps: InvestmentStudioDeps): void {
       if (!alias) return { success: false, error: 'No current user session' };
       const chatId = await resolveResearchChatId();
       if (!chatId) return { success: false, error: 'No chat config found' };
-      const pcManager = await deps.getProfileCacheManager();
-      const ok = await pcManager.deleteChatSession(alias, chatId, chatSessionId);
-      return ok ? { success: true } : { success: false, error: 'Failed to delete' };
+      // Route through agentChatManager so renderer state stays coherent
+      // (fallback switch + instance dispose + sessionDeleted event).
+      const result = await agentChatManager.deleteChatSession(chatId, chatSessionId);
+      return result.success ? { success: true } : { success: false, error: result.error || 'Failed to delete' };
     } catch (error) {
       return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
     }

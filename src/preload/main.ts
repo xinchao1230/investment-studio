@@ -892,6 +892,24 @@ export interface ElectronAPI {
       },
     ) => Promise<{ success: boolean; chatSessionId?: string; error?: string }>;
     startNewChatForPrimaryAgent: () => Promise<{ success: boolean; chatId?: string; chatSessionId?: string; error?: string }>;
+    deleteChatSession: (
+      chatId: string,
+      chatSessionId: string,
+    ) => Promise<{ success: boolean; error?: string; nextChatSessionId?: string | null }>;
+    reconcileCurrentChatSession: (expected?: {
+      expectedChatId?: string | null;
+      expectedChatSessionId?: string | null;
+    }) => Promise<{
+      success: boolean;
+      error?: string;
+      data?: {
+        chatId: string | null;
+        chatSessionId: string | null;
+        chatStatus: string | null;
+        expectedChatId: string | null;
+        expectedChatSessionId: string | null;
+      };
+    }>;
     streamMessage: (
       message: UserMessage,
       targetChatSessionId?: string,
@@ -2241,6 +2259,12 @@ export const electronAPI: ElectronAPI = {
     ) => ipcRenderer.invoke('agentChat:startNewChatFor', chatId),
     startNewChatForPrimaryAgent: () =>
       ipcRenderer.invoke('agentChat:startNewChatForPrimaryAgent'),
+    deleteChatSession: (chatId: string, chatSessionId: string) =>
+      ipcRenderer.invoke('agentChat:deleteChatSession', chatId, chatSessionId),
+    reconcileCurrentChatSession: (expected?: {
+      expectedChatId?: string | null;
+      expectedChatSessionId?: string | null;
+    }) => ipcRenderer.invoke('agentChat:reconcileCurrentChatSession', expected),
     streamMessage: (message: UserMessage, targetChatSessionId?: string) =>
       ipcRenderer.invoke('agentChat:streamMessage', message, targetChatSessionId),
     // 🔥 Retry the last failed conversation
