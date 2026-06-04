@@ -4,6 +4,9 @@ import { TokenCounter } from '../token';
 
 export interface ContextCompressionLlmSummarizerParams {
   conversationText: string;
+  /** Required: the user's currently selected model. Compression uses this
+   *  directly — no hardcoded model, no provider-side preference fallback. */
+  modelId: string;
   maxRetries?: number;
 }
 
@@ -16,7 +19,6 @@ export interface ContextCompressionLlmSummarizerResponse {
 
 export class ContextCompressionLlmSummarizer {
   private static readonly LOG_SOURCE = 'ContextCompressionLlmSummarizer';
-  private static readonly MODEL = 'claude-haiku-4.5';
   private static readonly MAX_TOKENS = 16000;
   private static readonly TEMPERATURE = 0.3;
   private static readonly OUTPUT_LANGUAGE = 'en';
@@ -160,6 +162,19 @@ Please generate a structured summary according to the above requirements:`;
     params: ContextCompressionLlmSummarizerParams,
   ): Promise<ContextCompressionLlmSummarizerResponse> {
     const logger = getGlobalLogger();
+    const modelId = params.modelId?.trim();
+    if (!modelId) {
+      logger.warn(
+        `[CompressionSummary] ⚠️ summarize() called without a modelId — refusing to invoke LLM (no hidden fallback)`,
+        this.LOG_SOURCE,
+      );
+      return {
+        success: false,
+        attempts: 0,
+        error: 'No modelId provided for context compression; refusing hidden model fallback',
+      };
+    }
+
     const maxRetries = Math.max(1, params.maxRetries ?? 3);
     const prompt = this.buildPrompt(params.conversationText);
     let lastError: Error | null = null;
@@ -167,12 +182,12 @@ Please generate a structured summary according to the above requirements:`;
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
         logger.info(
-          `[CompressionSummary] 🤖 Calling LLM (${this.MODEL}) — promptLength=${prompt.length}, language=${this.OUTPUT_LANGUAGE}, maxTokens=${this.MAX_TOKENS}, temperature=${this.TEMPERATURE}, attempt=${attempt}/${maxRetries}`,
+          `[CompressionSummary] 🤖 Calling LLM (${modelId}) — promptLength=${prompt.length}, language=${this.OUTPUT_LANGUAGE}, maxTokens=${this.MAX_TOKENS}, temperature=${this.TEMPERATURE}, attempt=${attempt}/${maxRetries}`,
           this.LOG_SOURCE,
         );
 
         const response = await ghcModelApi.callModel(
-          this.MODEL,
+          modelId,
           prompt,
           this.SYSTEM_PROMPT,
           this.MAX_TOKENS,

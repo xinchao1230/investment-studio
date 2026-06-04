@@ -1,4 +1,4 @@
-<!-- Last verified: 2026-05-21 -->
+<!-- Last verified: 2026-06-04 -->
 # Sub-Agent System
 
 > Manages spawning, lifecycle, and scoped execution of task-focused sub-agents from within a parent agent conversation.
@@ -18,7 +18,7 @@
 ## Architecture
 - **SubAgentManager** is a singleton (`getInstance()`). All spawn limits from `SUB_AGENT_LIMITS` in `profile.ts` have been removed (set to `Infinity`); no hard caps on parallel instances, total spawns per session, or background tasks. The system relies on turn budgets and `CancellationToken` cascades for resource protection.
 - **SubAgentChat** uses streaming fetch internally (SSE parsing identical to AgentChat) and forwards chunks to the renderer via `SubAgentTaskWatcherRegistry` when a UI panel is actively watching the task. Results are also returned to the parent after the loop completes.
-- Context compression in SubAgentChat uses claude-haiku-4.5 summary when message count or token threshold is exceeded; tool results are never discarded (only text messages are summarised).
+- Context compression in SubAgentChat uses an LLM summary when message count or token threshold is exceeded; tool results are never discarded (only text messages are summarised). The summary call goes through `SubAgentContextCompactor` and uses `options.subAgent.inheritedModel` (the sub-agent's runtime model = parent's currently selected model) — there is no hardcoded model name. If `inheritedModel` is empty, both compression paths fall back to hard truncation rather than risk a silent provider-side model fallback.
 - Sub-agents **default to the parent's LLM model**, but `AGENT.md` may specify a non-`inherit` `model` override for multi-model collaboration. They still **share the parent's `CancellationToken`** — cancelling the parent auto-terminates all running sub-agents.
 - Recursive spawning is explicitly blocked: sub-agents cannot call `sub_agent` or `send_to_subagent`.
 - `SubAgentFileManager` maps Claude Code tool shortnames (`Read`, `Write`, `Grep`…) to OpenKosmos built-in IDs (`read_file`, `write_file`…) on import of external AGENT.md files.
@@ -28,7 +28,7 @@
 - **Turn budget**: Hardcoded loop guard of 200 turns per sub-agent (`turnCount < 200` in `SubAgentChat`). No configurable `maxTurns` parameter — the limit is a safety bound, not a tuning knob.
 - **CancellationToken**: Inherited from parent `AgentChat`. User cancel or parent dispose fires `AbortController.abort()`, killing the in-flight streaming fetch.
 - **Auto-background promotion**: After 120s (`AUTO_BACKGROUND_TIMEOUT_MS`), a synchronous sub-agent is promoted to background — does NOT kill the agent, just unblocks the parent.
-- **Context compression timeouts**: 20s for message-count compression (haiku), 15s for tool-result summarization (haiku). Both fall back to hard truncation on timeout; neither terminates the sub-agent.
+- **Context compression timeouts**: 20s for message-count compression (Phase 0 LLM summary), 15s for tool-result summarization. Both use the sub-agent's runtime `inheritedModel` and fall back to hard truncation on timeout, empty model, or LLM error; neither terminates the sub-agent.
 - **No per-LLM-call timeout**: Long streaming calls (60–100s for opus-class models) are normal. The stream actively receives SSE chunks the entire time. Tool execution has its own built-in timeout mechanisms.
 
 ### Task Persistence (SubAgentTaskStore)
