@@ -677,7 +677,7 @@ describe('compressContextHistoryWithFullMode', () => {
     } as any;
 
     await expect(
-      compressContextHistoryWithFullMode(contextHistory, compressor, 'OpenKosmos')
+      compressContextHistoryWithFullMode(contextHistory, compressor, 'OpenKosmos', 'test-model-id')
     ).resolves.toEqual({
       success: true,
       compressedMessages: fallbackMessages,
@@ -720,7 +720,7 @@ describe('compressContextHistoryWithFullMode', () => {
     } as any;
 
     await expect(
-      compressContextHistoryWithFullMode(contextHistory, compressor, 'OpenKosmos')
+      compressContextHistoryWithFullMode(contextHistory, compressor, 'OpenKosmos', 'test-model-id')
     ).resolves.toEqual({
       success: false,
       compressedMessages: contextHistory,

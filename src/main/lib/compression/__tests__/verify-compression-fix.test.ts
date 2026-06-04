@@ -69,7 +69,7 @@ describe('Compression prefill fix verification', () => {
     }
     messages.push(msg('user', 'Summarize everything'));
 
-    const result = await compressor.compressMessages(messages);
+    const result = await compressor.compressMessages(messages, "test-model-id");
     const last = result.compressedMessages[result.compressedMessages.length - 1];
     expect(last.role).toBe('user');
   });
@@ -86,7 +86,7 @@ describe('Compression prefill fix verification', () => {
       messages.push(msg('assistant', `A${i} ${FILLER}`));
     }
 
-    const result = await compressor.compressMessages(messages);
+    const result = await compressor.compressMessages(messages, "test-model-id");
     const last = result.compressedMessages[result.compressedMessages.length - 1];
     expect(last.role).toBe('user');
   });
@@ -103,7 +103,7 @@ describe('Compression prefill fix verification', () => {
       messages.push(msg('assistant', `A${i} ${FILLER}`));
     }
 
-    const result = await compressor.compressMessages(messages);
+    const result = await compressor.compressMessages(messages, "test-model-id");
     const last = result.compressedMessages[result.compressedMessages.length - 1];
     expect(last.role).toBe('user');
   });

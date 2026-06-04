@@ -4,6 +4,7 @@ import React, { useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import '../../styles/AddNewMcpServerView.css';
 import { useMCPServers } from '../userData/userDataProvider'
+import { useAgentConfig } from '../userData/userDataProvider'
 import { useToast } from '../ui/ToastProvider'
 import { McpOps } from '../../lib/mcp/mcpOps'
 import { OpenKosmosAppMCPServerConfig } from '../../types/mcpTypes'
@@ -56,6 +57,7 @@ const AddNewMcpServerViewContent: React.FC<AddNewMcpServerViewContentProps> = ({
 }) => {
   const navigate = useNavigate()
   const { servers, addServer, refreshRuntimeInfo, getServerByName, updateServer } = useMCPServers()
+  const { currentModel } = useAgentConfig()
   const { showError, showSuccess, showWarning } = useToast()
 
   // Determine if we're in edit mode
@@ -374,8 +376,20 @@ const AddNewMcpServerViewContent: React.FC<AddNewMcpServerViewContentProps> = ({
       setVerifyError(null)
       setVerifyResult(null)
 
+      // Use the current chat's agent model. We refuse silently to invoke the
+      // LLM if no model is selected — the AI-assisted formatter is opt-in and
+      // shouldn't fall back to a provider default behind the user's back.
+      const trimmedModelId = (currentModel ?? '').trim()
+      if (!trimmedModelId) {
+        setVerifyError(
+          'Please select a model (open or pick a chat first) before using AI MCP config formatting.',
+        )
+        setIsVerifying(false)
+        return
+      }
+
       // Call the main process McpConfigLlmFormatter.formatMcpConfig via IPC
-      const ipcResult = await window.electronAPI?.llm?.formatMcpConfig(newServerConfig)
+      const ipcResult = await window.electronAPI?.llm?.formatMcpConfig(newServerConfig, trimmedModelId)
 
       if (!ipcResult) {
         throw new Error('LLM API not available')
@@ -459,7 +473,7 @@ const AddNewMcpServerViewContent: React.FC<AddNewMcpServerViewContentProps> = ({
     } finally {
       setIsVerifying(false)
     }
-  }, [newServerConfig, isEditMode, newServerType, newServerName])
+  }, [newServerConfig, isEditMode, newServerType, newServerName, currentModel])
 
   // Reset verify state when config changes
   const handleConfigChange = useCallback((value: string) => {

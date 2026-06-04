@@ -165,6 +165,7 @@ export class AgentChatContextService {
           currentContextHistory,
           this.deps.getFullModeCompressor(),
           this.deps.getAgentName(),
+          this.deps.getCurrentModelId(),
         );
 
         if (compressionResult.success && compressionResult.compressedMessages) {

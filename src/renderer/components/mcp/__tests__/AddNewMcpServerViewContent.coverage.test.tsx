@@ -56,6 +56,7 @@ vi.mock('../../ui/ToastProvider', () => ({
 // ---- user data ----
 vi.mock('../../userData/userDataProvider', () => ({
   useMCPServers: vi.fn(),
+  useAgentConfig: () => ({ currentModel: "test-model-id" }),
 }));
 
 // ---- McpOps ----

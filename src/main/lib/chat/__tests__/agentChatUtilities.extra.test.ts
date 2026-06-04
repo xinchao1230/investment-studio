@@ -335,7 +335,7 @@ describe('compressContextHistoryWithFullMode — uncovered branches', () => {
     const compressor = {
       compressMessages: vi.fn().mockRejectedValue(new Error('OOM')),
     } as any;
-    const result = await compressContextHistoryWithFullMode(history, compressor, 'agent');
+    const result = await compressContextHistoryWithFullMode(history, compressor, 'agent', 'test-model-id');
     expect(result.success).toBe(false);
     expect(result.compressedMessages).toBe(history);
   });
@@ -351,7 +351,7 @@ describe('compressContextHistoryWithFullMode — uncovered branches', () => {
         processingTime: 100,
       }),
     } as any;
-    const result = await compressContextHistoryWithFullMode(history, compressor, 'agent');
+    const result = await compressContextHistoryWithFullMode(history, compressor, 'agent', 'test-model-id');
     expect(result.success).toBe(false);
     expect(result.compressedMessages).toBe(history);
   });
@@ -368,7 +368,7 @@ describe('compressContextHistoryWithFullMode — uncovered branches', () => {
         processingTime: 100,
       }),
     } as any;
-    const result = await compressContextHistoryWithFullMode(history, compressor, 'agent');
+    const result = await compressContextHistoryWithFullMode(history, compressor, 'agent', 'test-model-id');
     expect(result.success).toBe(false);
   });
 });

@@ -53,6 +53,7 @@ function makeSimpleDeps(overrides: Partial<AgentChatSessionServiceDeps> = {}): {
     getChatId: () => 'chat-1',
     getChatSessionId: () => 'session-1',
     getAgentName: () => 'OpenKosmos',
+    getCurrentModelId: () => 'test-model-id',
     getFirstUserMessage: () => null,
     setFirstUserMessage: vi.fn(),
     getSchedulerMetadata: () => ({}),

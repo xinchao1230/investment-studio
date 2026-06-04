@@ -418,28 +418,33 @@ export interface ElectronAPI {
     // System Prompt optimization
     improveSystemPrompt: (
       userInputPrompt: string,
+      modelId: string,
     ) => Promise<{ success: boolean; data?: any; error?: string }>;
 
     // MCP config formatting
     formatMcpConfig: (
       userInputMcpConfig: string,
+      modelId: string,
     ) => Promise<{ success: boolean; data?: any; error?: string }>;
 
     // Chat session title generation
     generateChatTitle: (
       userMessage: string,
+      modelId: string,
     ) => Promise<{ success: boolean; data?: any; error?: string }>;
 
     // File name generation (auto-generate file name and extension based on content)
     generateFileName: (
       content: string,
+      modelId: string,
     ) => Promise<{ success: boolean; data?: any; error?: string }>;
 
     // Document summary generation (generate LLM summary from extracted document text content)
     generateDocumentSummary: (
       fileName: string,
       content: string,
-      truncated?: boolean,
+      truncated: boolean,
+      modelId: string,
     ) => Promise<{ success: boolean; data?: any; error?: string }>;
 
     // Text embedding
@@ -1991,16 +1996,16 @@ export const electronAPI: ElectronAPI = {
     },
   },
   llm: {
-    improveSystemPrompt: (userInputPrompt: string) =>
-      ipcRenderer.invoke('llm:improveSystemPrompt', userInputPrompt),
-    formatMcpConfig: (userInputMcpConfig: string) =>
-      ipcRenderer.invoke('llm:formatMcpConfig', userInputMcpConfig),
-    generateChatTitle: (userMessage: string) =>
-      ipcRenderer.invoke('llm:generateChatTitle', userMessage),
-    generateFileName: (content: string) =>
-      ipcRenderer.invoke('llm:generateFileName', content),
-    generateDocumentSummary: (fileName: string, content: string, truncated?: boolean) =>
-      ipcRenderer.invoke('llm:generateDocumentSummary', fileName, content, truncated ?? false),
+    improveSystemPrompt: (userInputPrompt: string, modelId: string) =>
+      ipcRenderer.invoke('llm:improveSystemPrompt', userInputPrompt, modelId),
+    formatMcpConfig: (userInputMcpConfig: string, modelId: string) =>
+      ipcRenderer.invoke('llm:formatMcpConfig', userInputMcpConfig, modelId),
+    generateChatTitle: (userMessage: string, modelId: string) =>
+      ipcRenderer.invoke('llm:generateChatTitle', userMessage, modelId),
+    generateFileName: (content: string, modelId: string) =>
+      ipcRenderer.invoke('llm:generateFileName', content, modelId),
+    generateDocumentSummary: (fileName: string, content: string, truncated: boolean, modelId: string) =>
+      ipcRenderer.invoke('llm:generateDocumentSummary', fileName, content, truncated, modelId),
     embedText: (text: string) => ipcRenderer.invoke('llm:embedText', text),
     embedBatch: (texts: string[]) =>
       ipcRenderer.invoke('llm:embedBatch', texts),

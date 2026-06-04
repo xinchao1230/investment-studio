@@ -9,8 +9,14 @@
 const mockCallModel = vi.fn();
 
 vi.mock('../ghcModelApi', () => ({
-  ghcModelApi: { callModel: (...args: any[]) => mockCallModel(...args) },
+  ghcModelApi: {
+    callModel: (...args: any[]) => mockCallModel(...args),
+    callModelStrict: (...args: any[]) => mockCallModel(...args),
+  },
 }));
+
+const TEST_MODEL_ID = 'test-model-id';
+
 
 import {
   McpConfigLlmFormatter,
@@ -148,7 +154,7 @@ describe('McpConfigLlmFormatter', () => {
     it('parses clean JSON response', async () => {
       mockCallModel.mockResolvedValue(makeSuccessStdioResponse());
 
-      const result = await McpConfigLlmFormatter.formatMcpConfig('{"command":"python","args":["script.py"]}');
+      const result = await McpConfigLlmFormatter.formatMcpConfig('{"command":"python","args":["script.py"]}', TEST_MODEL_ID);
       expect(result.success).toBe(true);
       expect(result.transportType).toBe('stdio');
       expect(result.serverName).toBe('my-server');
@@ -157,19 +163,19 @@ describe('McpConfigLlmFormatter', () => {
 
     it('strips markdown code blocks before parsing', async () => {
       mockCallModel.mockResolvedValue('```json\n' + makeSuccessStdioResponse() + '\n```');
-      const result = await McpConfigLlmFormatter.formatMcpConfig('command: python');
+      const result = await McpConfigLlmFormatter.formatMcpConfig('command: python', TEST_MODEL_ID);
       expect(result.success).toBe(true);
     });
 
     it('extracts JSON embedded in surrounding text', async () => {
       mockCallModel.mockResolvedValue('Preamble. ' + makeSuccessStdioResponse() + ' Postamble.');
-      const result = await McpConfigLlmFormatter.formatMcpConfig('any input');
+      const result = await McpConfigLlmFormatter.formatMcpConfig('any input', TEST_MODEL_ID);
       expect(result.success).toBe(true);
     });
 
     it('includes timestamp in the prompt (calls API)', async () => {
       mockCallModel.mockResolvedValue(makeSuccessStdioResponse());
-      await McpConfigLlmFormatter.formatMcpConfig('some config');
+      await McpConfigLlmFormatter.formatMcpConfig('some config', TEST_MODEL_ID);
       expect(mockCallModel).toHaveBeenCalledTimes(1);
       const promptArg = mockCallModel.mock.calls[0][1];
       expect(promptArg).toContain('Current time is @');
@@ -181,14 +187,14 @@ describe('McpConfigLlmFormatter', () => {
   describe('formatMcpConfig — error paths', () => {
     it('returns parse error when JSON is invalid', async () => {
       mockCallModel.mockResolvedValue('not json!!!');
-      const result = await McpConfigLlmFormatter.formatMcpConfig('bad config');
+      const result = await McpConfigLlmFormatter.formatMcpConfig('bad config', TEST_MODEL_ID);
       expect(result.success).toBe(false);
       expect(result.errors).toBeDefined();
     });
 
     it('returns error when API call throws', async () => {
       mockCallModel.mockRejectedValue(new Error('API error'));
-      const result = await McpConfigLlmFormatter.formatMcpConfig('any config');
+      const result = await McpConfigLlmFormatter.formatMcpConfig('any config', TEST_MODEL_ID);
       expect(result.success).toBe(false);
       expect(result.errors![0]).toContain('API error');
     });
@@ -196,7 +202,7 @@ describe('McpConfigLlmFormatter', () => {
     it('handles non-Error thrown values in outer catch (string thrown)', async () => {
       // Covers: error instanceof Error ? ... : String(error) — false branch (line 453)
       mockCallModel.mockRejectedValue('plain string error, not an Error object');
-      const result = await McpConfigLlmFormatter.formatMcpConfig('any config');
+      const result = await McpConfigLlmFormatter.formatMcpConfig('any config', TEST_MODEL_ID);
       expect(result.success).toBe(false);
       expect(result.errors![0]).toContain('plain string error');
     });
@@ -209,7 +215,7 @@ describe('McpConfigLlmFormatter', () => {
       // Actually the simplest is: JSON.parse of invalid JSON throws SyntaxError (an Error).
       // To hit the non-Error branch we'd need a custom scenario — we accept branch coverage as best effort.
       mockCallModel.mockResolvedValue('not valid json at all!!!');
-      const result = await McpConfigLlmFormatter.formatMcpConfig('a config string');
+      const result = await McpConfigLlmFormatter.formatMcpConfig('a config string', TEST_MODEL_ID);
       expect(result.success).toBe(false);
       expect(result.errors).toBeDefined();
     });
@@ -219,5 +225,32 @@ describe('McpConfigLlmFormatter', () => {
 
   it('mcpConfigLlmFormatter is the class itself', () => {
     expect(mcpConfigLlmFormatter).toBe(McpConfigLlmFormatter);
+  });
+
+  describe('model routing (regression)', () => {
+    it('forwards modelId to ghcModelApi.callModelStrict (no hardcoded model)', async () => {
+      mockCallModel.mockResolvedValue(JSON.stringify({ success: true, serverName: 'svc', transportType: 'stdio', config: { command: 'python' } }));
+
+      await McpConfigLlmFormatter.formatMcpConfig('{"command":"python","args":["script.py"]}', 'caller-provided-model-id');
+
+      expect(mockCallModel).toHaveBeenCalled();
+      const [model] = mockCallModel.mock.calls[0];
+      expect(model).toBe('caller-provided-model-id');
+    });
+
+    it('refuses to invoke LLM when modelId is empty (no hidden fallback)', async () => {
+      mockCallModel.mockClear();
+      const result = await McpConfigLlmFormatter.formatMcpConfig('{"command":"python","args":["script.py"]}', '');
+      expect(result.success).toBe(false);
+      expect(mockCallModel).not.toHaveBeenCalled();
+    });
+
+    it('returns failure when callModelStrict throws (invalid model on active provider)', async () => {
+      mockCallModel.mockRejectedValueOnce(
+        new Error("Model 'foo' is not available on the active provider 'openai'."),
+      );
+      const result = await McpConfigLlmFormatter.formatMcpConfig('{"command":"python","args":["script.py"]}', 'caller-provided-model-id');
+      expect(result.success).toBe(false);
+    });
   });
 });

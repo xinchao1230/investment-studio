@@ -106,8 +106,22 @@ Add your specific instructions here...`
     setIsOptimizing(true)
     try {
 
+      // Use the model of the agent currently being edited (in-progress cached
+      // edit takes precedence over saved value). The prompt should be polished
+      // by the same model that will ultimately interpret it; we do not fall
+      // back to "current chat's model" since the agent being edited may not
+      // be the active chat's agent at all.
+      const editedModelId = (cachedData?.model ?? agentData?.model ?? '').trim()
+      if (!editedModelId) {
+        setOptimizationError(
+          'Please select a model for this agent in the Basic tab before polishing the prompt.',
+        )
+        setIsOptimizing(false)
+        return
+      }
+
       // Call the main process systemPromptLlmWriter via IPC
-      const ipcResult = await window.electronAPI?.llm?.improveSystemPrompt(trimmedPrompt)
+      const ipcResult = await window.electronAPI?.llm?.improveSystemPrompt(trimmedPrompt, editedModelId)
 
       if (!ipcResult) {
         throw new Error('LLM API not available')
@@ -135,7 +149,7 @@ Add your specific instructions here...`
     } finally {
       setIsOptimizing(false)
     }
-  }, [systemPrompt])
+  }, [systemPrompt, cachedData?.model, agentData?.model])
 
   return (
     <div className="agent-tab">

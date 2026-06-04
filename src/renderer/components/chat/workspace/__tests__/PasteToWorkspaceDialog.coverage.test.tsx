@@ -21,6 +21,14 @@ vi.mock('../../../lib/utilities/logger', () => ({
   createLogger: () => ({ error: vi.fn(), warn: vi.fn(), debug: vi.fn() }),
 }));
 
+// ── userDataProvider mock ──────────────────────────────────────────────────────
+// The dialog reads the current chat's agent model via useAgentConfig().
+// Provide a default model so AI naming is exercised; individual tests can
+// override by re-mocking before render if they want the "no model" path.
+vi.mock('../../../userData/userDataProvider', () => ({
+  useAgentConfig: () => ({ currentModel: 'test-model-id' }),
+}));
+
 import PasteToWorkspaceDialog, { type PasteToWorkspaceDialogProps } from '../PasteToWorkspaceDialog';
 
 // ── helpers ────────────────────────────────────────────────────────────────────

@@ -146,7 +146,7 @@ describe('performCompression: firstUserMessageIndex === -1 with preamble (line 2
       makeUser('recent3', 'r3'),
     ];
 
-    const result = await compressor.compressMessages(messages);
+    const result = await compressor.compressMessages(messages, "test-model-id");
     expect(result.success).toBe(true);
   });
 });
@@ -174,7 +174,7 @@ describe('performCompression: firstUserMessageIndex pinned with gap (line 319)',
       makeUser('recent3', 'r3'),                  // 8
     ];
 
-    const result = await compressor.compressMessages(messages);
+    const result = await compressor.compressMessages(messages, "test-model-id");
     expect(result.success).toBe(true);
     // First user message should appear in compressed output
     const ids = result.compressedMessages.map(m => m.id);
@@ -629,7 +629,7 @@ describe('performFallbackCompression — no user messages', () => {
       makeAssistant('a6', 'a6'),
     ];
 
-    const result = await compressor.compressMessages(messages);
+    const result = await compressor.compressMessages(messages, "test-model-id");
     expect(result.success).toBe(false);
     expect(result.strategy).toBe('fallback_preservation');
     // Recent 3 should still be preserved
@@ -726,7 +726,7 @@ describe('compressMessages — no compression needed', () => {
   it('returns success with no_compression_needed strategy for short histories', async () => {
     const compressor = createFullModeCompressor({ preserveRecentMessages: 10 });
     const messages = [makeUser('hi', 'u1'), makeAssistant('hello', 'a1')];
-    const result = await compressor.compressMessages(messages);
+    const result = await compressor.compressMessages(messages, "test-model-id");
     expect(result.success).toBe(true);
     expect(result.strategy).toBe('no_compression_needed');
     expect(result.compressedMessages).toEqual(messages);

@@ -268,6 +268,83 @@ export class GhcModelApi {
   }
 
   /**
+   * Strict variant of {@link callModel} that refuses any silent model fallback.
+   *
+   * `callModel` (and `callWithMessages`) routes non-Copilot requests through
+   * `providerManager.resolveModelId(modelId)`, which falls back to the
+   * provider's configured default, then to a `PREFERENCE_BY_PROVIDER` family
+   * match, then to the first chat-capable model whenever the supplied modelId
+   * isn't valid for the active provider. That fallback is invisible to the
+   * caller and violates the project rule that every LLM call must run on
+   * exactly the model the user picked. For utility helpers (file naming, MCP
+   * config formatting, system prompt polishing, title generation, document
+   * summarization) and for context compression we never want that behavior —
+   * if the user-selected model isn't available on the active provider, the
+   * call must surface a clear error so the caller can fall back to a
+   * deterministic non-LLM path (or report failure to the user) instead of
+   * quietly running on a different model.
+   *
+   * Contract:
+   * - Throws when `modelId` is empty or whitespace-only.
+   * - For non-Copilot providers: throws when the active provider's
+   *   `validateModel(modelId)` returns false, before issuing any request.
+   * - For the Copilot provider: throws when `modelId` is not registered in
+   *   the local Copilot model registry (`getModelById`).
+   * - Otherwise behaves like {@link callModel}: single non-streaming call,
+   *   returns the assistant's text content.
+   */
+  async callModelStrict(
+    modelId: string,
+    userPrompt: string,
+    systemPrompt?: string,
+    maxTokens: number = 4000,
+    temperature: number = 0.7,
+  ): Promise<string> {
+    const trimmed = typeof modelId === 'string' ? modelId.trim() : '';
+    if (!trimmed) {
+      throw new Error('callModelStrict requires a non-empty modelId; received empty or whitespace value');
+    }
+
+    await providerManager.waitUntilReady();
+    const activeProviderId = providerManager.getActiveProviderId();
+
+    if (activeProviderId !== 'copilot') {
+      const provider = providerManager.getActiveProvider();
+      const valid = await provider.validateModel(trimmed);
+      if (!valid) {
+        throw new Error(
+          `Model '${trimmed}' is not available on the active provider '${activeProviderId}'. ` +
+          `callModelStrict refuses to silently fall back to a different model. ` +
+          `Pick a model that the active provider supports.`,
+        );
+      }
+      const messages: ChatMessage[] = [];
+      if (systemPrompt) {
+        messages.push({ role: 'system', content: systemPrompt });
+      }
+      messages.push({ role: 'user', content: userPrompt });
+      const result = await providerManager.chatCompletion({
+        model: trimmed,
+        messages,
+        maxTokens,
+        temperature,
+      });
+      return result.content;
+    }
+
+    // Copilot path — validate against the local registry before delegating to
+    // callModel, whose Copilot branch does not perform any fallback itself.
+    const model = getModelById(trimmed);
+    if (!model) {
+      throw new Error(
+        `Model '${trimmed}' is not registered in the GitHub Copilot model list. ` +
+        `callModelStrict refuses to silently fall back to a different model.`,
+      );
+    }
+    return this.callModel(trimmed, userPrompt, systemPrompt, maxTokens, temperature);
+  }
+
+  /**
    * Call an LLM model with a pre-built messages array.
    * Unlike callModel(), this accepts arbitrary multi-message conversations
    * without constructing Message objects — the caller provides { role, content } directly.

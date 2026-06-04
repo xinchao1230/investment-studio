@@ -2,6 +2,7 @@ import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { X, Clipboard, Loader2, FileText, Sparkles } from 'lucide-react';
 import '../../../styles/PasteToWorkspaceDialog.css';
 import { createLogger } from '../../../lib/utilities/logger';
+import { useAgentConfig } from '../../userData/userDataProvider';
 const logger = createLogger('[PasteToWorkspaceDialog]');
 
 export interface PasteToWorkspaceDialogProps {
@@ -32,6 +33,11 @@ const PasteToWorkspaceDialog: React.FC<PasteToWorkspaceDialogProps> = ({
   const [isGeneratingName, setIsGeneratingName] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Current chat's agent model — used as the modelId for AI-assisted file naming.
+  // Falls back to a deterministic timestamp name when unavailable; never lets
+  // the main process silently route to a different model.
+  const { currentModel } = useAgentConfig();
 
   // Refs
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -68,9 +74,25 @@ const PasteToWorkspaceDialog: React.FC<PasteToWorkspaceDialogProps> = ({
     }
   }, [isOpen, resetState]);
 
-  // Generate file name (with debounce)
-  const generateFileName = useCallback(async (contentToAnalyze: string) => {
+  // Generate file name (with debounce).
+  //
+  // `interactive` distinguishes a manual user click (e.g. Regenerate button)
+  // from the debounced auto-generation on content change. When auto-generating,
+  // a missing model silently falls back to a deterministic timestamp name to
+  // avoid spamming errors. When the user explicitly clicks Regenerate, we
+  // surface a visible error so they understand why the AI naming isn't running.
+  const generateFileName = useCallback(async (contentToAnalyze: string, interactive: boolean = false) => {
     if (!contentToAnalyze.trim() || contentToAnalyze.trim().length < 10) {
+      return;
+    }
+
+    const trimmedModelId = (currentModel ?? '').trim();
+    if (!trimmedModelId) {
+      const timestamp = Date.now();
+      setFileName(`pasted-content-${timestamp}.txt`);
+      if (interactive) {
+        setError('Select a model in the chat header before regenerating with AI. Used a timestamp-based name instead.');
+      }
       return;
     }
 
@@ -78,7 +100,7 @@ const PasteToWorkspaceDialog: React.FC<PasteToWorkspaceDialogProps> = ({
     setError(null);
 
     try {
-      const result = await window.electronAPI?.llm?.generateFileName?.(contentToAnalyze);
+      const result = await window.electronAPI?.llm?.generateFileName?.(contentToAnalyze, trimmedModelId);
 
       if (result?.success && result.data?.fullFileName) {
         setFileName(result.data.fullFileName);
@@ -98,7 +120,7 @@ const PasteToWorkspaceDialog: React.FC<PasteToWorkspaceDialogProps> = ({
     } finally {
       setIsGeneratingName(false);
     }
-  }, []);
+  }, [currentModel]);
 
   // Trigger file name generation when content changes (with debounce)
   const handleContentChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -122,7 +144,7 @@ const PasteToWorkspaceDialog: React.FC<PasteToWorkspaceDialogProps> = ({
   // Manually trigger file name regeneration
   const handleRegenerateFileName = useCallback(() => {
     if (content.trim().length >= 10) {
-      generateFileName(content);
+      generateFileName(content, true);
     }
   }, [content, generateFileName]);
 

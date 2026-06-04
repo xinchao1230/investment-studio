@@ -27,6 +27,7 @@ export interface AgentChatSessionServiceDeps {
   getChatId(): string;
   getChatSessionId(): string;
   getAgentName(): string;
+  getCurrentModelId(): string | null;
   getFirstUserMessage(): Message | null;
   setFirstUserMessage(message: Message | null): void;
   getSchedulerMetadata(): {
@@ -411,7 +412,10 @@ export class AgentChatSessionService {
         return;
       }
 
-      const titleResponse = await ChatSessionTitleLlmSummarizer.generateTitle(userMessageText);
+      const titleResponse = await ChatSessionTitleLlmSummarizer.generateTitle(
+        userMessageText,
+        this.deps.getCurrentModelId() ?? '',
+      );
       if (titleResponse?.success && titleResponse.title) {
         currentChatSession.title = titleResponse.title.trim();
         currentChatSession.last_updated = new Date().toISOString();
