@@ -351,6 +351,46 @@ describe('SubAgentManager', () => {
       expect(result.success).toBe(true);
       expect(capturedOptions.subAgent.inheritedModel).toBe('gpt-4.1');
     });
+
+    // Regression: auto-promotion to background must NOT dispose/evict the still-running chat.
+    // Previously the spawn-level `finally` ran `chat.dispose()` on the `return promoteToBackground()`,
+    // clearing the live chat's contextHistory and forking the compactor's reference (memory loss).
+    it('does NOT dispose or evict the chat when auto-promoted to background (reference-fork regression)', async () => {
+      const { SubAgentChat: MockSubAgentChat } = await import('../subAgentChat');
+      const disposeSpy = vi.fn();
+      // run() never resolves, so the 120s auto-background timer wins the race.
+      vi.mocked(MockSubAgentChat).mockImplementationOnce(function () {
+        return {
+          run: vi.fn(() => new Promise<string>(() => {})),
+          getTurnCount: vi.fn().mockReturnValue(3),
+          extractPartialResult: vi.fn().mockReturnValue(undefined),
+          dispose: disposeSpy,
+        };
+      });
+
+      vi.useFakeTimers();
+      try {
+        const spawnPromise = manager.spawnSubAgent({
+          parentSessionId: 'sess_promote',
+          parentChatId: 'chat_promote',
+          userAlias: 'testUser',
+          subAgentName: 'test-agent',
+          task: 'Long running task',
+          cancellationToken: createMockCancellationToken(),
+        });
+        // Flush async setup and fire the auto-background promotion timer.
+        await vi.advanceTimersByTimeAsync(SUB_AGENT_LIMITS.AUTO_BACKGROUND_TIMEOUT_MS + 10);
+        const result = await spawnPromise;
+
+        expect(result.autoPromoted).toBe(true);
+        // The core fix: the live chat must NOT be disposed at promotion time.
+        expect(disposeSpy).not.toHaveBeenCalled();
+        // And it must stay registered while running in the background.
+        expect((manager as any).activeInstances.has(result.taskId)).toBe(true);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
   });
 
   // ─── cancelByParentSession ───
