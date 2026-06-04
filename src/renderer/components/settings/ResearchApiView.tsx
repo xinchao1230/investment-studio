@@ -27,9 +27,9 @@ const PROVIDERS: ProviderSpec[] = [
   },
   {
     id: 'webiq',
-    title: 'Microsoft Web IQ (Web Search)',
+    title: 'Microsoft Web IQ',
     helper: (
-      <>API key for <a href="https://webiq.microsoft.ai/" target="_blank" rel="noreferrer" className="text-blue-600 hover:underline">Microsoft Web IQ</a>. When set, the built-in web search tool calls Web IQ directly. Leave empty to fall back to the bundled Bing scraper (requires Playwright Chromium).</>
+      <>API key for <a href="https://webiq.microsoft.ai/" target="_blank" rel="noreferrer" className="text-blue-600 hover:underline">Microsoft Web IQ</a>. When set, the built-in web search tool calls Web IQ directly.</>
     ),
   },
 ];

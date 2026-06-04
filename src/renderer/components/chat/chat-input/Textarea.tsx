@@ -544,8 +544,8 @@ export function TextArea(props: TextAreaProps) {
         title={title}
         placeholder={
           supportsImages
-            ? 'Type a message, drag files/images, paste screenshot, @ to mention files, # for skills...'
-            : 'Type a message, drag files, @ to mention files, # for skills...'
+            ? 'Ask anything. Type # for skills, @ to delegate tasks to specialized financial agents, or just drop files or images'
+            : 'Ask anything. Type # for skills, @ to delegate tasks to specialized financial agents, or just drop files'
         }
         className="chat-textarea"
       />
