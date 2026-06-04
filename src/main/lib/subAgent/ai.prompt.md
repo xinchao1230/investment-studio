@@ -1,4 +1,4 @@
-<!-- Last verified: 2026-05-21 -->
+<!-- Last verified: 2026-06-04 -->
 # Sub-Agent System
 
 > Manages spawning, lifecycle, and scoped execution of task-focused sub-agents from within a parent agent conversation.
@@ -57,6 +57,7 @@
 - ⚠️ **Task ID does NOT distinguish foreground vs background.** All tasks use `sa_` prefix. Background is a runtime state, not an identity. Never create a separate task ID for background promotion.
 - ⚠️ `executeInBackground` passes `externalTaskId` to spawn methods with `skipTaskStoreCreate` to avoid double-creating TaskStore entries. If adding a new spawn path, respect this pattern.
 - ⚠️ `completeTask()` must be called on ALL exit paths (success, failure, cancellation). Without it, the on-disk status stays "running" forever.
+- ⚠️ **NEVER dispose a chat on the auto-promote path.** The spawn methods (`spawnSubAgent` / `spawnAdhocSubAgent`) wrap the run in `try/finally`. When `Promise.race` yields the auto-promote sentinel, the code does `return promoteToBackground(...)` — and a `return` still triggers the enclosing `finally`. Historically that `finally` called `chat.dispose()` on a chat that was **still running in the background**, clearing its `contextHistory`. Because `SubAgentContextCompactor` captures that array by reference at construction, and `dispose()` used to reassign (`this.contextHistory = []`), the two references **forked**: the compactor kept compressing an orphaned 18-msg array while `run()` rebuilt context from ~2 msgs → the background sub-agent silently lost its entire memory at the 120s mark. Fix is defense-in-depth: (1) spawn `finally` skips dispose/delete when `promotedToBackground` is true (lifecycle owns background teardown via `chatPromise.finally`); (2) `dispose()` clears **in-place** (`length = 0`, never `= []`) and is idempotent; (3) the `run()` loop breaks early if `this.disposed` becomes true, so a stray dispose can never strand the loop on a cleared array.
 
 ## Related
 - Depends on: [Chat Engine](../chat/ai.prompt.md), [MCP Runtime](../mcpRuntime/ai.prompt.md), [Auth](../auth/ai.prompt.md), [UserDataADO](../userDataADO/ai.prompt.md)

@@ -236,7 +236,12 @@ export class SubAgentChat {
     let consecutiveTextOnlyRounds = 0; // Track consecutive text-only response count
 
     while (requiresFollowUp && this.turnCount < 200) {
-      // Check cancellation
+      // Defense-in-depth: stop immediately if disposed mid-run. This should not happen under
+      // normal operation (the background lifecycle disposes only after run() resolves), but if
+      // dispose() ever races a live loop, exit cleanly instead of operating on a cleared array.
+      if (this.disposed) {
+        break;
+      }
 
       // Step update: turn start
       this.options.onStepUpdate?.({
@@ -835,11 +840,17 @@ export class SubAgentChat {
   }
 
   /**
-   * Release resources
+   * Release resources.
+   *
+   * IMPORTANT: clears history arrays IN-PLACE (length = 0) rather than reassigning (= []).
+   * The compactor captured a reference to these arrays at construction and mutates them in
+   * place; reassigning would fork the references and silently strand the compactor on an
+   * orphaned array. Idempotent — safe to call multiple times.
    */
   public dispose(): void {
+    if (this.disposed) return;
     this.disposed = true;
-    this.contextHistory = [];
-    this.chatHistory = [];
+    this.contextHistory.length = 0;
+    this.chatHistory.length = 0;
   }
 }

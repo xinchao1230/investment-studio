@@ -181,6 +181,10 @@ export class SubAgentManager extends EventEmitter {
       };
     }
 
+    // Tracks whether this spawn handed the chat off to the background lifecycle.
+    // When promoted, the spawn-level finally must NOT dispose/delete the chat —
+    // the chat keeps running in the background and the lifecycle owns its teardown.
+    let promotedToBackground = false;
     try {
       // ── 2. Get sub-agent config (built-in registry first, then user file system) ──
       const fileManager = SubAgentFileManager.getInstance();
@@ -327,6 +331,7 @@ export class SubAgentManager extends EventEmitter {
 
       // ── Auto-promote path: detach and return immediately ──
       if (raceResult === AUTO_PROMOTE_SENTINEL) {
+        promotedToBackground = true;
         return this.lifecycle.promoteToBackground(taskId, chatPromise, chat, params, startTime, availabilityWarnings);
       }
 
@@ -395,10 +400,16 @@ export class SubAgentManager extends EventEmitter {
 
     } finally {
       // ── Clean up instance ──
-      const chat = this.activeInstances.get(taskId);
-      if (chat) {
-        chat.dispose();
-        this.activeInstances.delete(taskId);
+      // CRITICAL: skip teardown when promoted to background. Disposing here would clear
+      // the contextHistory of a chat that is still running in the background, stranding the
+      // compactor on an orphaned array (reference fork) and wiping the sub-agent's memory.
+      // The background lifecycle disposes the chat after chatPromise settles.
+      if (!promotedToBackground) {
+        const chat = this.activeInstances.get(taskId);
+        if (chat) {
+          chat.dispose();
+          this.activeInstances.delete(taskId);
+        }
       }
     }
   }
@@ -458,6 +469,8 @@ export class SubAgentManager extends EventEmitter {
       };
     }
 
+    // Tracks whether this spawn handed the chat off to the background lifecycle (see spawnSubAgent).
+    let promotedToBackground = false;
     try {
       // ── 2. Build synthetic SubAgentConfig (in-memory only, NOT persisted) ──
       const syntheticConfig: SubAgentConfig = {
@@ -612,6 +625,7 @@ export class SubAgentManager extends EventEmitter {
 
       // ── Auto-promote path ──
       if (raceResult === AUTO_PROMOTE_SENTINEL) {
+        promotedToBackground = true;
         return this.lifecycle.promoteToBackground(taskId, chatPromise, chat, params, startTime, [], adhocName);
       }
 
@@ -676,10 +690,13 @@ export class SubAgentManager extends EventEmitter {
       };
 
     } finally {
-      const chat = this.activeInstances.get(taskId);
-      if (chat) {
-        chat.dispose();
-        this.activeInstances.delete(taskId);
+      // CRITICAL: skip teardown when promoted to background (see spawnSubAgent for rationale).
+      if (!promotedToBackground) {
+        const chat = this.activeInstances.get(taskId);
+        if (chat) {
+          chat.dispose();
+          this.activeInstances.delete(taskId);
+        }
       }
     }
   }
