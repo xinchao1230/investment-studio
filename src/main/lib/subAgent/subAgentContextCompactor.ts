@@ -216,7 +216,7 @@ export class SubAgentContextCompactor {
         ? content.substring(0, MAX_TOOL_RESULT_CHARS)
         : content;
 
-      const summaryPromise = ghcModelApi.callModel(
+      const summaryPromise = ghcModelApi.callModelStrict(
         modelId,
         `Below is the output from a tool called "${toolName}". ` +
         `Extract and summarize the KEY INFORMATION that would be useful for completing the user's task. ` +
@@ -419,7 +419,7 @@ export class SubAgentContextCompactor {
         'compressEarlyMessages'
       );
 
-      const summaryPromise = ghcModelApi.callModel(
+      const summaryPromise = ghcModelApi.callModelStrict(
         modelId,
         `Below is the early conversation history of a sub-agent working on a task. ` +
         `Summarize the KEY PROGRESS and FINDINGS so far into a concise structured summary.\n\n` +

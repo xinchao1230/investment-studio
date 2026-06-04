@@ -333,6 +333,7 @@ export class AgentChat {
       getChatId: () => this.chatId,
       getChatSessionId: () => this.chatSessionId,
       getAgentName: () => this.getAgentName(),
+      getCurrentModelId: () => this.getCurrentModelId(),
       getFirstUserMessage: () => this.firstUserMessage,
       setFirstUserMessage: (message) => {
         this.firstUserMessage = message;

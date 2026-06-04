@@ -1,4 +1,4 @@
-<!-- Last verified: 2026-06-04 -->
+<!-- Last verified: 2026-07-30 -->
 # Sub-Agent System
 
 > Manages spawning, lifecycle, and scoped execution of task-focused sub-agents from within a parent agent conversation.
@@ -8,7 +8,7 @@
 |------|---------------|------|
 | `subAgentManager.ts` | Singleton lifecycle manager; enforces parallel/session limits, parent-child tracking, background promotion | ~large |
 | `subAgentChat.ts` | Lightweight non-streaming conversation engine; ≤25 turns, 30s timeout, context compression | ~large |
-| `subAgentTaskStore.ts` | Persistence layer for sub-agent task records; debounced JSON writes, dual history | ~medium |
+| `subAgentTaskStore.ts` | Persistence layer for sub-agent task records; debounced JSON writes, dual history. Background task-title generation (`generateTitleAsync`) runs on the sub-agent's `metadata.model` (i.e. its `inheritedModel`, which equals the parent agent's currently selected model) and refuses to invoke the LLM if no model was supplied — preventing any silent fallback to a hardcoded default | ~medium |
 | `subAgentTaskWatcherRegistry.ts` | Tracks which tasks have an active frontend viewer; gates streaming chunk emission | small |
 | `subAgentTaskTypes.ts` | Types for persisted task files (`SubAgentTaskFile`, `SubAgentTaskMetadata`) | small |
 | `subAgentFileManager.ts` | AGENT.md YAML front-matter parse/serialize, CRUD for agents/ directory, Claude Code tool name mapping | ~medium |

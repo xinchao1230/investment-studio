@@ -17,9 +17,7 @@ import type { Message } from '@shared/types/chatTypes';
 const { callModelSpy } = vi.hoisted(() => ({ callModelSpy: vi.fn() }));
 
 vi.mock('../../llm/ghcModelApi', () => ({
-  ghcModelApi: {
-    callModel: callModelSpy,
-  },
+  ghcModelApi: { callModel: callModelSpy, callModelStrict: callModelSpy },
 }));
 
 vi.mock('../../unifiedLogger', async () => {

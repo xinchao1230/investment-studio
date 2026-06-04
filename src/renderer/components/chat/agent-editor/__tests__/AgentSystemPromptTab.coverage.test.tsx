@@ -306,7 +306,10 @@ describe('AgentSystemPromptTab - AI optimization', () => {
     });
 
     await waitFor(() => {
-      expect((window as any).electronAPI.llm.improveSystemPrompt).toHaveBeenCalledWith('Original prompt');
+      expect((window as any).electronAPI.llm.improveSystemPrompt).toHaveBeenCalledWith(
+        'Original prompt',
+        expect.any(String),
+      );
       expect(screen.getByTestId('editor-textarea')).toHaveValue('Improved prompt text');
     });
   });

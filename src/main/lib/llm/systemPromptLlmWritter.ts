@@ -158,9 +158,16 @@ System prompt draft:`;
   /**
    * Improve system prompt
    * @param userInputPrompt User input system prompt
+   * @param modelId Required: the model to use for polishing. Should be the
+   *   model of the agent whose prompt is being edited (so polish runs on the
+   *   same model that will eventually use the prompt). Empty value returns
+   *   failure without invoking the LLM — no hidden model fallback.
    * @returns Improved system prompt response
    */
-  static async improveSystemPrompt(userInputPrompt: string): Promise<SystemPromptWriterResponse> {
+  static async improveSystemPrompt(
+    userInputPrompt: string,
+    modelId: string,
+  ): Promise<SystemPromptWriterResponse> {
     const trimmedPrompt = userInputPrompt.trim();
 
     if (!trimmedPrompt || trimmedPrompt.length < 3) {
@@ -170,6 +177,15 @@ System prompt draft:`;
           'Please provide a usable system prompt draft to polish.'
         ],
         errors: []
+      };
+    }
+
+    const trimmedModelId = typeof modelId === 'string' ? modelId.trim() : '';
+    if (!trimmedModelId) {
+      return {
+        success: false,
+        originalPrompt: trimmedPrompt,
+        errors: ['No modelId provided for system prompt polishing; refusing hidden model fallback'],
       };
     }
 
@@ -188,9 +204,10 @@ System prompt draft:`;
         temperature: 0.7
       };
 
-      // Use the claude-haiku-4.5 model for system prompt optimization
-      const rawResponse = await ghcModelApi.callModel(
-        'claude-haiku-4.5',
+      // callModelStrict refuses to silently fall back to a different model
+      // when the supplied modelId is not valid for the active provider.
+      const rawResponse = await ghcModelApi.callModelStrict(
+        trimmedModelId,
         llmParams.prompt,
         this.SYSTEM_PROMPT,
         llmParams.maxTokens,

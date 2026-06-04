@@ -9,8 +9,14 @@
 const mockCallModel = vi.fn();
 
 vi.mock('../ghcModelApi', () => ({
-  ghcModelApi: { callModel: (...args: any[]) => mockCallModel(...args) },
+  ghcModelApi: {
+    callModel: (...args: any[]) => mockCallModel(...args),
+    callModelStrict: (...args: any[]) => mockCallModel(...args),
+  },
 }));
+
+const TEST_MODEL_ID = 'test-model-id';
+
 
 import {
   SystemPromptLlmWriter,
@@ -103,18 +109,18 @@ describe('SystemPromptLlmWriter', () => {
 
   describe('improveSystemPrompt — input validation', () => {
     it('returns failure for empty input', async () => {
-      const result = await SystemPromptLlmWriter.improveSystemPrompt('');
+      const result = await SystemPromptLlmWriter.improveSystemPrompt('', TEST_MODEL_ID);
       expect(result.success).toBe(false);
       expect(result.warnings).toBeDefined();
     });
 
     it('returns failure for very short input (< 3 chars)', async () => {
-      const result = await SystemPromptLlmWriter.improveSystemPrompt('ab');
+      const result = await SystemPromptLlmWriter.improveSystemPrompt('ab', TEST_MODEL_ID);
       expect(result.success).toBe(false);
     });
 
     it('returns failure for whitespace-only input', async () => {
-      const result = await SystemPromptLlmWriter.improveSystemPrompt('   ');
+      const result = await SystemPromptLlmWriter.improveSystemPrompt('   ', TEST_MODEL_ID);
       expect(result.success).toBe(false);
     });
   });
@@ -132,7 +138,7 @@ describe('SystemPromptLlmWriter', () => {
       });
       mockCallModel.mockResolvedValue(raw);
 
-      const result = await SystemPromptLlmWriter.improveSystemPrompt('You are a coding assistant. Be helpful.');
+      const result = await SystemPromptLlmWriter.improveSystemPrompt('You are a coding assistant. Be helpful.', TEST_MODEL_ID);
       expect(result.success).toBe(true);
       expect(result.improvedPrompt).toBe('# Identity\nYou are a coding assistant.');
       expect(result.rawResponse).toBe(raw);
@@ -143,7 +149,7 @@ describe('SystemPromptLlmWriter', () => {
       const payload = { success: true, improvedPrompt: 'Polished', changeSummary: [], warnings: [], errors: [] };
       mockCallModel.mockResolvedValue('```json\n' + JSON.stringify(payload) + '\n```');
 
-      const result = await SystemPromptLlmWriter.improveSystemPrompt('Be a helpful assistant.');
+      const result = await SystemPromptLlmWriter.improveSystemPrompt('Be a helpful assistant.', TEST_MODEL_ID);
       expect(result.success).toBe(true);
       expect(result.improvedPrompt).toBe('Polished');
     });
@@ -152,7 +158,7 @@ describe('SystemPromptLlmWriter', () => {
       const payload = { success: true, improvedPrompt: 'Extracted', changeSummary: [], warnings: [], errors: [] };
       mockCallModel.mockResolvedValue('Some preamble. ' + JSON.stringify(payload) + ' Some postamble.');
 
-      const result = await SystemPromptLlmWriter.improveSystemPrompt('Draft system prompt here.');
+      const result = await SystemPromptLlmWriter.improveSystemPrompt('Draft system prompt here.', TEST_MODEL_ID);
       expect(result.success).toBe(true);
       expect(result.improvedPrompt).toBe('Extracted');
     });
@@ -163,14 +169,14 @@ describe('SystemPromptLlmWriter', () => {
   describe('improveSystemPrompt — error paths', () => {
     it('returns parse error response when JSON is invalid', async () => {
       mockCallModel.mockResolvedValue('not json!!!');
-      const result = await SystemPromptLlmWriter.improveSystemPrompt('A valid system prompt draft.');
+      const result = await SystemPromptLlmWriter.improveSystemPrompt('A valid system prompt draft.', TEST_MODEL_ID);
       expect(result.success).toBe(false);
       expect(result.errors).toBeDefined();
     });
 
     it('returns error when API throws', async () => {
       mockCallModel.mockRejectedValue(new Error('API down'));
-      const result = await SystemPromptLlmWriter.improveSystemPrompt('A valid system prompt draft.');
+      const result = await SystemPromptLlmWriter.improveSystemPrompt('A valid system prompt draft.', TEST_MODEL_ID);
       expect(result.success).toBe(false);
       expect(result.errors![0]).toContain('API down');
     });
@@ -180,5 +186,32 @@ describe('SystemPromptLlmWriter', () => {
 
   it('systemPromptLlmWriter is the class itself', () => {
     expect(systemPromptLlmWriter).toBe(SystemPromptLlmWriter);
+  });
+
+  describe('model routing (regression)', () => {
+    it('forwards modelId to ghcModelApi.callModelStrict (no hardcoded model)', async () => {
+      mockCallModel.mockResolvedValue(JSON.stringify({ success: true, improvedPrompt: 'better' }));
+
+      await SystemPromptLlmWriter.improveSystemPrompt('You are a helpful assistant.', 'caller-provided-model-id');
+
+      expect(mockCallModel).toHaveBeenCalled();
+      const [model] = mockCallModel.mock.calls[0];
+      expect(model).toBe('caller-provided-model-id');
+    });
+
+    it('refuses to invoke LLM when modelId is empty (no hidden fallback)', async () => {
+      mockCallModel.mockClear();
+      const result = await SystemPromptLlmWriter.improveSystemPrompt('You are a helpful assistant.', '');
+      expect(result.success).toBe(false);
+      expect(mockCallModel).not.toHaveBeenCalled();
+    });
+
+    it('returns failure when callModelStrict throws (invalid model on active provider)', async () => {
+      mockCallModel.mockRejectedValueOnce(
+        new Error("Model 'foo' is not available on the active provider 'openai'."),
+      );
+      const result = await SystemPromptLlmWriter.improveSystemPrompt('You are a helpful assistant.', 'caller-provided-model-id');
+      expect(result.success).toBe(false);
+    });
   });
 });

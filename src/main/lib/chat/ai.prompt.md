@@ -1,4 +1,4 @@
-<!-- Last verified: 2026-06-04 -->
+<!-- Last verified: 2026-07-30 -->
 # Chat Engine
 
 > Core multi-turn agent conversation engine: one `AgentChat` instance per active chat tab, orchestrated by `AgentChatManager`.
@@ -12,7 +12,7 @@
 | `agentChatOutputPort.ts` | Output adapter for streaming chunks, status events, and interactive request events | new |
 | `agentChatTurnRunner.ts` | Stage-based turn orchestrator for compression, streaming, tool follow-up, storage compression, and cancellation cleanup | new |
 | `agentChatPromptService.ts` | Prompt assembly, tool discovery, knowledge-source injection, sub-agent prompt text, skill snapshot refresh | new |
-| `agentChatSessionService.ts` | Chat session persistence, title generation, edit flow, file-path replacement, message save queue behavior | new |
+| `agentChatSessionService.ts` | Chat session persistence, title generation (uses `deps.getCurrentModelId()` so titles run on the user-selected model — never a hardcoded default), edit flow, file-path replacement, message save queue behavior | new |
 | `agentChatContextService.ts` | Context-history enrichment, memory read/write integration, compression trigger, token accounting, context-change notifications | new |
 | `agentChatInteractionService.ts` | Pending interactive request lifecycle, history summaries, approval bypass flow, unified form and choice requests | new |
 | `agentChatToolPostProcessor.ts` | Tool-result-specific post-processing for interactive-input and template placeholder/user-input flows | new |
