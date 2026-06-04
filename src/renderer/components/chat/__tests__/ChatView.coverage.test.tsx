@@ -90,6 +90,10 @@ vi.mock('../../layout/LayoutProvider', () => ({
   useLayout: () => ({ isMinimalMode: mockIsMinimalMode }),
 }));
 
+vi.mock('../../auth/AuthProvider', () => ({
+  useAuthContext: () => ({ authData: { ghcAuth: { alias: 'test-alias' } } }),
+}));
+
 vi.mock('../../../lib/audio/useAutoTts', () => ({ useAutoTts: vi.fn() }));
 
 vi.mock('../chat-side.atom', () => ({

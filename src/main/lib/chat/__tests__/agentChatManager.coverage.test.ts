@@ -133,6 +133,7 @@ vi.mock('../agentChatManagerScheduledRunner', () => ({
 const mockProfileCacheManager = vi.hoisted(() => ({
   getChatConfig: vi.fn(() => null),
   getAllChatConfigs: vi.fn(() => [] as any[]),
+  getCachedProfile: vi.fn(() => null),
   syncStarredChatSessionIndex: vi.fn().mockResolvedValue(undefined),
 }));
 

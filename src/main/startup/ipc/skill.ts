@@ -7,6 +7,7 @@ import { installAndActivateSkill } from "../../lib/skill/installAndActivateSkill
 import { applySkillToAgents } from "../../lib/skill/applySkillToAgents";
 import { updateSkillFromDevice } from "../../lib/skill/skillDeviceImporter";
 import { deleteInstalledSkill } from "../../lib/skill/deleteInstalledSkill";
+import { PROFILE_DIR_NAME } from '../../lib/userDataADO/pathUtils';
 export default function(ctx: Context) {
 
   const resolveSingleSelectedPath = (result: unknown): string | undefined => {
@@ -348,11 +349,11 @@ export default function(ctx: Context) {
       }
 
       // Build SKILL.md file path
-      // {app user data folder}/profiles/{user alias}/skills/{skill-name}/SKILL.md
+      // {app user data folder}/profiles/<PROFILE_DIR_NAME>/skills/{skill-name}/SKILL.md
       const skillMarkdownPath = path.join(
         app.getPath('userData'),
         'profiles',
-        ctx.currentUserAlias,
+        PROFILE_DIR_NAME,
         'skills',
         skillName,
         'SKILL.md'
@@ -382,7 +383,7 @@ export default function(ctx: Context) {
       const skillBasePath = path.join(
         app.getPath('userData'),
         'profiles',
-        ctx.currentUserAlias,
+        PROFILE_DIR_NAME,
         'skills',
         skillName
       );
@@ -461,7 +462,7 @@ export default function(ctx: Context) {
       const skillBasePath = path.join(
         app.getPath('userData'),
         'profiles',
-        ctx.currentUserAlias,
+        PROFILE_DIR_NAME,
         'skills',
         skillName
       );
@@ -556,7 +557,7 @@ export default function(ctx: Context) {
       const skillPath = path.join(
         app.getPath('userData'),
         'profiles',
-        ctx.currentUserAlias,
+        PROFILE_DIR_NAME,
         'skills',
         skillName
       );

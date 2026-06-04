@@ -4,8 +4,6 @@ import '../../styles/SubAgentsView.css'
 
 interface SubAgentListItemProps {
   config: SubAgentConfig
-  isSelected: boolean
-  onClick: () => void
   onMenuToggle: (buttonElement: HTMLElement) => void
   /** Parent agent's MCP server count (for inherited display) */
   parentMcpCount?: number
@@ -26,8 +24,6 @@ const contextAccessLabels: Record<string, string> = {
  */
 const SubAgentListItem: React.FC<SubAgentListItemProps> = ({
   config,
-  isSelected,
-  onClick,
   onMenuToggle,
   parentMcpCount = 0,
   parentSkillsCount = 0,
@@ -61,10 +57,7 @@ const SubAgentListItem: React.FC<SubAgentListItemProps> = ({
   }, [config, parentSkillsCount])
 
   return (
-    <div
-      className={`sub-agent-card-wrapper ${isSelected ? 'selected' : ''}`}
-      onClick={onClick}
-    >
+    <div className="sub-agent-card-wrapper">
       {/* Header Row: emoji + name + version + menu button */}
       <div className="sub-agent-card-header">
         <span className="sub-agent-card-emoji">{config.emoji}</span>

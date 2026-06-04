@@ -34,6 +34,7 @@ import { GhcCopilotModel } from '@shared/types/ghcChatTypes';
 import { GHC_CONFIG } from '../auth/ghcConfig';
 import { createLogger } from '../unifiedLogger';
 import { MainAuthManager } from "../auth/authManager";
+import { PROFILE_DIR_NAME } from '../userDataADO/pathUtils';
 const logger = createLogger();
 
 // ============================================================================
@@ -212,7 +213,7 @@ class GhcModelsManager {
       throw new Error('[GhcModelsManager] Electron app is not available.');
     }
     const appPath = electronApp.getPath('userData');
-    const profileDir = path.join(appPath, 'profiles', this.currentAlias);
+    const profileDir = path.join(appPath, 'profiles', PROFILE_DIR_NAME);
     if (!fs.existsSync(profileDir)) {
       fs.mkdirSync(profileDir, { recursive: true });
     }

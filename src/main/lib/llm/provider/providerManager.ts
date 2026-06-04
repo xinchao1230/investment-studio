@@ -35,6 +35,7 @@ import { AnthropicProvider } from './anthropicProvider';
 import { GeminiProvider } from './geminiProvider';
 import { CustomDynamicProvider } from './customDynamicProvider';
 import type { CustomProtocol } from './protocolDetector';
+import { PROFILE_DIR_NAME } from '../../userDataADO/pathUtils';
 
 const logger = createLogger();
 
@@ -564,7 +565,7 @@ export class ProviderManager {
     if (!this.currentAlias) return null;
     try {
       const appPath = app.getPath('userData');
-      return path.join(appPath, 'profiles', this.currentAlias, CONFIG_FILE_NAME);
+      return path.join(appPath, 'profiles', PROFILE_DIR_NAME, CONFIG_FILE_NAME);
     } catch {
       return null;
     }
@@ -781,7 +782,7 @@ export class ProviderManager {
     // Ensure the skip-login profile directory exists
     try {
       const appPath = app.getPath('userData');
-      const localDir = path.join(appPath, 'profiles', SKIP_LOGIN_ALIAS);
+      const localDir = path.join(appPath, 'profiles', PROFILE_DIR_NAME);
       if (!fs.existsSync(localDir)) {
         await fs.promises.mkdir(localDir, { recursive: true });
       }

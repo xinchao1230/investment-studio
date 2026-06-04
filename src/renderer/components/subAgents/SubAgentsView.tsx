@@ -54,27 +54,14 @@ const SubAgentsView: React.FC = () => {
   const globalSkillsCount = skills?.length || 0
 
   // Local UI state
-  const [selectedSubAgent, setSelectedSubAgent] = useState<string | null>(null)
   const [isSyncing, setIsSyncing] = useState(false)
   // Hidden file input for "Import from Claude Code"
   const importFileInputRef = useRef<HTMLInputElement>(null)
 
-  // Auto-select the first item when subAgents changes
-  useEffect(() => {
-    if (subAgents.length > 0 && !selectedSubAgent) {
-      setSelectedSubAgent(subAgents[0].name)
-    } else if (subAgents.length === 0) {
-      setSelectedSubAgent(null)
-    }
-  }, [subAgents, selectedSubAgent])
-
   // Listen for refresh events
   useEffect(() => {
-    const handleRefresh = (event: CustomEvent<{ subAgentName?: string } | null>) => {
+    const handleRefresh = () => {
       refresh().catch(() => {})
-      if (event.detail?.subAgentName) {
-        setSelectedSubAgent(event.detail.subAgentName)
-      }
     }
 
     window.addEventListener('subAgents:refreshList', handleRefresh as EventListener)
@@ -129,9 +116,6 @@ const SubAgentsView: React.FC = () => {
         showSuccess(`Sub-agent "${result.data.display_name || result.data.name}" imported successfully`)
         setTimeout(() => {
           refresh().catch(() => {})
-          if (result.data?.name) {
-            setSelectedSubAgent(result.data.name)
-          }
         }, 300)
       } else {
         showError(result.error || 'Import failed')
@@ -256,8 +240,6 @@ const SubAgentsView: React.FC = () => {
               <SubAgentListItem
                 key={sa.name}
                 config={sa}
-                isSelected={selectedSubAgent === sa.name}
-                onClick={() => setSelectedSubAgent(sa.name)}
                 onMenuToggle={(el: HTMLElement) => handleMenuToggle(sa.name, el)}
                 parentMcpCount={globalMcpCount}
                 parentSkillsCount={globalSkillsCount}

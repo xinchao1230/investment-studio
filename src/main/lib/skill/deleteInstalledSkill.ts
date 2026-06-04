@@ -4,6 +4,7 @@ import { app } from 'electron';
 import { isBuiltinSkill } from '../../../shared/constants/builtinSkills';
 import { isPluginSkill } from '../plugin/bridges/skillBridge';
 import { profileCacheManager } from '../userDataADO';
+import { PROFILE_DIR_NAME } from '../userDataADO/pathUtils';
 
 export interface DeleteInstalledSkillResult {
   success: boolean;
@@ -52,7 +53,7 @@ export async function deleteInstalledSkill(
   const skillPath = path.join(
     app.getPath('userData'),
     'profiles',
-    userAlias,
+    PROFILE_DIR_NAME,
     'skills',
     normalizedSkillName,
   );

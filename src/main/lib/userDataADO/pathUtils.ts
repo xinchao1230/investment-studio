@@ -48,11 +48,18 @@ export function getProfilesRootPath(): string {
   return profilesRoot;
 }
 
-export function getProfileDirectoryPath(alias: string): string {
-  if (!alias) {
-    throw new Error('Profile alias is required to resolve profile directory path.');
-  }
-  const profileDir = path.join(getProfilesRootPath(), alias);
+/**
+ * On-disk profile directory name.
+ *
+ * Both copilot-login and skip-login share a single directory; the user `alias`
+ * (still tracked in memory and in `auth.json` for display/identity) does NOT
+ * participate in path construction. See
+ * docs/plans/2026-06-03-profile-dir-default-design.md.
+ */
+export const PROFILE_DIR_NAME = 'default';
+
+export function getProfileDirectoryPath(_alias?: string): string {
+  const profileDir = path.join(getProfilesRootPath(), PROFILE_DIR_NAME);
   ensureDirectoryExists(profileDir);
   return profileDir;
 }

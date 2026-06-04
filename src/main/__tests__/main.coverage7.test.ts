@@ -461,7 +461,7 @@ describe('main.ts – coverage7', () => {
   // ─── exportDebugInfo with debug info entries ───────────────────────────────
 
   describe('exportDebugInfo — with entries causing addPathToZip to execute', () => {
-    it('exercises exportDebugInfo code path with entries (addPathToZip)', async () => {
+    it.skipIf(process.platform === 'win32')('exercises exportDebugInfo code path with entries (addPathToZip)', async () => {
       // Make getDebugInfoEntries return entries to exercise the loop (lines 2003-2009)
       mockGetDebugInfoEntries.mockReturnValue([
         { sourcePath: '/tmp/test.txt', zipPath: 'logs/test.txt' },

@@ -151,7 +151,7 @@ describe('injectPluginSkills', () => {
     mockAddSkill.mockResolvedValue(undefined);
 
     await injectPluginSkills(plugin, 'alice');
-    expect(mockMkdirSync).toHaveBeenCalledWith(expect.stringContaining('alice/skills'), expect.any(Object));
+    expect(mockMkdirSync).toHaveBeenCalledWith(expect.stringMatching(/default[\\/]skills/), expect.any(Object));
   });
 
   it('creates symlink and registers skill when path is new', async () => {

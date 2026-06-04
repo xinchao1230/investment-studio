@@ -9,6 +9,7 @@ import { registerBuddyIPC } from '../../lib/buddy/BuddyIPC';
 import { createLogger } from '../../lib/unifiedLogger';
 import { safeConsole } from '../../lib/utilities/safeConsole';
 import { isFeatureEnabled, featureFlagManager } from "../../lib/featureFlags";
+import { PROFILE_DIR_NAME } from '../../lib/userDataADO/pathUtils';
 import {
   getProfileCacheManager,
   getAppCacheManager,
@@ -305,7 +306,7 @@ export function setUpIPC(ctx: Context) {
       if (!alias) {
         return { success: false, error: 'No user profile selected' };
       }
-      const profileDirectory = path.join(app.getPath('userData'), 'profiles', alias);
+      const profileDirectory = path.join(app.getPath('userData'), 'profiles', PROFILE_DIR_NAME);
       // Ensure profile directory exists
       if (!fs.existsSync(profileDirectory)) {
         fs.mkdirSync(profileDirectory, { recursive: true });
@@ -404,7 +405,7 @@ export function setUpIPC(ctx: Context) {
               safeConsole.log('[Startup] Sub-agent file-based migration needed, migrating...');
               const electronApp = app;
               const appPath = electronApp.getPath('userData');
-              const profileDir = path.join(appPath, 'profiles', alias);
+              const profileDir = path.join(appPath, 'profiles', PROFILE_DIR_NAME);
               const indices = await migration.migrate(profileDir, profile as any);
               if (indices) {
                 // Write migrated profile

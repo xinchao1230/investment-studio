@@ -43,8 +43,6 @@ function createTestConfig(overrides: Partial<SubAgentConfig> = {}): SubAgentConf
 describe('SubAgentListItem', () => {
   const defaultProps = {
     config: createTestConfig(),
-    isSelected: false,
-    onClick: vi.fn(),
     onMenuToggle: vi.fn(),
   };
 
@@ -158,30 +156,11 @@ describe('SubAgentListItem', () => {
   // ========== Interactions ==========
 
   describe('interactions', () => {
-    it('should call onClick when item is clicked', () => {
-      const onClick = vi.fn();
-      render(<SubAgentListItem {...defaultProps} onClick={onClick} />);
-
-      fireEvent.click(screen.getByText('Web Researcher'));
-      expect(onClick).toHaveBeenCalledTimes(1);
-    });
-
     it('should call onMenuToggle when menu button is clicked', () => {
       const onMenuToggle = vi.fn();
       render(<SubAgentListItem {...defaultProps} onMenuToggle={onMenuToggle} />);
 
       fireEvent.click(screen.getByText('⋮'));
-      expect(onMenuToggle).toHaveBeenCalledTimes(1);
-    });
-
-    it('should not call onClick when menu button is clicked (stopPropagation)', () => {
-      const onClick = vi.fn();
-      const onMenuToggle = vi.fn();
-      render(<SubAgentListItem {...defaultProps} onClick={onClick} onMenuToggle={onMenuToggle} />);
-
-      fireEvent.click(screen.getByText('⋮'));
-      // onClick should NOT be called because menu button uses stopPropagation
-      expect(onClick).not.toHaveBeenCalled();
       expect(onMenuToggle).toHaveBeenCalledTimes(1);
     });
   });

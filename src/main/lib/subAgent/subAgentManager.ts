@@ -24,6 +24,7 @@ import * as path from 'path';
 import { app } from 'electron';
 import { SubAgentFileManager } from "./subAgentFileManager";
 import { builtinAgentRegistry } from "./builtinAgentRegistry";
+import { PROFILE_DIR_NAME } from '../userDataADO/pathUtils';
 import {
   resolveSubAgentModel,
   getParentAgentConfig,
@@ -185,7 +186,7 @@ export class SubAgentManager extends EventEmitter {
       const fileManager = SubAgentFileManager.getInstance();
 
       const appPath = app.getPath('userData');
-      const profileDir = path.join(appPath, 'profiles', params.userAlias);
+      const profileDir = path.join(appPath, 'profiles', PROFILE_DIR_NAME);
 
       let subAgentConfig = builtinAgentRegistry.get(params.subAgentName);
       if (!subAgentConfig) {

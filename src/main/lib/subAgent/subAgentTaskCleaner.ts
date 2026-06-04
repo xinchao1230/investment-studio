@@ -9,6 +9,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { app } from 'electron';
 import { createLogger } from '../unifiedLogger';
+import { PROFILE_DIR_NAME } from '../userDataADO/pathUtils';
 
 const logger = createLogger();
 
@@ -16,9 +17,9 @@ const logger = createLogger();
  * Purge sub-agent task files older than retentionDays.
  * Returns the number of files deleted.
  */
-export async function purgeOldSubAgentTasks(userAlias: string, retentionDays = 30): Promise<number> {
+export async function purgeOldSubAgentTasks(_userAlias: string, retentionDays = 30): Promise<number> {
   const userData = app.getPath('userData');
-  const baseDir = path.join(userData, 'profiles', userAlias, 'sub-agent-tasks');
+  const baseDir = path.join(userData, 'profiles', PROFILE_DIR_NAME, 'sub-agent-tasks');
 
   if (!fs.existsSync(baseDir)) return 0;
 

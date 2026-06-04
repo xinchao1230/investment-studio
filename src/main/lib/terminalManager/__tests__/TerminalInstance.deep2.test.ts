@@ -198,13 +198,19 @@ describe('prepareCwd()', () => {
   it('resolves relative path to absolute', () => {
     const ti = new TestableTI(cfg({ cwd: 'relative/path' }));
     const cwd = ti.callPrepareCwd();
-    expect(cwd.startsWith('/')).toBe(true);
+    // On POSIX absolute paths start with '/'; on Windows with drive letter (e.g. 'C:\').
+    expect(/^([a-zA-Z]:[\\/]|\/)/.test(cwd)).toBe(true);
   });
 
   it('returns absolute path unchanged', () => {
     const ti = new TestableTI(cfg({ cwd: '/absolute/path' }));
     const cwd = ti.callPrepareCwd();
-    expect(cwd).toBe('/absolute/path');
+    // path.resolve('/absolute/path') on Windows produces drive-prefixed form.
+    if (process.platform === 'win32') {
+      expect(cwd).toMatch(/[\\/]absolute[\\/]path$/);
+    } else {
+      expect(cwd).toBe('/absolute/path');
+    }
   });
 });
 

@@ -43,6 +43,7 @@ vi.mock('../chatSessionFileOps', async () => ({
   },
 }));
 vi.mock('../pathUtils', async () => ({
+  PROFILE_DIR_NAME: 'default',
   getDefaultWorkspacePath: vi.fn(() => '/mock/workspace'),
   getDefaultAgentWorkspacePath: vi.fn(() => '/mock/workspace/agent'),
   ensureWorkspaceExists: vi.fn(),

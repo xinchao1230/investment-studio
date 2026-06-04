@@ -13,6 +13,7 @@ import type { SubAgentConfig } from '../userDataADO/types/profile';
 import { skillManager } from '../skill/skillManager';
 import * as path from 'path';
 import { app } from 'electron';
+import { PROFILE_DIR_NAME } from '../userDataADO/pathUtils';
 
 /**
  * Get the Electron app instance (supports test environment mocking)
@@ -58,7 +59,7 @@ export function buildWorkspaceAndSkillsInfo(options: SubAgentChatOptions, config
           if (electronApp) {
             const appPath = electronApp.getPath('userData');
 
-            const skillDir = path.join(appPath, 'profiles', options.currentUserAlias, 'skills', skillName);
+            const skillDir = path.join(appPath, 'profiles', PROFILE_DIR_NAME, 'skills', skillName);
             const { metadata } = skillManager.getSkillMetadata(skillDir);
             if (metadata) {
               const skillMdPath = path.join(skillDir, 'skill.md');

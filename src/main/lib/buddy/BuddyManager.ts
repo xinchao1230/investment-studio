@@ -21,6 +21,7 @@ import { app } from 'electron';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as crypto from 'crypto';
+import { PROFILE_DIR_NAME } from '../userDataADO/pathUtils';
 
 export interface BuddyEventListener {
   onXPUpdated?: (data: BuddyXPData) => void;
@@ -71,7 +72,7 @@ export class BuddyManager {
 
     try {
       const userDataPath = app.getPath('userData');
-      const profileDir = path.join(userDataPath, 'profiles', alias);
+      const profileDir = path.join(userDataPath, 'profiles', PROFILE_DIR_NAME);
       if (!fs.existsSync(profileDir)) {
         fs.mkdirSync(profileDir, { recursive: true });
       }

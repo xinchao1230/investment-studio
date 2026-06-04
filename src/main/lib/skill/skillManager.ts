@@ -9,6 +9,7 @@ import * as path from 'path';
 import { app } from 'electron';
 import { createLogger } from '../unifiedLogger';
 import { profileCacheManager } from '../userDataADO';
+import { PROFILE_DIR_NAME } from '../userDataADO/pathUtils';
 // @ts-ignore - js-yaml types may not be available
 import * as yaml from 'js-yaml';
 import JSZip from 'jszip';
@@ -444,7 +445,7 @@ export class SkillManager {
     isUpdate: boolean = false
   ): Promise<SkillOperationResult> {
     try {
-      const userSkillsDir = path.join(app.getPath('userData'), 'profiles', userAlias, 'skills');
+      const userSkillsDir = path.join(app.getPath('userData'), 'profiles', PROFILE_DIR_NAME, 'skills');
       if (!fs.existsSync(userSkillsDir)) {
         fs.mkdirSync(userSkillsDir, { recursive: true });
       }

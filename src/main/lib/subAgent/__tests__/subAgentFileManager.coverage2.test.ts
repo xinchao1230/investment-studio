@@ -592,7 +592,7 @@ Do helpful things.
 
   // ── writeAgentConfig error propagation ────────────────────────────────────
 
-  it('writeAgentConfig throws when mkdir fails', async () => {
+  it.skipIf(process.platform === 'win32')('writeAgentConfig throws when mkdir fails', async () => {
     const badDir = path.join(tmpDir, 'no-perms');
     await fs.promises.mkdir(badDir, { recursive: true });
     await fs.promises.chmod(badDir, 0o444); // read-only

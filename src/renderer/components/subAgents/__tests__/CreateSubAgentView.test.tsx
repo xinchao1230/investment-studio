@@ -6,7 +6,7 @@
  * CreateSubAgentView component tests
  *
  * Tests the correctness of the refactored CSS class layout (based on SkillsView):
- * - unified-header rendering (back button + title "Create Sub-Agent")
+ * - unified-header rendering (back button + title "Create Agent")
  * - Form field rendering (name, description, system_prompt, model, mcp_servers, skills)
  * - Capabilities section (MCP Servers + inherit toggle, Skills + inherit toggle)
  * - Form validation
@@ -100,11 +100,11 @@ describe('CreateSubAgentView', () => {
       expect(container.querySelector('.unified-header')).toBeInTheDocument();
     });
 
-    it('should render header name "Create Sub-Agent"', () => {
+    it('should render header name "Create Agent"', () => {
       const { container } = render(<CreateSubAgentView />);
       const headerName = container.querySelector('.header-name');
       expect(headerName).toBeInTheDocument();
-      expect(headerName?.textContent).toBe('Create Sub-Agent');
+      expect(headerName?.textContent).toBe('Create Agent');
     });
 
     it('should render back button with title "Back"', () => {
@@ -274,7 +274,7 @@ describe('CreateSubAgentView', () => {
   describe('form validation', () => {
     it('should show errors when submitting empty form', () => {
       render(<CreateSubAgentView />);
-      fireEvent.click(screen.getByRole('button', { name: 'Create Sub-Agent' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Create Agent' }));
 
       expect(screen.getByText('Name is required')).toBeInTheDocument();
       expect(screen.getByText('Description is required')).toBeInTheDocument();
@@ -285,7 +285,7 @@ describe('CreateSubAgentView', () => {
       render(<CreateSubAgentView />);
 
       // Trigger validation
-      fireEvent.click(screen.getByRole('button', { name: 'Create Sub-Agent' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Create Agent' }));
       expect(screen.getByText('Description is required')).toBeInTheDocument();
 
       // Type in description
@@ -298,10 +298,10 @@ describe('CreateSubAgentView', () => {
   // ========== Action Buttons ==========
 
   describe('action buttons', () => {
-    it('should render Cancel and Create Sub-Agent buttons', () => {
+    it('should render Cancel and Create Agent buttons', () => {
       render(<CreateSubAgentView />);
       expect(screen.getByText('Cancel')).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: 'Create Sub-Agent' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Create Agent' })).toBeInTheDocument();
     });
 
     it('should navigate to /settings/sub-agents on Cancel click', () => {
@@ -330,7 +330,7 @@ describe('CreateSubAgentView', () => {
       fireEvent.change(screen.getByPlaceholderText('Describe what this sub-agent does...'), { target: { value: 'A test agent' } });
       fireEvent.change(screen.getByPlaceholderText("Provide the system prompt that defines this sub-agent's behavior..."), { target: { value: 'You are a test agent' } });
 
-      fireEvent.click(screen.getByRole('button', { name: 'Create Sub-Agent' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Create Agent' }));
 
       await waitFor(() => {
         expect(mockAdd).toHaveBeenCalledTimes(1);
@@ -358,7 +358,7 @@ describe('CreateSubAgentView', () => {
       fireEvent.change(screen.getByPlaceholderText('Describe what this sub-agent does...'), { target: { value: 'desc' } });
       fireEvent.change(screen.getByPlaceholderText("Provide the system prompt that defines this sub-agent's behavior..."), { target: { value: 'prompt' } });
 
-      fireEvent.click(screen.getByRole('button', { name: 'Create Sub-Agent' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Create Agent' }));
 
       await waitFor(() => {
         expect(mockShowSuccess).toHaveBeenCalledWith(expect.stringContaining('test-agent'));
@@ -378,7 +378,7 @@ describe('CreateSubAgentView', () => {
       fireEvent.click(screen.getByRole('button', { name: /Inherit parent model/i }));
       fireEvent.click(screen.getByRole('button', { name: /Claude Sonnet 4.5/i }));
 
-      fireEvent.click(screen.getByRole('button', { name: 'Create Sub-Agent' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Create Agent' }));
 
       await waitFor(() => {
         expect(mockAdd).toHaveBeenCalledWith(
@@ -398,7 +398,7 @@ describe('CreateSubAgentView', () => {
       fireEvent.change(screen.getByPlaceholderText('Describe what this sub-agent does...'), { target: { value: 'desc' } });
       fireEvent.change(screen.getByPlaceholderText("Provide the system prompt that defines this sub-agent's behavior..."), { target: { value: 'prompt' } });
 
-      fireEvent.click(screen.getByRole('button', { name: 'Create Sub-Agent' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Create Agent' }));
 
       await waitFor(() => {
         expect(mockShowError).toHaveBeenCalledWith(expect.stringContaining('Name already exists'));
@@ -415,7 +415,7 @@ describe('CreateSubAgentView', () => {
       fireEvent.change(screen.getByPlaceholderText('Describe what this sub-agent does...'), { target: { value: 'desc' } });
       fireEvent.change(screen.getByPlaceholderText("Provide the system prompt that defines this sub-agent's behavior..."), { target: { value: 'prompt' } });
 
-      fireEvent.click(screen.getByRole('button', { name: 'Create Sub-Agent' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Create Agent' }));
 
       await waitFor(() => {
         expect(mockShowError).toHaveBeenCalledWith('Sub-agent API not available');
@@ -432,7 +432,7 @@ describe('CreateSubAgentView', () => {
       fireEvent.change(screen.getByPlaceholderText('Describe what this sub-agent does...'), { target: { value: 'desc' } });
       fireEvent.change(screen.getByPlaceholderText("Provide the system prompt that defines this sub-agent's behavior..."), { target: { value: 'prompt' } });
 
-      fireEvent.click(screen.getByRole('button', { name: 'Create Sub-Agent' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Create Agent' }));
 
       await waitFor(() => {
         expect(mockShowError).toHaveBeenCalledWith(expect.stringContaining('Network failure'));
@@ -447,7 +447,7 @@ describe('CreateSubAgentView', () => {
       render(<CreateSubAgentView />);
 
       fireEvent.change(screen.getByPlaceholderText('e.g., web-researcher'), { target: { value: '-invalid' } });
-      fireEvent.click(screen.getByRole('button', { name: 'Create Sub-Agent' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Create Agent' }));
 
       await waitFor(() => {
         expect(screen.getByText(/lowercase letters, numbers, and hyphens/)).toBeInTheDocument();
@@ -458,7 +458,7 @@ describe('CreateSubAgentView', () => {
       render(<CreateSubAgentView />);
 
       fireEvent.change(screen.getByPlaceholderText('e.g., web-researcher'), { target: { value: 'invalid-' } });
-      fireEvent.click(screen.getByRole('button', { name: 'Create Sub-Agent' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Create Agent' }));
 
       await waitFor(() => {
         expect(screen.getByText(/lowercase letters, numbers, and hyphens/)).toBeInTheDocument();
@@ -475,7 +475,7 @@ describe('CreateSubAgentView', () => {
       fireEvent.change(screen.getByPlaceholderText('Describe what this sub-agent does...'), { target: { value: 'desc' } });
       fireEvent.change(screen.getByPlaceholderText("Provide the system prompt that defines this sub-agent's behavior..."), { target: { value: 'prompt' } });
 
-      fireEvent.click(screen.getByRole('button', { name: 'Create Sub-Agent' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Create Agent' }));
 
       await waitFor(() => {
         expect(mockAdd).toHaveBeenCalledWith(expect.objectContaining({ name: 'my-agent-123' }));

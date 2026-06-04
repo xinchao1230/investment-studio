@@ -56,6 +56,7 @@ vi.mock('fs', async () => ({
 }));
 
 vi.mock('../../userDataADO/pathUtils', async () => ({
+  PROFILE_DIR_NAME: 'default',
   extractMonthFromChatSessionId: vi.fn((id: string) => {
     const match = id.match(/chatSession_(\d{6})/);
     return match ? match[1] : undefined;

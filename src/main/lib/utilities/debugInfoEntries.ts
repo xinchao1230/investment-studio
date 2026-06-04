@@ -1,4 +1,5 @@
 import * as path from 'path';
+import { PROFILE_DIR_NAME } from '../userDataADO/pathUtils';
 
 export interface DebugInfoEntry {
   sourcePath: string;
@@ -31,7 +32,7 @@ export function getDebugInfoEntries(
 
   if (currentUserAlias) {
     entries.push({
-      sourcePath: path.join(userDataPath, 'profiles', currentUserAlias, 'schedules'),
+      sourcePath: path.join(userDataPath, 'profiles', PROFILE_DIR_NAME, 'schedules'),
       zipPath: path.join('profiles', '<REDACTED_ALIAS>', 'schedules'),
     });
   }

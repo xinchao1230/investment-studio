@@ -6,9 +6,12 @@ import { render, screen, fireEvent, act } from '@testing-library/react';
 
 // ── Hoisted variables ──────────────────────────────────────────────────────
 
-const { mockUpdateModel, mockUseAgentConfig } = vi.hoisted(() => ({
+const { mockUpdateModel, mockUseAgentConfig, mockUpdateChatAgent, mockAddChatConfig, mockGetCurrentChatId } = vi.hoisted(() => ({
   mockUpdateModel: vi.fn(),
   mockUseAgentConfig: vi.fn(),
+  mockUpdateChatAgent: vi.fn(),
+  mockAddChatConfig: vi.fn(),
+  mockGetCurrentChatId: vi.fn(() => null),
 }));
 
 // ── Mocks ──────────────────────────────────────────────────────────────────
@@ -35,6 +38,19 @@ vi.mock('@/lib/models/useAvailableModels', () => ({
 
 vi.mock('@/lib/hooks/useScrollSelectedIntoView', () => ({
   useScrollSelectedIntoView: vi.fn(),
+}));
+
+vi.mock('@/lib/chat/chatOps', () => ({
+  chatOps: {
+    updateChatAgent: (...args: any[]) => mockUpdateChatAgent(...args),
+    addChatConfig: (...args: any[]) => mockAddChatConfig(...args),
+  },
+}));
+
+vi.mock('@/lib/chat/agentChatSessionCacheManager', () => ({
+  agentChatSessionCacheManager: {
+    getCurrentChatId: () => mockGetCurrentChatId(),
+  },
 }));
 
 // ── Imports (after mocks) ──────────────────────────────────────────────────
@@ -81,6 +97,9 @@ describe('ModelSelector', () => {
     vi.mocked(getModelById).mockReturnValue(fakeModels[0] as any);
     vi.mocked(useScrollSelectedIntoView).mockReturnValue(undefined as any);
     mockUpdateModel.mockResolvedValue({ success: true });
+    mockUpdateChatAgent.mockResolvedValue({ success: true });
+    mockAddChatConfig.mockResolvedValue({ success: true, data: { chat_id: 'new-chat' } });
+    mockGetCurrentChatId.mockReturnValue(null);
   });
 
   function renderSelector(props?: Partial<React.ComponentProps<typeof ModelSelector>>) {
@@ -101,7 +120,9 @@ describe('ModelSelector', () => {
 
   it('renders "Select Model" when getModelById returns nothing', () => {
     vi.mocked(getModelById).mockReturnValue(undefined as any);
-    renderSelector();
+    vi.mocked(profileDataManager.getSelectedModel).mockReturnValue(null);
+    vi.mocked(useAvailableModels).mockReturnValue({ models: [] } as any);
+    renderSelector({ currentChatId: null });
     expect(screen.getByText('Select Model')).toBeTruthy();
   });
 
@@ -157,7 +178,8 @@ describe('ModelSelector', () => {
     await act(async () => {
       fireEvent.click(screen.getByText('GPT-4.1'));
     });
-    expect(mockUpdateModel).toHaveBeenCalledWith('gpt-4.1');
+    // With a chat session present, the selector persists via chatOps.updateChatAgent
+    expect(mockUpdateChatAgent).toHaveBeenCalledWith('chat-1', { model: 'gpt-4.1' });
   });
 
   it('does not call updateModel when isLoading=true', () => {
@@ -214,13 +236,13 @@ describe('ModelSelector', () => {
   });
 
   it('clears pending model on failed updateModel and dropdown closes', async () => {
-    mockUpdateModel.mockResolvedValue({ success: false });
+    mockUpdateChatAgent.mockResolvedValue({ success: false });
     renderSelector();
     fireEvent.click(screen.getByTitle('Select AI Model'));
     await act(async () => {
       fireEvent.click(screen.getByText('GPT-4.1'));
     });
-    expect(mockUpdateModel).toHaveBeenCalled();
+    expect(mockUpdateChatAgent).toHaveBeenCalled();
     // Dropdown should be closed
     expect(screen.queryByText('GPT-4.1')).toBeNull();
   });

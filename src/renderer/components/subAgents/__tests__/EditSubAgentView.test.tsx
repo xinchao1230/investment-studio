@@ -6,7 +6,7 @@
  * EditSubAgentView component tests
  *
  * Tests the correctness of the refactored CSS class layout (based on SkillsView):
- * - unified-header rendering (back button + title "Edit Sub-Agent: {name}")
+ * - unified-header rendering (back button + title "Edit Agent: {name}")
  * - Loading state
  * - Sub-agent not found state
  * - Form field rendering (Name read-only, Display Name, Emoji, Description, System Prompt, etc.)
@@ -162,10 +162,10 @@ describe('EditSubAgentView', () => {
       expect(container.querySelector('.unified-header')).toBeInTheDocument();
     });
 
-    it('should render header with "Edit Sub-Agent: web-researcher"', () => {
+    it('should render header with "Edit Agent: web-researcher"', () => {
       mockUseSubAgents.mockReturnValue({ subAgents: [existingSubAgent], isLoading: false });
       render(<EditSubAgentView />);
-      expect(screen.getByText('Edit Sub-Agent: web-researcher')).toBeInTheDocument();
+      expect(screen.getByText('Edit Agent: web-researcher')).toBeInTheDocument();
     });
 
     it('should render back button with title "Back"', () => {
@@ -430,7 +430,7 @@ describe('EditSubAgentView', () => {
       mockUseSubAgents.mockReturnValue({ subAgents: [spacedAgent], isLoading: false });
 
       render(<EditSubAgentView />);
-      expect(screen.getByText('Edit Sub-Agent: agent with spaces')).toBeInTheDocument();
+      expect(screen.getByText('Edit Agent: agent with spaces')).toBeInTheDocument();
     });
   });
 });

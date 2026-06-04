@@ -15,6 +15,7 @@ import type { Message } from '@shared/types/chatTypes';
 import type { SubAgentTaskFile, SubAgentTaskMetadata, SubAgentTaskStatus, SubAgentTaskSummary } from './subAgentTaskTypes';
 import { createLogger } from '../unifiedLogger';
 import { ChatSessionTitleLlmSummarizer } from '../llm/chatSessionTitleLlmSummarizer';
+import { PROFILE_DIR_NAME } from '../userDataADO/pathUtils';
 
 const logger = createLogger();
 
@@ -393,9 +394,9 @@ export class SubAgentTaskStore {
     }
   }
 
-  private getBaseDir(userAlias: string): string {
+  private getBaseDir(_userAlias: string): string {
     const userData = app.getPath('userData');
-    return path.join(userData, 'profiles', userAlias, 'sub-agent-tasks');
+    return path.join(userData, 'profiles', PROFILE_DIR_NAME, 'sub-agent-tasks');
   }
 
   private getFilePath(userAlias: string, file: SubAgentTaskFile): string {

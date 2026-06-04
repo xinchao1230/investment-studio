@@ -56,7 +56,7 @@ describe('deleteInstalledSkill', () => {
     // lstatSync should be called to check for symlinks before removal
     expect(mockLstatSync).toHaveBeenCalled();
     expect(mockRmSync).toHaveBeenCalledWith(
-      expect.stringContaining('profiles/tester/skills/pptx'.replace(/\//g, require('path').sep)),
+      expect.stringContaining('profiles/default/skills/pptx'.replace(/\//g, require('path').sep)),
       { recursive: true, force: true },
     );
   });

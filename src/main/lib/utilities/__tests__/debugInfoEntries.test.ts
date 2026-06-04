@@ -27,7 +27,7 @@ describe('getDebugInfoEntries', () => {
         zipPath: 'crashDumps',
       },
       {
-        sourcePath: path.join('C:', 'Users', 'tester', 'AppData', 'Roaming', 'openkosmos-app', 'profiles', 'alice', 'schedules'),
+        sourcePath: path.join('C:', 'Users', 'tester', 'AppData', 'Roaming', 'openkosmos-app', 'profiles', 'default', 'schedules'),
         zipPath: path.join('profiles', '<REDACTED_ALIAS>', 'schedules'),
       },
     ]);
