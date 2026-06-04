@@ -11,10 +11,8 @@
  */
 
 import type { Message, AssistantMessage, UnifiedContentPart, TextContentPart } from '@shared/types/chatTypes';
-import { GHC_CONFIG } from '../auth/ghcConfig';
-import { getEndpointForModel } from '../llm/ghcModelApi';
-import { getModelCapabilities, buildMaxTokensParam } from '../llm/ghcModelsManager';
-import { MainAuthManager } from '../auth/authManager';
+import { providerManager } from '../llm/provider';
+import type { ChatCompletionParams, ChatMessage, ProviderStreamChunk } from '../llm/provider/types';
 import type { SubAgentChatOptions } from './types';
 import { createConsoleLogger } from '../unifiedLogger';
 import { repairToolCallArguments } from './subAgentToolCallRepair';
@@ -145,25 +143,20 @@ export class SubAgentLLMClient {
   /**
    * Call LLM — streaming mode
    *
-   * Key differences from main AgentChat.makeStreamingApiCall():
-   * - Does not send StreamingChunk to frontend (sub-agent doesn't need real-time display)
-   * - Supports both /chat/completions and /responses endpoint formats
-   * - Parses finish_reason for loop decision
-   *
-   * Authentication flow: obtains GitHub Copilot OAuth token via MainAuthManager
+   * Routes through `providerManager.chatCompletionStream(...)` so the request
+   * goes to whichever provider the user has configured (Copilot, OpenAI,
+   * Anthropic, Gemini, or a custom endpoint). Previously this method hard-coded
+   * GitHub Copilot OAuth + endpoint, which broke skip-login users with an API
+   * key (400 "Authorization header is badly formatted") and bypassed any
+   * non-Copilot provider entirely.
    */
   async callLLM(
     systemMessages: Message[],
     contextHistory: Message[],
     tools: any[]
   ): Promise<LLMResponse> {
-    // ── Authentication ──
-    const authManager = MainAuthManager.getInstance();
-    const currentAuth = await authManager.getCurrentAuth();
-    if (!currentAuth?.ghcAuth?.copilotTokens?.token) {
-      throw new Error('No valid authentication token available for sub-agent');
-    }
-    const accessToken = currentAuth.ghcAuth.copilotTokens.token;
+    // Wait for provider config to load before routing.
+    await providerManager.waitUntilReady();
 
     // ── Build request messages ──
     // Safety net: remove orphaned tool_result messages (corresponding assistant tool_calls may have been compressed away)
@@ -171,113 +164,192 @@ export class SubAgentLLMClient {
     const allMessages = [...systemMessages, ...sanitizedContext];
     const formattedMessages = allMessages.map(m => this.formatMessageForAPI(m));
 
-    // ── Determine endpoint based on model ──
     const modelId = this.options.subAgent.inheritedModel;
-    const endpoint = getEndpointForModel(modelId);
-    const url = `${GHC_CONFIG.API_ENDPOINT}${endpoint}`;
 
-    // Convert tools to the corresponding endpoint format
-    const toolDefinitions = tools.length > 0 ? tools.map(t => {
-      if (endpoint === '/responses') {
-        // /responses endpoint uses flat format
-        return {
+    // Tools are always built in the OpenAI nested format. Each provider's
+    // chatCompletionStream translates to its own wire protocol internally
+    // (e.g., Anthropic flattens, Gemini reshapes).
+    const toolDefinitions = tools.length > 0
+      ? tools.map(t => ({
           type: 'function' as const,
-          name: t.name,
-          description: t.description || '',
-          parameters: t.inputSchema,
-          strict: false,
-        };
-      }
-      // /chat/completions uses nested format
-      return {
-        type: 'function' as const,
-        function: {
-          name: t.name,
-          description: t.description || '',
-          parameters: t.inputSchema,
-        },
-      };
-    }) : undefined;
+          function: {
+            name: t.name,
+            description: t.description || '',
+            parameters: t.inputSchema,
+          },
+        }))
+      : undefined;
 
-    // ── Build request body (adapt format based on endpoint) ──
-    let requestBody: Record<string, unknown>;
+    const params: ChatCompletionParams = {
+      model: modelId,
+      messages: formattedMessages as unknown as ChatMessage[],
+      maxTokens: MAX_OUTPUT_TOKENS,
+      stream: true,
+      signal: this.createAbortSignal(),
+    };
+    if (toolDefinitions && toolDefinitions.length > 0) {
+      params.tools = toolDefinitions;
+    }
 
-    if (endpoint === '/responses') {
-      requestBody = {
-        model: modelId,
-        input: formattedMessages,
-        stream: true,
-        ...buildMaxTokensParam(modelId, MAX_OUTPUT_TOKENS),
-        include: ['reasoning.encrypted_content'],
-      };
-      if (toolDefinitions && toolDefinitions.length > 0) {
-        requestBody.tools = toolDefinitions;
+    let stream: AsyncIterable<ProviderStreamChunk>;
+    try {
+      stream = await providerManager.chatCompletionStream(params);
+    } catch (error) {
+      this.logRequestError(error, modelId, formattedMessages, toolDefinitions);
+      throw error;
+    }
+
+    try {
+      return await this.consumeProviderStream(stream);
+    } catch (error) {
+      // Don't double-log cancellation: that's a normal control-flow exit.
+      const msg = error instanceof Error ? error.message : String(error);
+      if (!msg.includes('cancelled')) {
+        this.logRequestError(error, modelId, formattedMessages, toolDefinitions);
       }
-    } else {
-      // /chat/completions standard format
-      requestBody = {
-        model: modelId,
-        messages: formattedMessages,
-        stream: true,
-        ...buildMaxTokensParam(modelId, MAX_OUTPUT_TOKENS),
-      };
-      if (toolDefinitions && toolDefinitions.length > 0) {
-        requestBody.tools = toolDefinitions;
+      throw error;
+    }
+  }
+
+  /**
+   * Accumulate ProviderStreamChunks into the LLMResponse shape the sub-agent
+   * loop expects. Also forwards throttled `llm_streaming` updates to
+   * `onStepUpdate` so the parent UI can show progress.
+   */
+  private async consumeProviderStream(
+    stream: AsyncIterable<ProviderStreamChunk>,
+  ): Promise<LLMResponse> {
+    const messageId = `sa_msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    let fullContent = '';
+    const toolCallAccumulator: Record<number, any> = {};
+    let finishReason = '';
+
+    let lastStreamingEmitTime = 0;
+    let lastEmittedLength = 0;
+    const STREAMING_EMIT_INTERVAL_MS = 300;
+
+    const emitStreamingText = (text: string, force = false) => {
+      const now = Date.now();
+      if (!force && (now - lastStreamingEmitTime < STREAMING_EMIT_INTERVAL_MS) && text.length - lastEmittedLength < 100) {
+        return;
+      }
+      if (text.length > lastEmittedLength) {
+        lastStreamingEmitTime = now;
+        lastEmittedLength = text.length;
+        this.options.onStepUpdate?.({
+          type: 'llm_streaming',
+          turn: this.getTurnCount() + 1,
+          streamingText: text,
+        });
+      }
+    };
+
+    for await (const chunk of stream) {
+      if (this.options.cancellationToken.isCancellationRequested) {
+        throw new Error('Sub-agent task cancelled during streaming');
+      }
+
+      if (chunk.contentDelta) {
+        fullContent += chunk.contentDelta;
+        emitStreamingText(fullContent);
+      }
+
+      if (chunk.toolCallDelta) {
+        const tc = chunk.toolCallDelta;
+        const idx = tc.index ?? 0;
+        if (!toolCallAccumulator[idx]) {
+          toolCallAccumulator[idx] = {
+            id: tc.id || '',
+            type: 'function',
+            function: { name: '', arguments: '' },
+          };
+        }
+        if (tc.id) toolCallAccumulator[idx].id = tc.id;
+        if (tc.function?.name) toolCallAccumulator[idx].function.name += tc.function.name;
+        if (tc.function?.arguments) toolCallAccumulator[idx].function.arguments += tc.function.arguments;
+      }
+
+      if (chunk.finishReason) {
+        finishReason = chunk.finishReason;
       }
     }
 
-    // ── Send request ──
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${accessToken}`,
-        'Content-Type': 'application/json',
-        'User-Agent': GHC_CONFIG.USER_AGENT,
-        'Editor-Version': GHC_CONFIG.EDITOR_VERSION,
-        'Editor-Plugin-Version': GHC_CONFIG.EDITOR_PLUGIN_VERSION,
-      },
-      body: JSON.stringify(requestBody),
-      signal: this.createAbortSignal(),
-    });
+    if (fullContent) {
+      emitStreamingText(fullContent, true);
+    }
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      getLogger().error?.(
-        `[SubAgentLLMClient] LLM API error (${response.status}): ${errorText.substring(0, 500)}`,
-        'callLLM'
-      );
-      // Log request context for debugging
-      const lastRoles = formattedMessages.slice(-3).map((fm: any) => {
-        const tcInfo = fm.tool_calls ? `(+tool_calls:${fm.tool_calls.length})` : '';
-        return fm.role + tcInfo;
-      }).join(', ');
-      getLogger().error?.(
-        `[SubAgentLLMClient] Request context: model=${modelId}, endpoint=${endpoint}, ` +
-        `messageCount=${formattedMessages.length}, hasTools=${(toolDefinitions?.length || 0) > 0}. ` +
-        `Last 3 messages roles: [${lastRoles}]`,
-        'callLLM'
-      );
-      // Log arguments details for messages containing tool_calls
-      for (const fm of formattedMessages) {
-        if ((fm as any).tool_calls) {
-          for (const tc of (fm as any).tool_calls) {
-            const args = tc?.function?.arguments || '';
-            let validJson = false;
-            try { JSON.parse(args); validJson = true; } catch { /* invalid */ }
-            getLogger().error?.(
-              `[SubAgentLLMClient] tool_call in request: name=${tc?.function?.name}, id=${tc?.id}, ` +
-              `argsLen=${args.length}, validJson=${validJson}` +
-              (!validJson ? `, argsPreview="${String(args).substring(0, 200)}"` : ''),
-              'callLLM'
-            );
-          }
+    const validToolCalls = Object.values(toolCallAccumulator).filter(tc => tc && tc.id);
+
+    if (validToolCalls.length > 0) {
+      for (const tc of validToolCalls) {
+        const argsStr = tc.function?.arguments || '';
+        let argsValid = false;
+        try {
+          JSON.parse(argsStr);
+          argsValid = true;
+        } catch { /* invalid */ }
+        getLogger().info?.(
+          `[SubAgentLLMClient] Parsed tool call: id=${tc.id}, name=${tc.function?.name}, ` +
+          `argsLength=${argsStr.length}, argsValidJson=${argsValid}` +
+          (!argsValid ? `, argsPreview="${argsStr.substring(0, 200)}"` : ''),
+          'consumeProviderStream'
+        );
+      }
+    }
+
+    const assistantMessage: AssistantMessage = {
+      id: messageId,
+      role: 'assistant',
+      content: fullContent ? [{ type: 'text', text: fullContent }] : [],
+      tool_calls: validToolCalls.length > 0 ? validToolCalls : undefined,
+      timestamp: Date.now(),
+    };
+
+    return {
+      hasToolCalls: validToolCalls.length > 0,
+      toolCalls: validToolCalls,
+      textContent: fullContent,
+      finishReason,
+      assistantMessage,
+    };
+  }
+
+  private logRequestError(
+    error: unknown,
+    modelId: string,
+    formattedMessages: Record<string, unknown>[],
+    toolDefinitions: { type: 'function'; function: unknown }[] | undefined,
+  ): void {
+    const errMsg = error instanceof Error ? error.message : String(error);
+    getLogger().error?.(
+      `[SubAgentLLMClient] LLM call failed: ${errMsg.substring(0, 500)}`,
+      'callLLM'
+    );
+    const lastRoles = formattedMessages.slice(-3).map((fm: any) => {
+      const tcInfo = fm.tool_calls ? `(+tool_calls:${fm.tool_calls.length})` : '';
+      return fm.role + tcInfo;
+    }).join(', ');
+    getLogger().error?.(
+      `[SubAgentLLMClient] Request context: model=${modelId}, provider=${providerManager.getActiveProviderId()}, ` +
+      `messageCount=${formattedMessages.length}, hasTools=${(toolDefinitions?.length || 0) > 0}. ` +
+      `Last 3 messages roles: [${lastRoles}]`,
+      'callLLM'
+    );
+    for (const fm of formattedMessages) {
+      if ((fm as any).tool_calls) {
+        for (const tc of (fm as any).tool_calls) {
+          const args = tc?.function?.arguments || '';
+          let validJson = false;
+          try { JSON.parse(args); validJson = true; } catch { /* invalid */ }
+          getLogger().error?.(
+            `[SubAgentLLMClient] tool_call in request: name=${tc?.function?.name}, id=${tc?.id}, ` +
+            `argsLen=${args.length}, validJson=${validJson}` +
+            (!validJson ? `, argsPreview="${String(args).substring(0, 200)}"` : ''),
+            'callLLM'
+          );
         }
       }
-      throw new Error(`LLM API error (${response.status}): ${errorText}`);
     }
-
-    // ── Parse streaming response ──
-    return this.parseStreamingResponse(response, endpoint);
   }
 
   /**

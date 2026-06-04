@@ -108,6 +108,20 @@ vi.mock('../../chat/systemReminderUtils', () => ({
   wrapInSystemReminder: vi.fn((text: string) => `[SYS]${text}[/SYS]`),
 }));
 
+// callLLM now routes through providerManager; default to a no-op stream.
+// Individual tests override chatCompletionStream as needed.
+const { mockProviderChatCompletionStream } = vi.hoisted(() => ({
+  mockProviderChatCompletionStream: vi.fn(),
+}));
+
+vi.mock('../../llm/provider', () => ({
+  providerManager: {
+    chatCompletionStream: mockProviderChatCompletionStream,
+    waitUntilReady: vi.fn().mockResolvedValue(undefined),
+    getActiveProviderId: vi.fn(() => 'copilot'),
+  },
+}));
+
 // ─── Imports ─────────────────────────────────────────────────────────────────
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -391,19 +405,14 @@ describe('getElectronApp — catch path', () => {
 
 // ─── callLLM: HTTP error response ────────────────────────────────────────────
 
-describe('callLLM — HTTP error response', () => {
-  it('throws on non-ok response and logs tool_calls details', async () => {
-    // Mock fetch to return an error response
-    const origFetch = global.fetch;
-    global.fetch = vi.fn().mockResolvedValue({
-      ok: false,
-      status: 429,
-      text: async () => 'rate limit exceeded',
-      body: null,
-    } as any);
+describe('callLLM — provider error', () => {
+  it('rethrows when providerManager.chatCompletionStream fails', async () => {
+    mockProviderChatCompletionStream.mockRejectedValueOnce(
+      new Error('bad request: Authorization header is badly formatted'),
+    );
 
     const chat = makeChat();
-    // Set up minimal context
+    // Set up minimal context with a tool_call to exercise the error-log path
     (chat as any).contextHistory = [
       {
         role: 'assistant',
@@ -420,11 +429,9 @@ describe('callLLM — HTTP error response', () => {
       (chat as any).callLLM(
         [{ role: 'system', content: [{ type: 'text', text: 'system prompt' }] }],
         [{ role: 'user', content: [{ type: 'text', text: 'test' }] }],
-        [], // empty tools
+        [],
       )
-    ).rejects.toThrow('LLM API error (429)');
-
-    global.fetch = origFetch;
+    ).rejects.toThrow(/Authorization header is badly formatted/);
   });
 });
 

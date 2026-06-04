@@ -106,6 +106,18 @@ vi.mock('../../skill/skillManager', () => ({
   },
 }));
 
+// providerManager is the new transport for callLLM; tests that drive run()
+// stub callLLM directly via vi.spyOn so the default no-op stream is enough.
+vi.mock('../../llm/provider', () => ({
+  providerManager: {
+    chatCompletionStream: vi.fn().mockResolvedValue({
+      async *[Symbol.asyncIterator]() { yield { finishReason: 'stop' }; },
+    }),
+    waitUntilReady: vi.fn().mockResolvedValue(undefined),
+    getActiveProviderId: vi.fn(() => 'copilot'),
+  },
+}));
+
 vi.mock('../../token/TokenCounter', () => ({
   TokenCounter: vi.fn().mockImplementation(function () {
     return { countTextTokens: vi.fn((text: string) => Math.ceil((text || '').length / 4)) };
@@ -213,65 +225,11 @@ beforeEach(() => {
 });
 
 // ============================================================
-// callLLM — no auth token throws
+// callLLM auth/endpoint legacy tests removed.
+// callLLM now routes through providerManager.chatCompletionStream(...),
+// so it no longer owns auth or endpoint selection. Provider-level mocking
+// is exercised in src/main/lib/subAgent/__tests__/subAgentLLMClient.test.ts.
 // ============================================================
-
-describe('callLLM — no auth token', () => {
-  it('throws when no auth token is available', async () => {
-    mockGetCurrentAuth.mockResolvedValueOnce(null);
-    const chat = new SubAgentChat(makeOptions());
-    await expect(
-      (chat as any).callLLM([], [], [])
-    ).rejects.toThrow('No valid authentication token available for sub-agent');
-  });
-
-  it('throws when copilotTokens is missing', async () => {
-    mockGetCurrentAuth.mockResolvedValueOnce({ ghcAuth: {} });
-    const chat = new SubAgentChat(makeOptions());
-    await expect(
-      (chat as any).callLLM([], [], [])
-    ).rejects.toThrow('No valid authentication token available for sub-agent');
-  });
-});
-
-// ============================================================
-// callLLM — /responses endpoint with tools
-// ============================================================
-
-describe('callLLM — /responses endpoint', () => {
-  it('builds /responses format request with tools', async () => {
-    mockGetEndpointForModel.mockReturnValueOnce('/responses');
-    const tools = [{ name: 'search', description: 'Search the web', inputSchema: { type: 'object' } }];
-
-    // /responses endpoint uses different SSE format
-    const enc = new TextEncoder();
-    const chunks = [
-      `data: ${JSON.stringify({ type: 'response.output_text.delta', delta: 'Hello from responses' })}\n\n`,
-      `data: ${JSON.stringify({ type: 'response.completed' })}\n\n`,
-      'data: [DONE]\n\n',
-    ].join('');
-    const responsesStream = new ReadableStream({
-      start(controller) {
-        controller.enqueue(enc.encode(chunks));
-        controller.close();
-      },
-    });
-
-    global.fetch = vi.fn().mockResolvedValueOnce({
-      ok: true,
-      body: responsesStream,
-    } as any);
-
-    const chat = new SubAgentChat(makeOptions());
-    const result = await (chat as any).callLLM([], [], tools);
-
-    expect(result.textContent).toBe('Hello from responses');
-    // Verify request was made with tools in /responses flat format
-    const fetchCall = (global.fetch as any).mock.calls[0];
-    const body = JSON.parse(fetchCall[1].body);
-    expect(body.tools[0].name).toBe('search');
-  });
-});
 
 // ============================================================
 // run() — 400 invalid_tool_call_format retry path

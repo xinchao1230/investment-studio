@@ -119,9 +119,17 @@ describe('ModelSelector', () => {
   });
 
   it('renders "Select Model" when getModelById returns nothing', () => {
+    // To hit the 'Select Model' fallback, the available-models list must be
+    // non-empty (so we don't fall into the "No models found" branch) but
+    // both getModelById and displayModel must yield nothing for the current
+    // selection. A model exists in the list, but the persisted selection
+    // doesn't match it.
     vi.mocked(getModelById).mockReturnValue(undefined as any);
     vi.mocked(profileDataManager.getSelectedModel).mockReturnValue(null);
-    vi.mocked(useAvailableModels).mockReturnValue({ models: [] } as any);
+    vi.mocked(useAvailableModels).mockReturnValue({
+      models: [{ id: 'some-model', name: 'Some Model' }],
+      isLoading: false,
+    } as any);
     renderSelector({ currentChatId: null });
     expect(screen.getByText('Select Model')).toBeTruthy();
   });
