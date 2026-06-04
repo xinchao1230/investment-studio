@@ -6,6 +6,7 @@ import type { ChatSessionFile } from '../userDataADO/chatSessionFileOps';
 import type { GhcModelCapabilities } from '@shared/types/ghcChatTypes';
 import type { TokenCounter } from '../token';
 import type { FullModeCompressor } from '../compression/fullModeCompressor';
+import type { CompressionEncoding } from '../compression/fullModeCompressor';
 import { getEndpointForModel } from '../llm/ghcModelApi';
 import {
   checkCompressionNeeds,
@@ -20,6 +21,7 @@ import {
   formatDeferredToolsIndex,
 } from './toolSearchFilter';
 import { isFeatureEnabled } from '../featureFlags';
+import { providerManager, PROVIDER_TOKENIZER } from '../llm/provider';
 
 const logger = createLogger();
 
@@ -166,6 +168,11 @@ export class AgentChatContextService {
           this.deps.getFullModeCompressor(),
           this.deps.getAgentName(),
           this.deps.getCurrentModelId(),
+          // Pick the tiktoken family that matches the active provider so chunk
+          // budgeting matches the model that will actually consume the context.
+          // Without this, the compressor would always use its default
+          // ('cl100k_base'), which under-counts for OpenAI / Copilot models.
+          (PROVIDER_TOKENIZER[providerManager.getActiveProviderId()] ?? 'cl100k_base') as CompressionEncoding,
         );
 
         if (compressionResult.success && compressionResult.compressedMessages) {

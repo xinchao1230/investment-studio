@@ -11,6 +11,7 @@ import { createLogger } from '../unifiedLogger';
 import { formatFileSize } from '../utilities/contentUtils';
 import { GhcApiError } from '../utilities/errors';
 import { FullModeCompressor } from '../compression/fullModeCompressor';
+import type { CompressionEncoding } from '../compression/fullModeCompressor';
 import { TokenCounter } from '../token';
 import {
   sanitizeFormattedToolReplayMessages,
@@ -492,15 +493,25 @@ export async function checkCompressionNeeds(
 
 /**
  * Compress context history using FullModeCompressor
+ *
+ * @param encoding - Optional tiktoken family hint matching the active provider
+ *   (see PROVIDER_TOKENIZER). Threaded through to compressMessages so chunk
+ *   budgeting uses the right tokenizer; falls back to the compressor's own
+ *   default (`cl100k_base` — the conservative overestimate) when omitted.
  */
 export async function compressContextHistoryWithFullMode(
   contextHistory: Message[],
   fullModeCompressor: FullModeCompressor,
   agentName: string,
-  modelId: string
+  modelId: string,
+  encoding?: CompressionEncoding
 ): Promise<{ success: boolean; compressedMessages: Message[] }> {
   try {
-    const compressionResult = await fullModeCompressor.compressMessages(contextHistory, modelId);
+    const compressionResult = await fullModeCompressor.compressMessages(
+      contextHistory,
+      modelId,
+      encoding ? { encoding } : undefined,
+    );
     const compressedMessages = compressionResult.compressedMessages;
     const compressionMethod = compressionResult.metadata.compressionMethod;
     const hasUsableSummary = compressionMethod !== 'summary' || Boolean(compressionResult.summary?.trim());

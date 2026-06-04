@@ -9,6 +9,9 @@ import { createLogger } from '../unifiedLogger';
 
 const logger = createLogger();
 
+/** Tiktoken families supported by TokenCounter (mirrors token/types.ts). */
+export type CompressionEncoding = 'cl100k_base' | 'o200k_base';
+
 /**
  * Full Mode compression configuration.
  */
@@ -73,7 +76,15 @@ export interface FullModeCompressionResult {
  */
 export class FullModeCompressor {
   private config: FullModeCompressionConfig;
-  private readonly tokenCounter: TokenCounter;
+  private tokenCounter: TokenCounter;
+  /**
+   * Lazily-populated map of TokenCounters keyed by encoding name. Lets a
+   * single compressor instance be reused across calls that target different
+   * providers (and therefore different tiktoken families) without losing
+   * the per-encoding tiktoken cache between calls.
+   */
+  private readonly tokenCounterByEncoding: Map<CompressionEncoding, TokenCounter> = new Map();
+  private readonly defaultEncoding: CompressionEncoding;
   private chunkSummaryCallCount = 0;
   private totalLlmCallCount = 0;
   private static readonly MAX_TOOL_TEXT_CHARS = 1200;
@@ -95,20 +106,61 @@ export class FullModeCompressor {
     enableDebugLog: false
   };
 
-  constructor(config: Partial<FullModeCompressionConfig> = {}) {
+  constructor(config: Partial<FullModeCompressionConfig> = {}, options: { defaultEncoding?: CompressionEncoding } = {}) {
     this.config = { ...FullModeCompressor.DEFAULT_CONFIG, ...config };
-    this.tokenCounter = new TokenCounter({ enableCache: true, encoding: 'o200k_base' });
+    // Default to cl100k_base — the same conservative overestimate that
+    // PROVIDER_TOKENIZER falls back to for unknown / non-OpenAI providers.
+    // Callers that know their model is OpenAI-family (Copilot / OpenAI) should
+    // pass `compressMessages(..., { encoding: 'o200k_base' })` explicitly.
+    // Historically this was hard-coded to `o200k_base`, which under-counted
+    // tokens for Anthropic / Gemini / custom-dynamic endpoints and silently
+    // mis-sized compression chunks.
+    this.defaultEncoding = options.defaultEncoding || 'cl100k_base';
+    this.tokenCounter = this.resolveTokenCounter(this.defaultEncoding);
+  }
+
+  /**
+   * Return (and lazily cache) a TokenCounter for the requested encoding. Reusing
+   * counters across calls preserves their internal tiktoken cache; we never
+   * release them because the set of encodings is small and bounded by the
+   * PROVIDER_TOKENIZER table.
+   */
+  private resolveTokenCounter(encoding: CompressionEncoding): TokenCounter {
+    let counter = this.tokenCounterByEncoding.get(encoding);
+    if (!counter) {
+      counter = new TokenCounter({ enableCache: true, encoding });
+      this.tokenCounterByEncoding.set(encoding, counter);
+    }
+    return counter;
   }
 
   /**
    * Compress a message list.
    * Strategy: prioritize recent message continuity and tool-pairing integrity,
    * with optional extra anchors, then compress the middle portion.
+   *
+   * @param messages - the message list to compress
+   * @param modelId  - the user-selected model id (forwarded to the LLM summarizer)
+   * @param options  - { encoding } — tiktoken family to use for token budgeting.
+   *                   Should match the active provider's tokenizer (see
+   *                   PROVIDER_TOKENIZER in llm/provider/types.ts). Defaults to
+   *                   the encoding passed at construction time (`cl100k_base`
+   *                   if neither is supplied).
    */
-  async compressMessages(messages: Message[], modelId: string): Promise<FullModeCompressionResult> {
+  async compressMessages(
+    messages: Message[],
+    modelId: string,
+    options: { encoding?: CompressionEncoding } = {},
+  ): Promise<FullModeCompressionResult> {
     const startTime = Date.now();
     this.chunkSummaryCallCount = 0;
     this.totalLlmCallCount = 0;
+
+    // Swap in the right tokenizer for this call. Done before any helper method
+    // touches this.tokenCounter so chunk sizing, prompt budgeting and
+    // truncation all use the correct encoding for the active provider.
+    const callEncoding = options.encoding || this.defaultEncoding;
+    this.tokenCounter = this.resolveTokenCounter(callEncoding);
 
     try {
       // 1. Analyze message structure
@@ -996,6 +1048,9 @@ export class FullModeCompressor {
 /**
  * Factory function for creating a Full Mode compressor.
  */
-export function createFullModeCompressor(config?: Partial<FullModeCompressionConfig>): FullModeCompressor {
-  return new FullModeCompressor(config);
+export function createFullModeCompressor(
+  config?: Partial<FullModeCompressionConfig>,
+  options?: { defaultEncoding?: CompressionEncoding },
+): FullModeCompressor {
+  return new FullModeCompressor(config, options);
 }
