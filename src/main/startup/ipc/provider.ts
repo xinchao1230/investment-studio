@@ -11,6 +11,7 @@
  *   provider:testConnection   — test connectivity for a provider
  *   provider:listModels       — list models from a specific provider
  *   provider:hasApiKeyProvider — check if any API-key provider is configured
+ *   provider:isActiveProviderUsable — check if the active provider is usable now
  */
 
 import { ipcMain } from 'electron';
@@ -123,6 +124,28 @@ export default function handleProviderIPC(ctx: Context) {
       }
       const has = providerManager.hasApiKeyProvider();
       return { success: true, data: has };
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+    }
+  });
+
+  // Whether the ACTIVE provider is usable right now (non-Copilot, enabled, and
+  // credential-ready). Backs the Settings "Back to workspace" enable gate, which
+  // must stay disabled when the active pointer is stale (e.g. aimed at a provider
+  // the user has since disabled). Must NEVER throw — it gates a UI button.
+  ipcMain.handle('provider:isActiveProviderUsable', async () => {
+    try {
+      if (!ctx.currentUserAlias) {
+        try {
+          await providerManager.loadConfigForProbe();
+        } catch {
+          return { success: true, data: false };
+        }
+      } else {
+        await providerManager.waitUntilReady();
+      }
+      const usable = providerManager.isActiveProviderUsable();
+      return { success: true, data: usable };
     } catch (error) {
       return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
     }

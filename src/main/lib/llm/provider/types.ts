@@ -3,8 +3,8 @@
  * Multi-Provider LLM Abstraction — Type Definitions
  *
  * Defines the unified interface that all LLM providers must implement.
- * This allows the app to route calls to GitHub Copilot, OpenAI, DeepSeek,
- * Ollama, or any OpenAI-compatible API through a single abstraction.
+ * This allows the app to route calls to GitHub Copilot, OpenAI, Anthropic,
+ * or any OpenAI-compatible API through a single abstraction.
  */
 
 // =============================================================================
@@ -22,9 +22,17 @@ export { SKIP_LOGIN_ALIAS } from '@shared/constants/auth';
 export const PROVIDER_TOKENIZER: Record<string, string> = {
   copilot: 'o200k_base',
   openai: 'o200k_base',
-  deepseek: 'cl100k_base',
-  ollama: 'cl100k_base',
-  'custom-openai': 'cl100k_base',
+  // custom-dynamic auto-detects its protocol at runtime; since it may resolve to
+  // any of OpenAI/Anthropic/Gemini, use the conservative cl100k_base overestimate
+  // rather than risk underestimating a non-OpenAI endpoint.
+  'custom-dynamic': 'cl100k_base',
+  // Anthropic uses its own tokenizer with no tiktoken equivalent. cl100k_base is
+  // the safer overestimate (vs o200k_base) for non-OpenAI models, matching the
+  // conservative token-estimation philosophy documented in the overflow postmortem.
+  anthropic: 'cl100k_base',
+  // Gemini uses its own SentencePiece tokenizer with no tiktoken equivalent.
+  // cl100k_base is the safer overestimate for the same reason as Anthropic.
+  gemini: 'cl100k_base',
 };
 
 // =============================================================================
@@ -32,7 +40,7 @@ export const PROVIDER_TOKENIZER: Record<string, string> = {
 // =============================================================================
 
 /** Supported provider identifiers */
-export type ProviderId = 'copilot' | 'openai' | 'deepseek' | 'ollama' | 'custom-openai';
+export type ProviderId = 'copilot' | 'openai' | 'anthropic' | 'gemini' | 'custom-dynamic';
 
 /** Display metadata for a provider */
 export interface ProviderInfo {
@@ -63,6 +71,14 @@ export interface ProviderConfig {
   defaultModel?: string;
   /** Custom display name override */
   displayName?: string;
+  /**
+   * For `custom-dynamic` only: the wire protocol detected for this endpoint
+   * ('openai' | 'anthropic' | 'gemini'). Written at Test/Save time by the
+   * protocol detector and read at run time to route without re-detecting.
+   * Additive field — older configs without it are treated as 'openai' (the
+   * legacy custom-openai behavior) for backward compatibility.
+   */
+  detectedProtocol?: 'openai' | 'anthropic' | 'gemini';
 }
 
 /** Root configuration for all providers */
@@ -194,6 +210,11 @@ export interface ConnectionTestResult {
   error?: string;
   /** Models available (first few) as proof of connectivity */
   sampleModels?: string[];
+  /**
+   * For `custom-dynamic` only: the protocol detected during this test, so the
+   * renderer can show a "compatible with X" badge without a second round-trip.
+   */
+  detectedProtocol?: 'openai' | 'anthropic' | 'gemini';
 }
 
 // =============================================================================

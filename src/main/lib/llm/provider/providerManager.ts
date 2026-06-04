@@ -31,6 +31,10 @@ import {
 } from './types';
 import { CopilotProvider } from './copilotProvider';
 import { OpenAICompatibleProvider } from './openaiCompatibleProvider';
+import { AnthropicProvider } from './anthropicProvider';
+import { GeminiProvider } from './geminiProvider';
+import { CustomDynamicProvider } from './customDynamicProvider';
+import type { CustomProtocol } from './protocolDetector';
 
 const logger = createLogger();
 
@@ -38,13 +42,16 @@ const logger = createLogger();
 const CONFIG_FILE_NAME = 'provider-config.json';
 const CONFIG_VERSION = '1.0.0';
 
-/** All supported provider IDs and their constructor factories */
-const PROVIDER_FACTORIES: Record<ProviderId, () => ILlmProvider> = {
+/**
+ * Provider factories for the fixed-config providers. `custom-dynamic` is created
+ * separately in the constructor because it needs a persistence callback bound to
+ * the manager instance (to write back its detected protocol).
+ */
+const PROVIDER_FACTORIES: Record<Exclude<ProviderId, 'custom-dynamic'>, () => ILlmProvider> = {
   copilot: () => new CopilotProvider(),
   openai: () => new OpenAICompatibleProvider('openai'),
-  deepseek: () => new OpenAICompatibleProvider('deepseek'),
-  ollama: () => new OpenAICompatibleProvider('ollama'),
-  'custom-openai': () => new OpenAICompatibleProvider('custom-openai'),
+  anthropic: () => new AnthropicProvider(),
+  gemini: () => new GeminiProvider(),
 };
 
 export class ProviderManager {
@@ -71,9 +78,37 @@ export class ProviderManager {
   private initializationChain: Promise<void> = Promise.resolve();
 
   private constructor() {
-    // Pre-instantiate all providers so they're ready to configure
+    // Pre-instantiate the fixed-config providers so they're ready to configure.
     for (const [id, factory] of Object.entries(PROVIDER_FACTORIES)) {
       this.providers.set(id as ProviderId, factory());
+    }
+    // custom-dynamic gets a persistence callback so its protocol detection can
+    // write `detectedProtocol` back to provider-config.json without the provider
+    // itself touching disk. The callback captures the current alias at call time.
+    this.providers.set(
+      'custom-dynamic',
+      new CustomDynamicProvider((protocol) => {
+        void this.persistDetectedProtocol(protocol);
+      }),
+    );
+  }
+
+  /**
+   * Persist the protocol detected for `custom-dynamic` into provider-config.json.
+   * Called by the CustomDynamicProvider's detection callback (Test / Save / run-
+   * time self-heal). Fire-and-forget; failure to persist is non-fatal (the verdict
+   * still lives in memory for the session).
+   */
+  private async persistDetectedProtocol(protocol: CustomProtocol): Promise<void> {
+    try {
+      if (!this.config) this.config = this.getDefaultConfig();
+      const existing = this.config.providers['custom-dynamic'] || { enabled: false };
+      if (existing.detectedProtocol === protocol) return; // no-op if unchanged
+      this.config.providers['custom-dynamic'] = { ...existing, detectedProtocol: protocol };
+      await this.saveConfig(this.config);
+      logger.debug(`[ProviderManager] Persisted custom-dynamic protocol: ${protocol}`);
+    } catch (error) {
+      logger.warn(`[ProviderManager] Failed to persist detected protocol: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
@@ -127,13 +162,20 @@ export class ProviderManager {
         this.config.activeProvider = fallbackProvider;
         await this.saveConfig(this.config);
       } else {
-        // No non-Copilot provider configured yet. Rather than blocking sign-in,
-        // allow skip-login to proceed into a transitional state: the user is
-        // routed to Settings → Providers to configure one. activeProviderId
-        // stays 'copilot' (unusable under skip-login, but harmless until the
-        // user picks a real provider). Chat is gated by hasApiKeyProvider()
-        // downstream, so no LLM call fires before a key exists.
-        logger.warn('[ProviderManager] Skip-login has no non-Copilot provider; entering transitional state (user must configure one in Settings)');
+        // No non-Copilot provider configured yet. A skip-login (_local) user can
+        // NOT use Copilot (it needs GitHub auth), so leaving the active pointer
+        // at 'copilot' would make the UI advertise an unusable provider — e.g.
+        // the model selector showing the GitHub/Copilot icon next to
+        // "No models found". Point the active provider at the 'custom-dynamic'
+        // slot instead (the "My LLM Provider" endpoint this user will configure):
+        // its instance is always registered, so getActiveProvider() is safe, and
+        // getActive() now reports a provider that matches what the user can
+        // actually use. This is an IN-MEMORY redirect only — we deliberately do
+        // NOT persist it (config.activeProvider stays 'copilot'), so the next
+        // init re-evaluates from a clean slate. Chat remains gated by
+        // hasApiKeyProvider() downstream, so no LLM call fires before a key exists.
+        this.activeProviderId = 'custom-dynamic';
+        logger.warn('[ProviderManager] Skip-login has no non-Copilot provider; defaulting active pointer to custom-dynamic (user must configure it in Settings)');
       }
     }
 
@@ -151,10 +193,19 @@ export class ProviderManager {
       this.notifyRenderer('provider:switched', { activeProvider: 'copilot' });
     }
 
-    // For non-Copilot providers, warm the model cache in background so that
+    // Warm the model cache for a USABLE non-Copilot active provider, so that
     // subsequent IPC calls (getModelById, getModelCapabilities, etc.) hit cache
     // instead of each firing a separate HTTP request to the provider.
-    if (this.activeProviderId !== 'copilot') {
+    //
+    // Gate on isActiveProviderUsable() (non-Copilot + enabled + credentialed) so
+    // we NEVER warm an unconfigured endpoint. A skip-login user with no provider
+    // configured has the active pointer redirected to an empty 'custom-dynamic'
+    // (above); warming it would fire listModels() against a blank base URL on
+    // every init — a guaranteed failed HTTP request plus log noise. The
+    // models:updated push is gated too: with no usable provider there are no
+    // models to surface, and the renderer reads its (empty) cache to show
+    // "No models found" without needing a push.
+    if (this.isActiveProviderUsable()) {
       this.getActiveProvider().listModels().catch((err) => {
         logger.warn(`[ProviderManager] Model cache warm failed: ${err instanceof Error ? err.message : String(err)}`);
       });
@@ -303,6 +354,26 @@ export class ProviderManager {
 
     const merged: ProviderConfig = { ...decryptedExisting, ...updates };
 
+    // Endpoint identity change → drop the stale detected-protocol verdict.
+    //
+    // For custom-dynamic, `detectedProtocol` is CACHED provider data: it records
+    // which wire protocol the PREVIOUS endpoint spoke. Settings' Save only sends
+    // {enabled, apiKey?, baseUrl?} — never the protocol — so without this, the old
+    // verdict survives in `merged` and `provider.configure()` would momentarily
+    // route the NEW endpoint through the OLD protocol's engine. detect() (below)
+    // re-resolves it, but if that probe ever fails the wrong verdict would linger
+    // and the chat/research model list would keep showing the previous endpoint's
+    // models. Clearing it here guarantees a changed endpoint starts from a clean
+    // slate and is re-detected from scratch — no cached protocol data carried over.
+    if (id === 'custom-dynamic') {
+      const endpointChanged =
+        (updates.baseUrl !== undefined && updates.baseUrl !== decryptedExisting.baseUrl) ||
+        (updates.apiKey !== undefined && updates.apiKey !== decryptedExisting.apiKey);
+      if (endpointChanged) {
+        delete merged.detectedProtocol;
+      }
+    }
+
     // Apply to the live provider instance (with decrypted/plaintext key)
     const provider = this.providers.get(id);
     if (provider) {
@@ -318,8 +389,57 @@ export class ProviderManager {
     this.config.providers[id] = persistConfig;
     await this.saveConfig(this.config);
 
+    // For custom-dynamic, Save is a detection trigger: probe the endpoint, resolve
+    // the protocol, and persist it (via the provider's onProtocolDetected callback
+    // → persistDetectedProtocol). Best-effort — a detection failure here does NOT
+    // fail the Save; the user can still click Test to see the error, and run-time
+    // self-heal covers a wrong/missing verdict. Only runs when both URL + key exist.
+    if (id === 'custom-dynamic' && merged.baseUrl && merged.apiKey) {
+      const dynamic = provider as CustomDynamicProvider | undefined;
+      if (dynamic?.detect) {
+        try {
+          await dynamic.detect();
+        } catch (error) {
+          logger.warn(`[ProviderManager] custom-dynamic detection on save failed: ${error instanceof Error ? error.message : String(error)}`);
+        }
+      }
+    }
+
+    // If we just reconfigured the ACTIVE provider, its model list may have changed
+    // (new endpoint/key, or — for custom-dynamic — a different detected protocol
+    // entirely). `provider.configure()` already invalidated the provider's internal
+    // model cache; re-sync the renderer so downstream consumers (ModelSelector,
+    // research chat) drop the stale list from init/last switch.
+    this.notifyActiveModelsUpdated(id, 'provider-config-update');
+
     logger.debug(`[ProviderManager] Updated config for ${id}`);
     return { success: true };
+  }
+
+  /**
+   * Warm the active provider's model cache and push `models:updated` so the
+   * renderer's modelCacheManager re-syncs. Call this after any operation that can
+   * change the active provider's model list (Save, Test/Connect — both run
+   * custom-dynamic protocol detection, which can swap the entire upstream model
+   * set). No-op unless `id` is the active provider; Copilot is skipped because
+   * GhcModelsManager fires its own `models:updated`. The cache-warm is
+   * fire-and-forget so callers (including UI-gating IPC handlers) never block.
+   */
+  private notifyActiveModelsUpdated(id: ProviderId, source: string): void {
+    if (id !== this.activeProviderId || id === 'copilot') return;
+    const provider = this.providers.get(id);
+    if (!provider) return;
+    provider.listModels()
+      .catch((err) => {
+        logger.warn(`[ProviderManager] Model cache warm (${source}) failed: ${err instanceof Error ? err.message : String(err)}`);
+      })
+      .finally(() => {
+        this.notifyRenderer('models:updated', {
+          count: 0,
+          timestamp: Date.now(),
+          source,
+        });
+      });
   }
 
   // ── Delegated LLM Calls ──────────────────────────────────────────────
@@ -393,9 +513,9 @@ export class ProviderManager {
         /^gpt-4\.1$/i, /^gpt-4o(-2|$)/i, /^gpt-4o-mini/i,
         /^gpt-4-turbo/i, /^gpt-4($|-)/i, /^gpt-3\.5-turbo/i,
       ],
-      deepseek: [/^deepseek-chat/i, /^deepseek-coder/i, /^deepseek-v3/i],
-      ollama: [/^llama3/i, /^llama-3/i, /^qwen/i, /^mistral/i, /^gemma/i],
-      'custom-openai': [/^gpt-4/i, /^claude/i, /^llama/i],
+      anthropic: [/claude-opus/i, /claude-sonnet/i, /claude-haiku/i],
+      gemini: [/gemini-.*pro/i, /gemini-.*flash/i, /gemini/i],
+      'custom-dynamic': [/^gpt-4/i, /claude/i, /gemini/i, /^llama/i],
     };
     const preferences = PREFERENCE_BY_PROVIDER[this.activeProviderId] || [];
     for (const pattern of preferences) {
@@ -422,11 +542,19 @@ export class ProviderManager {
 
   /** Test connection for a specific provider */
   async testConnection(id?: ProviderId): Promise<ConnectionTestResult> {
-    const provider = id ? this.providers.get(id) : this.getActiveProvider();
+    const targetId = id ?? this.activeProviderId;
+    const provider = this.providers.get(targetId);
     if (!provider) {
-      return { success: false, error: `Provider ${id} not found` };
+      return { success: false, error: `Provider ${targetId} not found` };
     }
-    return provider.testConnection();
+    const result = await provider.testConnection();
+    // Test/Connect runs detection for custom-dynamic, which can resolve a new
+    // protocol and thus a new model set. If this is the active provider and the
+    // connection succeeded, re-sync the renderer's model list (same as Save).
+    if (result.success) {
+      this.notifyActiveModelsUpdated(targetId, 'provider-test-connection');
+    }
+    return result;
   }
 
   // ── Config Persistence ────────────────────────────────────────────────
@@ -460,11 +588,42 @@ export class ProviderManager {
         return this.getDefaultConfig();
       }
 
-      return parsed;
+      return this.migrateLegacyCustomOpenAI(parsed);
     } catch (error) {
       logger.warn(`[ProviderManager] Failed to load config: ${error instanceof Error ? error.message : String(error)}`);
       return this.getDefaultConfig();
     }
+  }
+
+  /**
+   * Migrate legacy `custom-openai` configs to `custom-dynamic`.
+   *
+   * Pre-detection builds used a fixed OpenAI-only custom slot keyed `custom-openai`.
+   * We rename it to `custom-dynamic` and seed `detectedProtocol: 'openai'` so the
+   * endpoint keeps its exact previous behavior with zero re-detection. Purely
+   * additive/renaming — no fields are dropped. If both keys somehow exist, the
+   * existing `custom-dynamic` wins and the legacy block is discarded.
+   */
+  private migrateLegacyCustomOpenAI(config: AllProvidersConfig): AllProvidersConfig {
+    const legacyKey = 'custom-openai' as ProviderId;
+    const legacy = (config.providers as Record<string, ProviderConfig | undefined>)[legacyKey];
+    if (!legacy) return config;
+
+    if (!config.providers['custom-dynamic']) {
+      config.providers['custom-dynamic'] = {
+        ...legacy,
+        detectedProtocol: legacy.detectedProtocol ?? 'openai',
+      };
+    }
+    delete (config.providers as Record<string, ProviderConfig | undefined>)[legacyKey];
+
+    // Repoint the active provider if it referenced the old key.
+    if ((config.activeProvider as string) === legacyKey) {
+      config.activeProvider = 'custom-dynamic';
+    }
+
+    logger.info('[ProviderManager] Migrated legacy custom-openai config to custom-dynamic (protocol: openai)');
+    return config;
   }
 
   /** Save provider config to disk */
@@ -569,6 +728,33 @@ export class ProviderManager {
       }
     }
     return false;
+  }
+
+  /**
+   * Authoritative "is the workspace usable right now" check for the active
+   * provider. Returns true only when the ACTIVE provider is a non-Copilot
+   * provider that is itself enabled and credential-ready.
+   *
+   * This is stricter than hasApiKeyProvider(): that one answers "does ANY
+   * provider have a key" (used by the sign-in skip gate), whereas this answers
+   * "is the provider we'd actually route to usable". They diverge in exactly the
+   * bug case this guards against — a stale `activeProvider` pointer left aimed at
+   * a provider the user has since DISABLED (e.g. activeProvider 'custom-dynamic'
+   * with custom-dynamic.enabled === false). hasApiKeyProvider() would say false
+   * there too, but the old UI gate combined `active !== 'copilot'` (true, from
+   * the stale pointer) with hasApiKeyProvider() as separate signals; collapsing
+   * both into this single active-scoped check removes that gap.
+   *
+   * Never throws — it backs a UI enable/disable gate.
+   */
+  isActiveProviderUsable(): boolean {
+    if (!this.config) return false;
+    const activeId = this.activeProviderId;
+    if (activeId === 'copilot') return false; // Copilot needs GitHub auth, not a key
+    const activeConfig = this.config.providers[activeId];
+    if (!activeConfig?.enabled) return false; // active points at a disabled provider
+    const provider = this.providers.get(activeId);
+    return !provider?.info.requiresApiKey || !!activeConfig.apiKey;
   }
 
   private getFirstConfiguredNonCopilotProvider(): ProviderId | undefined {

@@ -27,14 +27,14 @@ describe('OpenAICompatibleProvider', () => {
       expect(provider.info.defaultBaseUrl).toBe('https://api.openai.com/v1');
     });
 
-    it('should not require API key for ollama', () => {
-      const ollamaProvider = new OpenAICompatibleProvider('ollama');
-      expect(ollamaProvider.info.requiresApiKey).toBe(false);
-      expect(ollamaProvider.info.defaultBaseUrl).toBe('http://localhost:11434/v1');
+    it('should require an API key for custom-dynamic', () => {
+      const customProvider = new OpenAICompatibleProvider('custom-dynamic');
+      expect(customProvider.info.requiresApiKey).toBe(true);
+      expect(customProvider.info.defaultBaseUrl).toBe('');
     });
 
-    it('should handle custom-openai with empty base URL', () => {
-      const custom = new OpenAICompatibleProvider('custom-openai');
+    it('should handle custom-dynamic with empty base URL', () => {
+      const custom = new OpenAICompatibleProvider('custom-dynamic');
       expect(custom.info.defaultBaseUrl).toBe('');
     });
   });
@@ -58,9 +58,9 @@ describe('OpenAICompatibleProvider', () => {
 
   describe('chatCompletion', () => {
     it('should throw when no base URL configured', async () => {
-      const custom = new OpenAICompatibleProvider('custom-openai');
+      const custom = new OpenAICompatibleProvider('custom-dynamic');
       custom.configure({ enabled: true, apiKey: 'test' });
-      // custom-openai has empty default base URL, so fetch will fail
+      // custom-dynamic has empty default base URL, so fetch will fail
       await expect(
         custom.chatCompletion({
           model: 'test',

@@ -12,9 +12,9 @@ import { agentChatSessionCacheManager } from '@/lib/chat/agentChatSessionCacheMa
 const PROVIDER_LABELS: Record<string, string> = {
   copilot: 'Copilot',
   openai: 'OpenAI',
-  deepseek: 'DeepSeek',
-  ollama: 'Ollama',
-  'custom-openai': 'Custom',
+  anthropic: 'Anthropic',
+  gemini: 'Gemini',
+  'custom-dynamic': 'Custom',
 };
 
 /** Hook to track the active LLM provider */
@@ -133,7 +133,7 @@ function Selector(props: Props) {
 
   // Available OpenKosmos models — loaded from the renderer-side cache and kept
   // in sync with `modelCacheUpdated` events via the shared hook.
-  const { models: availableModels, refresh: refreshModels } = useAvailableModels({ fetchOnEmpty: true });
+  const { models: availableModels, isLoading: modelsLoading } = useAvailableModels({ fetchOnEmpty: true });
 
   // Track active provider for the badge
   const activeProvider = useActiveProvider();
@@ -216,29 +216,45 @@ function Selector(props: Props) {
     ? getModelById(displayModel) ?? availableModels.find(m => m.id === displayModel) ?? null
     : null;
 
+  // Resolve the button label. When the provider has NO models we must NOT fall
+  // back to the persisted `displayModel` (a stale id like 'claude-sonnet-4.6'
+  // left over from a previous provider) — that would advertise a model the
+  // active provider cannot serve. Distinguish two empty states:
+  //   - still loading  → neutral "Loading models…" (avoid flashing the error)
+  //   - loaded + empty → "No models found"
+  // When models exist, prefer the resolved name, then the raw id, then a prompt.
+  const hasNoModels = availableModels.length === 0;
+  const buttonLabel = hasNoModels
+    ? (modelsLoading ? 'Loading models…' : 'No models found')
+    : (currentModelInfo?.name || displayModel || 'Select Model');
+
   return (
     <div className="model-selector" ref={modelDropdownRef}>
       <button
         className="model-button"
-        onClick={() => {
-          const next = !showModelDropdown;
-          if (next && availableModels.length === 0) {
-            void refreshModels(true);
-          }
-          setShowModelDropdown(next);
-        }}
-        disabled={isLoading || shouldLockComposeUi}
+        onClick={() => setShowModelDropdown((prev) => !prev)}
+        // Disabled while loading/locked, AND when there are no models — opening
+        // the dropdown onto an empty list (or a single "No models found" row) is
+        // pointless. The list auto-refreshes via `fetchOnEmpty` + the
+        // `modelCacheUpdated` event, so the button re-enables on its own once
+        // the active provider yields models; no manual click is needed.
+        disabled={isLoading || shouldLockComposeUi || hasNoModels}
         title="Select AI Model"
       >
-        {activeProvider && PROVIDER_ICONS[activeProvider] ? (
+        {/* Provider badge — hidden when there are no models. With an empty list
+            the active-provider pointer may still point at a provider the user
+            cannot actually use (e.g. a skip-login/local user whose active
+            pointer defaults to 'copilot'), so showing its icon next to
+            "No models found" is misleading. No models → no provider badge. */}
+        {!hasNoModels && activeProvider && PROVIDER_ICONS[activeProvider] ? (
           <span className="provider-badge provider-badge--icon" title={providerLabel || activeProvider}>
             {React.createElement(PROVIDER_ICONS[activeProvider])}
           </span>
-        ) : providerLabel ? (
+        ) : !hasNoModels && providerLabel ? (
           <span className="provider-badge">{providerLabel}</span>
         ) : null}
         <span className="model-name">
-          {currentModelInfo?.name || displayModel || 'Select Model'}
+          {buttonLabel}
         </span>
         <svg
           className={`dropdown-arrow ${showModelDropdown ? 'rotated' : ''
@@ -260,7 +276,14 @@ function Selector(props: Props) {
       {showModelDropdown && (
         <div className="model-dropdown">
           <div className="model-list">
-            {availableModels.map((model) => (
+            {availableModels.length === 0 ? (
+              <div className="model-option model-option--empty" aria-disabled="true">
+                <span className="model-option-name">
+                  {modelsLoading ? 'Loading models…' : 'No models found'}
+                </span>
+              </div>
+            ) : (
+              availableModels.map((model) => (
               <button
                 key={model.id}
                 ref={displayModel === model.id ? selectedOptionRef : undefined}
@@ -298,7 +321,8 @@ function Selector(props: Props) {
                   </svg>
                 )}
               </button>
-            ))}
+              ))
+            )}
           </div>
         </div>
       )}
