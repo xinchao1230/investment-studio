@@ -187,7 +187,7 @@ describe('FullModeCompressor', () => {
         createAssistantMessage('recent 3', 'recent_3'),
       ];
 
-      await concurrentCompressor.compressMessages(largeMessages);
+      await concurrentCompressor.compressMessages(largeMessages, "test-model-id");
 
       expect(maxActiveCalls).toBeGreaterThan(1);
       expect(maxActiveCalls).toBeLessThanOrEqual(3);
@@ -242,7 +242,7 @@ describe('FullModeCompressor', () => {
         createAssistantMessage('recent 3', 'recent_3'),
       ];
 
-      const result = await concurrentCompressor.compressMessages(largeMessages);
+      const result = await concurrentCompressor.compressMessages(largeMessages, "test-model-id");
 
       expect(result.success).toBe(false);
       expect(result.strategy).toBe('fallback_preservation');
@@ -300,7 +300,7 @@ describe('FullModeCompressor', () => {
         createAssistantMessage('recent 3', 'recent_3'),
       ];
 
-      await concurrentCompressor.compressMessages(largeMessages);
+      await concurrentCompressor.compressMessages(largeMessages, "test-model-id");
 
       expect(maxActiveMergeCalls).toBeLessThanOrEqual(1);
     });
@@ -322,7 +322,7 @@ describe('FullModeCompressor', () => {
         createAssistantMessage('recent 3', 'recent_3'),
       ];
 
-      await budgetedCompressor.compressMessages(largeMessages);
+      await budgetedCompressor.compressMessages(largeMessages, "test-model-id");
 
       expect(contextCompressionLlmSummarizer.summarize.mock.calls.length).toBeGreaterThan(1);
     });
@@ -361,7 +361,7 @@ describe('FullModeCompressor', () => {
         createAssistantMessage('recent 3', 'recent_3'),
       ];
 
-      await recursivelyMergingCompressor.compressMessages(largeMessages);
+      await recursivelyMergingCompressor.compressMessages(largeMessages, "test-model-id");
 
       const mergeCalls = contextCompressionLlmSummarizer.summarize.mock.calls.filter(
         ([args]: [{ conversationText: string }]) => args.conversationText.includes('Chunk summary to merge:')
@@ -396,7 +396,7 @@ describe('FullModeCompressor', () => {
         createAssistantMessage('recent 3', 'recent_3'),
       ];
 
-      await budgetedCompressor.compressMessages(denseMessages);
+      await budgetedCompressor.compressMessages(denseMessages, "test-model-id");
 
       const tokenCounter = (budgetedCompressor as any).tokenCounter;
       const configuredBudget = budgetedCompressor.getConfig().summaryPromptTokenBudget;
@@ -457,7 +457,7 @@ describe('FullModeCompressor', () => {
         createAssistantMessage('recent 3', 'recent_3'),
       ];
 
-      const result = await hardBudgetCompressor.compressMessages(messages);
+      const result = await hardBudgetCompressor.compressMessages(messages, "test-model-id");
 
       expect(result.success).toBe(false);
       expect(result.strategy).toBe('fallback_preservation');
@@ -497,7 +497,7 @@ describe('FullModeCompressor', () => {
         createAssistantMessage('recent 3', 'recent_3'),
       ];
 
-      const result = await shallowDepthCompressor.compressMessages(largeMessages);
+      const result = await shallowDepthCompressor.compressMessages(largeMessages, "test-model-id");
 
       expect(result.success).toBe(false);
       expect(result.strategy).toBe('fallback_preservation');
@@ -838,7 +838,7 @@ describe('FullModeCompressor', () => {
         createUserMessage('Thanks', 'msg_11'),
       ];
 
-      const result = await compressor.compressMessages(messages);
+      const result = await compressor.compressMessages(messages, "test-model-id");
 
       expect(result.success).toBe(true);
       expect(result.compressedMessages.length).toBeLessThan(messages.length);
@@ -881,7 +881,7 @@ describe('FullModeCompressor', () => {
         createUserMessage('Thanks', 'msg_11'),
       ];
 
-      const result = await pinnedCompressor.compressMessages(messages);
+      const result = await pinnedCompressor.compressMessages(messages, "test-model-id");
       const preservedIds = result.compressedMessages.map(m => m.id);
 
       expect(preservedIds).toContain('msg_1');
@@ -916,7 +916,7 @@ describe('FullModeCompressor', () => {
         createUserMessage('Recent 3', 'msg_8'),
       ];
 
-      await pinnedCompressor.compressMessages(messages);
+      await pinnedCompressor.compressMessages(messages, "test-model-id");
 
       // Check that the summary prompt was called
       expect(contextCompressionLlmSummarizer.summarize).toHaveBeenCalled();
@@ -1206,7 +1206,7 @@ describe('FullModeCompressor', () => {
         createAssistantMessage('recent 3', 'recent_3'),
       ];
 
-      const result = await compressor.compressMessages(messages);
+      const result = await compressor.compressMessages(messages, "test-model-id");
 
       expect(typeof result.metadata.chunkSummaryCallCount).toBe('number');
       expect(result.metadata.chunkSummaryCallCount).toBeGreaterThanOrEqual(0);
@@ -1224,8 +1224,8 @@ describe('FullModeCompressor', () => {
         createAssistantMessage('recent 3', 'recent_3'),
       ];
 
-      const first = await compressor.compressMessages(messages);
-      const second = await compressor.compressMessages(messages);
+      const first = await compressor.compressMessages(messages, "test-model-id");
+      const second = await compressor.compressMessages(messages, "test-model-id");
 
       // Both calls should report the same count, not an accumulated total
       expect(first.metadata.chunkSummaryCallCount).toBe(second.metadata.chunkSummaryCallCount);
@@ -1253,7 +1253,7 @@ describe('FullModeCompressor', () => {
         createUserMessage('recent 3', 'recent_3'),
       ];
 
-      const result = await fallbackCompressor.compressMessages(messages);
+      const result = await fallbackCompressor.compressMessages(messages, "test-model-id");
 
       expect(result.success).toBe(false);
       expect(result.metadata.compressionMethod).toBe('fallback');
@@ -1282,7 +1282,7 @@ describe('FullModeCompressor', () => {
         createAssistantMessage('response 2', 'resp_2'),
       ];
 
-      const result = await fallbackCompressor.compressMessages(messages);
+      const result = await fallbackCompressor.compressMessages(messages, "test-model-id");
 
       // Should not have duplicates
       const ids = result.compressedMessages.map(m => m.id);
@@ -1307,7 +1307,7 @@ describe('FullModeCompressor', () => {
         createUserMessage('recent 3', 'r3'),
       ];
 
-      const result = await fallbackCompressor.compressMessages(messages);
+      const result = await fallbackCompressor.compressMessages(messages, "test-model-id");
 
       // Even on fallback, the counter reflects attempted API calls before fallback triggered
       expect(result.metadata.chunkSummaryCallCount).toBeGreaterThanOrEqual(0);

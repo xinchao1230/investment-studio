@@ -49,7 +49,7 @@ const { mockGetEndpointForModel, mockCallModel } = vi.hoisted(() => ({
 
 vi.mock('../../subAgent/../llm/ghcModelApi', () => ({
   getEndpointForModel: mockGetEndpointForModel,
-  ghcModelApi: { callModel: mockCallModel },
+  ghcModelApi: { callModel: mockCallModel, callModelStrict: mockCallModel },
 }));
 
 vi.mock('../../subAgent/../llm/ghcModelsManager', () => ({

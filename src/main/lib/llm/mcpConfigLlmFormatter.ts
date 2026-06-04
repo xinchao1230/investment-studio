@@ -384,10 +384,23 @@ Do NOT nest the configuration under the server name. The config field should dir
   /**
    * Format MCP configuration
    * @param userInputMcpConfig User input MCP configuration
+   * @param modelId Required: the user's currently selected model. Empty value
+   *   returns failure without invoking the LLM — no hidden model fallback.
    * @returns Formatted MCP configuration response
    */
-  static async formatMcpConfig(userInputMcpConfig: string): Promise<McpConfigFormatterResponse> {
+  static async formatMcpConfig(
+    userInputMcpConfig: string,
+    modelId: string,
+  ): Promise<McpConfigFormatterResponse> {
     try {
+      const trimmedModelId = typeof modelId === 'string' ? modelId.trim() : '';
+      if (!trimmedModelId) {
+        return {
+          success: false,
+          errors: ['No modelId provided for MCP config formatting; refusing hidden model fallback'],
+        };
+      }
+
       // Build complete prompt
       const fullPrompt = `${this.getFormattingPrompt()}
 ${userInputMcpConfig}`;
@@ -400,9 +413,11 @@ ${userInputMcpConfig}`;
         temperature: 0.3
       };
 
-      // Use the claude-haiku-4.5 model for MCP configuration formatting
-      const rawResponse = await ghcModelApi.callModel(
-        'claude-haiku-4.5',
+      // callModelStrict throws if the model is not available on the active
+      // provider, so we never reformat MCP config on a different model than
+      // the user picked.
+      const rawResponse = await ghcModelApi.callModelStrict(
+        trimmedModelId,
         llmParams.prompt,
         this.SYSTEM_PROMPT,
         llmParams.maxTokens,

@@ -1,4 +1,4 @@
-<!-- Last verified: 2026-05-28 -->
+<!-- Last verified: 2026-07-30 -->
 # Chat Engine
 
 > Core multi-turn agent conversation engine: one `AgentChat` instance per active chat tab, orchestrated by `AgentChatManager`.
@@ -12,7 +12,7 @@
 | `agentChatOutputPort.ts` | Output adapter for streaming chunks, status events, and interactive request events | new |
 | `agentChatTurnRunner.ts` | Stage-based turn orchestrator for compression, streaming, tool follow-up, storage compression, and cancellation cleanup | new |
 | `agentChatPromptService.ts` | Prompt assembly, tool discovery, knowledge-source injection, sub-agent prompt text, skill snapshot refresh | new |
-| `agentChatSessionService.ts` | Chat session persistence, title generation, edit flow, file-path replacement, message save queue behavior | new |
+| `agentChatSessionService.ts` | Chat session persistence, title generation (uses `deps.getCurrentModelId()` so titles run on the user-selected model — never a hardcoded default), edit flow, file-path replacement, message save queue behavior | new |
 | `agentChatContextService.ts` | Context-history enrichment, memory read/write integration, compression trigger, token accounting, context-change notifications | new |
 | `agentChatInteractionService.ts` | Pending interactive request lifecycle, history summaries, approval bypass flow, unified form and choice requests | new |
 | `agentChatToolPostProcessor.ts` | Tool-result-specific post-processing for interactive-input and template placeholder/user-input flows | new |
@@ -154,7 +154,7 @@ Interactive availability is now controlled by a runtime interaction policy. Fore
 - ⚠️ Outside-workspace validation is currently bypassed in `batchValidateAndRequestApproval()`. If you re-enable `SecurityValidator`, update the runtime flow, renderer UX, and docs together.
 - ⚠️ On Windows, `Notification` objects must be kept in `activeNotifications` map or click events are silently dropped due to GC. Do not remove entries before the click handler fires.
 - ⚠️ `AgentChatManager` no longer owns the core registry Maps/Sets, BrowserWindow/notification lifecycle, or scheduled-silent orchestration directly. New stateful lifecycle logic should usually land in `agentChatManagerRegistry.ts`, `agentChatManagerSessionCoordinator.ts`, `agentChatManagerNotificationBridge.ts`, or `agentChatManagerScheduledRunner.ts`, not back in the singleton facade.
-- ⚠️ Compression uses `claude-haiku-4.5` as a secondary LLM call inside an active chat turn. Auth token failures during compression fall back to truncation — the user sees no error, but conversation context may be degraded.
+- ⚠️ Compression runs as a secondary LLM call inside an active chat turn, using `AgentChat.getCurrentModelId()` (the user's currently selected model). Auth-token / provider failures during compression fall back to truncation — the user sees no error, but conversation context may be degraded. Compression must never assume a specific hardcoded model is available; pass the active chat's model through `compressContextHistoryWithFullMode(history, compressor, agentName, modelId)`.
 - ⚠️ Compression gating should follow the formatted final-send payload, not only raw `context_history` message arrays. Tool replay sanitization and payload formatting can materially change real prompt size.
 - ⚠️ `COMPRESSED_CONTEXT` is a verified outcome state, not just evidence that a compaction branch executed. If no shorter history is applied, the status must not advance to `COMPRESSED_CONTEXT`.
 - ⚠️ Compression must stay inside the active send / start-chat loop. Do not reintroduce standalone initialization-time compaction, or oversized session opens can block renderer cache hydration behind hidden LLM work.

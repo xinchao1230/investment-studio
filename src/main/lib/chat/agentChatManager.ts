@@ -643,6 +643,12 @@ export class AgentChatManager {
    * Start a new chat for the current user's primary agent.
    * Resolves the chatId entirely on the main process — avoids renderer-side
    * stale-profile races during sign-out → sign-in transitions.
+   *
+   * If an empty (zero-message) interactive session already exists for this
+   * primary-agent chatId, it is reused instead of creating yet another empty
+   * session. This is the implicit auto-create path used by ChatView's
+   * `ensureCompactChatSession` at startup; explicit "New Chat" buttons go
+   * through `startNewChatFor` (no reuse, by design).
    */
   async startNewChatForPrimaryAgent(): Promise<{ chatId: string; instance: AgentChat } | null> {
     const chatId = this.resolvePrimaryAgentChatId();
@@ -650,8 +656,171 @@ export class AgentChatManager {
       logger.error('[AgentChatManager] Cannot resolve primary agent chatId', 'startNewChatForPrimaryAgent', { alias: this.currentUserAlias });
       return null;
     }
+
+    const reusableSessionId = await this.findReusableEmptyPrimarySession(chatId);
+    if (reusableSessionId) {
+      logger.info('[AgentChatManager] Reusing existing empty primary-agent session', 'startNewChatForPrimaryAgent', {
+        chatId, chatSessionId: reusableSessionId, alias: this.currentUserAlias,
+      });
+      const instance = await this.switchToChatSession(chatId, reusableSessionId);
+      return instance ? { chatId, instance } : null;
+    }
+
     const instance = await this.startNewChatFor(chatId);
     return instance ? { chatId, instance } : null;
+  }
+
+  /**
+   * Find an existing empty (chat_history.length === 0), non-scheduled session
+   * for the given chatId that is safe to reuse instead of creating a brand-new
+   * empty one. Returns the chatSession_id, or null if none qualify.
+   *
+   * Scanned cap: top 5 sessions by recency. Skips scheduler/remote-channel
+   * sessions to avoid accidentally adopting execution metadata.
+   */
+  private async findReusableEmptyPrimarySession(chatId: string): Promise<string | null> {
+    const alias = this.currentUserAlias;
+    if (!alias) return null;
+    try {
+      const sessions = await profileCacheManager.getChatSessionsAsync(alias, chatId);
+      if (!sessions || sessions.length === 0) return null;
+      const sorted = [...sessions].sort((a, b) =>
+        String(b.last_updated || '').localeCompare(String(a.last_updated || '')),
+      );
+      const SCAN_LIMIT = 5;
+      const candidates = sorted.slice(0, SCAN_LIMIT);
+      for (const meta of candidates) {
+        if (meta.schedulerJobId || meta.schedulerExecutionStatus) continue;
+        if (meta.source && meta.source.type !== 'local') continue;
+        const file = await profileCacheManager.getChatSessionFile(alias, chatId, meta.chatSession_id);
+        if (!file) continue;
+        if ((file.chat_history?.length ?? 0) === 0) {
+          return meta.chatSession_id;
+        }
+      }
+      return null;
+    } catch (error) {
+      logger.warn('[AgentChatManager] findReusableEmptyPrimarySession failed; falling back to create-new', 'findReusableEmptyPrimarySession', {
+        chatId, alias, error: error instanceof Error ? error.message : String(error),
+      });
+      return null;
+    }
+  }
+
+  /**
+   * Delete a chat session through the manager so renderer-visible state stays
+   * coherent. Steps:
+   *   1. Refuse deletion if the in-memory AgentChat instance is mid-response
+   *      (B1: prevents `saveChatSession()` from resurrecting a just-deleted
+   *      file). Caller is expected to cancel the chat first.
+   *   2. If the session is the currently active one, switch to a fallback
+   *      session (newest sibling) BEFORE deletion so the renderer's current
+   *      pointer moves coherently. If no sibling exists, clear current
+   *      (`switchToChatSession(chatId, null)`) — the renderer's
+   *      `ensureCompactChatSession` flow will then auto-spawn a usable
+   *      session.
+   *   3. Dispose any in-memory instance (fires `chatSessionCacheDestroyed`).
+   *   4. Delete from store (fires `chatSessionStore:sessionDeleted` — the
+   *      renderer cache manager listens to this and drops its entry).
+   */
+  async deleteChatSession(chatId: string, chatSessionId: string): Promise<{
+    success: boolean;
+    error?: string;
+    nextChatSessionId?: string | null;
+  }> {
+    const alias = this.currentUserAlias;
+    if (!alias) {
+      return { success: false, error: 'No current user session' };
+    }
+    if (!chatId || !chatSessionId) {
+      return { success: false, error: 'chatId and chatSessionId are required' };
+    }
+
+    const existingInstance = this.registry.getInstance(chatSessionId);
+    if (existingInstance) {
+      const status = existingInstance.getChatStatus();
+      if (status && status !== 'idle') {
+        logger.warn('[AgentChatManager] Refusing to delete active chat session', 'deleteChatSession', {
+          chatId, chatSessionId, status, alias,
+        });
+        return {
+          success: false,
+          error: `Cannot delete this chat while it is ${status}. Please cancel first.`,
+        };
+      }
+    }
+
+    const currentChatSessionId = this.sessionCoordinator.getCurrentChatSessionId();
+    const currentInstance = this.sessionCoordinator.getCurrentInstance();
+    const currentChatId = currentInstance ? currentInstance.getChatId() : null;
+    let nextChatSessionId: string | null = null;
+
+    if (currentChatSessionId === chatSessionId && currentChatId === chatId) {
+      try {
+        const sessions = await profileCacheManager.getChatSessionsAsync(alias, chatId);
+        const candidates = (sessions || [])
+          .filter((s) => s.chatSession_id !== chatSessionId)
+          .sort((a, b) =>
+            String(b.last_updated || '').localeCompare(String(a.last_updated || '')),
+          );
+        nextChatSessionId = candidates[0]?.chatSession_id ?? null;
+      } catch (err) {
+        logger.warn('[AgentChatManager] Failed to enumerate fallback sessions', 'deleteChatSession', {
+          chatId, chatSessionId, error: err instanceof Error ? err.message : String(err),
+        });
+        nextChatSessionId = null;
+      }
+
+      // Switch BEFORE delete so the renderer's currentChatSessionId moves
+      // coherently. switchToChatSession fires `agentChat:currentChatSessionIdChanged`.
+      await this.switchToChatSession(chatId, nextChatSessionId);
+    }
+
+    if (existingInstance) {
+      this.disposeManagedInstance(chatSessionId, true);
+    }
+
+    const success = await profileCacheManager.deleteChatSession(alias, chatId, chatSessionId);
+    if (!success) {
+      return { success: false, error: 'Failed to delete chat session' };
+    }
+
+    logger.info('[AgentChatManager] Chat session deleted', 'deleteChatSession', {
+      chatId, chatSessionId, nextChatSessionId, alias,
+    });
+
+    return { success: true, nextChatSessionId };
+  }
+
+  /**
+   * Renderer-side cache may drift if a deletion happens without the renderer
+   * receiving the corresponding event (lost IPC, foreground/background race,
+   * etc.). This handler returns the main-process-authoritative current chat
+   * session so the renderer can recover.
+   *
+   * The renderer passes its `expected` view of state; we echo it back so the
+   * caller can perform a compare-and-swap and skip stale responses if the
+   * local state changed in flight (e.g. user clicked elsewhere).
+   */
+  reconcileCurrentChatSession(expected?: {
+    expectedChatId?: string | null;
+    expectedChatSessionId?: string | null;
+  }): {
+    chatId: string | null;
+    chatSessionId: string | null;
+    chatStatus: string | null;
+    expectedChatId: string | null;
+    expectedChatSessionId: string | null;
+  } {
+    const chatSessionId = this.sessionCoordinator.getCurrentChatSessionId();
+    const instance = this.sessionCoordinator.getCurrentInstance();
+    return {
+      chatId: instance ? instance.getChatId() : null,
+      chatSessionId,
+      chatStatus: instance ? instance.getChatStatus() : null,
+      expectedChatId: expected?.expectedChatId ?? null,
+      expectedChatSessionId: expected?.expectedChatSessionId ?? null,
+    };
   }
 
   /**

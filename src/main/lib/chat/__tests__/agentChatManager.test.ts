@@ -97,6 +97,10 @@ vi.mock('../agentChatManagerScheduledRunner', () => ({
 // Mock profileCacheManager
 const mockProfileCacheManager = vi.hoisted(() => ({
   getChatConfig: vi.fn(() => null),
+  getCachedProfile: vi.fn(() => null),
+  getChatSessionsAsync: vi.fn().mockResolvedValue([]),
+  getChatSessionFile: vi.fn().mockResolvedValue(null),
+  deleteChatSession: vi.fn().mockResolvedValue(true),
 }));
 
 vi.mock('../../userDataADO/profileCacheManager', () => ({
@@ -202,6 +206,10 @@ describe('AgentChatManager', () => {
     mockSessionCoordinator.forkChatSessionDirectory.mockResolvedValue('/some/dir');
     mockChatSessionStore.copySession.mockResolvedValue(true);
     mockProfileCacheManager.getChatConfig.mockReturnValue(null);
+    mockProfileCacheManager.getCachedProfile.mockReturnValue(null);
+    mockProfileCacheManager.getChatSessionsAsync.mockResolvedValue([]);
+    mockProfileCacheManager.getChatSessionFile.mockResolvedValue(null);
+    mockProfileCacheManager.deleteChatSession.mockResolvedValue(true);
     mockScheduledRunner.run.mockResolvedValue({ success: true, messagesCount: 0 });
   });
 
@@ -515,6 +523,249 @@ describe('AgentChatManager', () => {
       mockSessionCoordinator.getCurrentChatSessionId.mockReturnValue('session-1');
 
       expect(manager.updateSessionTitle('session-1', 'New Title')).toBe(true);
+    });
+  });
+
+  describe('deleteChatSession', () => {
+    async function makeInitialized(): Promise<AgentChatManager> {
+      const manager = createFreshManager();
+      await manager.initialize('alice');
+      return manager;
+    }
+
+    it('returns error when no current user', async () => {
+      const manager = createFreshManager();
+      const result = await manager.deleteChatSession('chat-1', 'session-1');
+      expect(result.success).toBe(false);
+      expect(result.error).toMatch(/No current user/i);
+    });
+
+    it('returns error when chatId or sessionId missing', async () => {
+      const manager = await makeInitialized();
+      expect((await manager.deleteChatSession('', 'session-1')).success).toBe(false);
+      expect((await manager.deleteChatSession('chat-1', '')).success).toBe(false);
+    });
+
+    it('refuses to delete an active (non-idle) session', async () => {
+      const manager = await makeInitialized();
+      const activeInstance = makeMockAgentChat({ getChatStatus: vi.fn(() => 'sending_response') });
+      mockRegistry.getInstance.mockReturnValue(activeInstance);
+
+      const result = await manager.deleteChatSession('chat-1', 'session-1');
+      expect(result.success).toBe(false);
+      expect(result.error).toMatch(/Cannot delete this chat while it is sending_response/);
+      expect(mockProfileCacheManager.deleteChatSession).not.toHaveBeenCalled();
+    });
+
+    it('deletes a non-current idle session without switching', async () => {
+      const manager = await makeInitialized();
+      mockRegistry.getInstance.mockReturnValue(null);
+      mockSessionCoordinator.getCurrentChatSessionId.mockReturnValue('other-session');
+      const otherInstance = makeMockAgentChat({ getChatId: vi.fn(() => 'chat-1') });
+      mockSessionCoordinator.getCurrentInstance.mockReturnValue(otherInstance);
+      const switchSpy = vi.spyOn(manager, 'switchToChatSession');
+
+      const result = await manager.deleteChatSession('chat-1', 'session-1');
+
+      expect(result.success).toBe(true);
+      expect(result.nextChatSessionId).toBeNull();
+      expect(mockProfileCacheManager.deleteChatSession).toHaveBeenCalledWith('alice', 'chat-1', 'session-1');
+      expect(switchSpy).not.toHaveBeenCalled();
+    });
+
+    it('switches to newest sibling before deleting the current session', async () => {
+      const manager = await makeInitialized();
+      const currentInstance = makeMockAgentChat({
+        getChatId: vi.fn(() => 'chat-1'),
+        getChatStatus: vi.fn(() => 'idle'),
+      });
+      mockSessionCoordinator.getCurrentInstance.mockReturnValue(currentInstance);
+      mockSessionCoordinator.getCurrentChatSessionId.mockReturnValue('session-1');
+      mockRegistry.getInstance.mockReturnValue(null);
+
+      mockProfileCacheManager.getChatSessionsAsync.mockResolvedValue([
+        { chatSession_id: 'session-1', title: 'Active', last_updated: '2024-01-03T00:00:00Z' },
+        { chatSession_id: 'session-old', title: 'Old', last_updated: '2024-01-01T00:00:00Z' },
+        { chatSession_id: 'session-new', title: 'New', last_updated: '2024-01-02T00:00:00Z' },
+      ]);
+
+      const switchSpy = vi.spyOn(manager, 'switchToChatSession').mockResolvedValue(null as any);
+
+      const result = await manager.deleteChatSession('chat-1', 'session-1');
+
+      expect(result.success).toBe(true);
+      expect(result.nextChatSessionId).toBe('session-new');
+      // Switch must happen BEFORE the underlying delete so the renderer's
+      // currentChatSessionId moves coherently.
+      const switchOrder = switchSpy.mock.invocationCallOrder[0];
+      const deleteOrder = mockProfileCacheManager.deleteChatSession.mock.invocationCallOrder[0];
+      expect(switchSpy).toHaveBeenCalledWith('chat-1', 'session-new');
+      expect(switchOrder).toBeLessThan(deleteOrder);
+    });
+
+    it('switches to null when deleting the only session', async () => {
+      const manager = await makeInitialized();
+      const currentInstance = makeMockAgentChat({
+        getChatId: vi.fn(() => 'chat-1'),
+        getChatStatus: vi.fn(() => 'idle'),
+      });
+      mockSessionCoordinator.getCurrentInstance.mockReturnValue(currentInstance);
+      mockSessionCoordinator.getCurrentChatSessionId.mockReturnValue('session-1');
+      mockRegistry.getInstance.mockReturnValue(null);
+
+      mockProfileCacheManager.getChatSessionsAsync.mockResolvedValue([
+        { chatSession_id: 'session-1', title: 'Only', last_updated: '2024-01-01T00:00:00Z' },
+      ]);
+      const switchSpy = vi.spyOn(manager, 'switchToChatSession').mockResolvedValue(null as any);
+
+      const result = await manager.deleteChatSession('chat-1', 'session-1');
+
+      expect(result.success).toBe(true);
+      expect(result.nextChatSessionId).toBeNull();
+      expect(switchSpy).toHaveBeenCalledWith('chat-1', null);
+    });
+
+    it('does not switch when deleting a non-current session even if it is the same chatId', async () => {
+      const manager = await makeInitialized();
+      const currentInstance = makeMockAgentChat({
+        getChatId: vi.fn(() => 'chat-1'),
+        getChatStatus: vi.fn(() => 'idle'),
+      });
+      mockSessionCoordinator.getCurrentInstance.mockReturnValue(currentInstance);
+      mockSessionCoordinator.getCurrentChatSessionId.mockReturnValue('session-current');
+      mockRegistry.getInstance.mockReturnValue(null);
+
+      const result = await manager.deleteChatSession('chat-1', 'session-other');
+
+      expect(result.success).toBe(true);
+      expect(mockProfileCacheManager.getChatSessionsAsync).not.toHaveBeenCalled();
+    });
+
+    it('returns error when underlying store delete fails', async () => {
+      const manager = await makeInitialized();
+      mockRegistry.getInstance.mockReturnValue(null);
+      mockSessionCoordinator.getCurrentChatSessionId.mockReturnValue('other');
+      mockProfileCacheManager.deleteChatSession.mockResolvedValue(false);
+
+      const result = await manager.deleteChatSession('chat-1', 'session-1');
+
+      expect(result.success).toBe(false);
+      expect(result.error).toMatch(/Failed to delete/i);
+    });
+  });
+
+  describe('reconcileCurrentChatSession', () => {
+    it('returns null state when there is no current instance', () => {
+      const manager = createFreshManager();
+      mockSessionCoordinator.getCurrentInstance.mockReturnValue(null);
+      mockSessionCoordinator.getCurrentChatSessionId.mockReturnValue(null);
+
+      const state = manager.reconcileCurrentChatSession({
+        expectedChatId: 'old-chat',
+        expectedChatSessionId: 'old-session',
+      });
+
+      expect(state.chatId).toBeNull();
+      expect(state.chatSessionId).toBeNull();
+      expect(state.chatStatus).toBeNull();
+      expect(state.expectedChatId).toBe('old-chat');
+      expect(state.expectedChatSessionId).toBe('old-session');
+    });
+
+    it('returns authoritative state from the session coordinator', () => {
+      const manager = createFreshManager();
+      const instance = makeMockAgentChat({
+        getChatId: vi.fn(() => 'chat-X'),
+        getChatStatus: vi.fn(() => 'idle'),
+      });
+      mockSessionCoordinator.getCurrentInstance.mockReturnValue(instance);
+      mockSessionCoordinator.getCurrentChatSessionId.mockReturnValue('session-X');
+
+      const state = manager.reconcileCurrentChatSession();
+
+      expect(state.chatId).toBe('chat-X');
+      expect(state.chatSessionId).toBe('session-X');
+      expect(state.chatStatus).toBe('idle');
+      expect(state.expectedChatId).toBeNull();
+      expect(state.expectedChatSessionId).toBeNull();
+    });
+  });
+
+  describe('startNewChatForPrimaryAgent reuse-empty', () => {
+    async function setupPrimaryAgent(): Promise<AgentChatManager> {
+      const manager = createFreshManager();
+      await manager.initialize('alice');
+      mockProfileCacheManager.getCachedProfile.mockReturnValue({
+        primaryAgent: 'PrimaryAgent',
+        chats: [{ chat_id: 'chat-primary', agent: { name: 'PrimaryAgent' } }],
+      });
+      // Make switchToChatSession's create-instance path return an instance.
+      mockRegistry.getInstance.mockReturnValue(makeMockAgentChat());
+      return manager;
+    }
+
+    it('reuses an existing empty session for the primary agent', async () => {
+      const manager = await setupPrimaryAgent();
+      mockProfileCacheManager.getChatSessionsAsync.mockResolvedValue([
+        { chatSession_id: 'empty-newest', title: 'Empty', last_updated: '2024-01-03T00:00:00Z' },
+        { chatSession_id: 'used-older', title: 'Used', last_updated: '2024-01-02T00:00:00Z' },
+      ]);
+      mockProfileCacheManager.getChatSessionFile.mockImplementation(async (_alias, _chatId, sid) => ({
+        chatSession_id: sid,
+        last_updated: '2024-01-03T00:00:00Z',
+        title: 'Whatever',
+        chat_history: sid === 'empty-newest' ? [] : [{ id: 'm1' }],
+        context_history: [],
+      }));
+
+      await manager.startNewChatForPrimaryAgent();
+
+      // It should NOT generate a new session id (no call into startNewChatFor's
+      // getOrCreateNewChatSessionId path).
+      expect(mockSessionCoordinator.getOrCreateNewChatSessionId).not.toHaveBeenCalled();
+    });
+
+    it('falls back to creating a new session when no empty session exists', async () => {
+      const manager = await setupPrimaryAgent();
+      mockProfileCacheManager.getChatSessionsAsync.mockResolvedValue([
+        { chatSession_id: 'used-1', title: 'Used', last_updated: '2024-01-03T00:00:00Z' },
+      ]);
+      mockProfileCacheManager.getChatSessionFile.mockResolvedValue({
+        chatSession_id: 'used-1',
+        last_updated: '2024-01-03T00:00:00Z',
+        title: 'Used',
+        chat_history: [{ id: 'm1' }],
+        context_history: [],
+      });
+
+      await manager.startNewChatForPrimaryAgent();
+
+      // No empty session → must go through the standard create path.
+      expect(mockSessionCoordinator.getOrCreateNewChatSessionId).toHaveBeenCalled();
+    });
+
+    it('skips scheduler-spawned sessions even when chat_history is empty', async () => {
+      const manager = await setupPrimaryAgent();
+      mockProfileCacheManager.getChatSessionsAsync.mockResolvedValue([
+        {
+          chatSession_id: 'sched-empty',
+          title: 'Scheduled',
+          last_updated: '2024-01-03T00:00:00Z',
+          schedulerJobId: 'job-1',
+        },
+      ]);
+      mockProfileCacheManager.getChatSessionFile.mockResolvedValue({
+        chatSession_id: 'sched-empty',
+        last_updated: '2024-01-03T00:00:00Z',
+        title: 'Scheduled',
+        chat_history: [],
+        context_history: [],
+      });
+
+      await manager.startNewChatForPrimaryAgent();
+
+      // Scheduler session should be skipped; must fall through to create new.
+      expect(mockSessionCoordinator.getOrCreateNewChatSessionId).toHaveBeenCalled();
     });
   });
 });

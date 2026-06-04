@@ -52,11 +52,13 @@ vi.mock('../../auth/ghcConfig', async () => ({
   },
 }));
 
+const { _coverageSharedCallMock } = vi.hoisted(() => ({
+  _coverageSharedCallMock: vi.fn().mockResolvedValue('LLM compressed summary'),
+}));
+
 vi.mock('../../llm/ghcModelApi', async () => ({
   getEndpointForModel: vi.fn(() => '/chat/completions'),
-  ghcModelApi: {
-    callModel: vi.fn().mockResolvedValue('LLM compressed summary'),
-  },
+  ghcModelApi: { callModel: _coverageSharedCallMock, callModelStrict: _coverageSharedCallMock },
 }));
 
 vi.mock('../../llm/ghcModelsManager', async () => ({

@@ -42,11 +42,15 @@ const COMPACT_CONTEXT_CONFIG = {
 } as const;
 
 /**
- * Tool result LLM smart compression configuration
+ * Tool result LLM smart compression configuration.
+ *
+ * The model is NOT pinned here. Compression uses the sub-agent's runtime model
+ * (`options.subAgent.inheritedModel`, set at spawn time from the parent agent's
+ * currently selected model), so compression always runs on whatever provider /
+ * model the user has chosen — no hidden GHC-model assumption.
  */
 const TOOL_RESULT_SUMMARIZE_CONFIG = {
   SUMMARIZE_THRESHOLD: 15000,
-  SUMMARIZE_MODEL: 'claude-haiku-4.5' as const,
   SUMMARIZE_MAX_TOKENS: 2000,
   SUMMARIZE_TIMEOUT_MS: 15000,
   MAX_TOOL_RESULT_CHARS: 50000,
@@ -179,7 +183,7 @@ export class SubAgentContextCompactor {
   /**
    * Smart compression of large tool results.
    *
-   * 1. Try distilling via claude-haiku-4.5.
+   * 1. Try distilling via the sub-agent's runtime model (inheritedModel).
    * 2. On failure or timeout, fall back to hard truncation.
    */
   public async compressToolResult(
@@ -187,12 +191,23 @@ export class SubAgentContextCompactor {
     toolName: string,
     originalLength: number
   ): Promise<string> {
-    const { SUMMARIZE_MODEL, SUMMARIZE_MAX_TOKENS, SUMMARIZE_TIMEOUT_MS, MAX_TOOL_RESULT_CHARS } =
+    const { SUMMARIZE_MAX_TOKENS, SUMMARIZE_TIMEOUT_MS, MAX_TOOL_RESULT_CHARS } =
       TOOL_RESULT_SUMMARIZE_CONFIG;
+
+    const modelId = this.options.subAgent.inheritedModel?.trim();
+    if (!modelId) {
+      getLogger().warn?.(
+        `[SubAgentContextCompactor] No inheritedModel configured; falling back to truncation for '${toolName}'`,
+        'compressToolResult'
+      );
+      return content.length > MAX_TOOL_RESULT_CHARS
+        ? `${content.substring(0, MAX_TOOL_RESULT_CHARS)}\n[Truncated to ${MAX_TOOL_RESULT_CHARS} chars]`
+        : content;
+    }
 
     try {
       getLogger().info?.(
-        `[SubAgentContextCompactor] Compressing tool '${toolName}' result via ${SUMMARIZE_MODEL} ` +
+        `[SubAgentContextCompactor] Compressing tool '${toolName}' result via ${modelId} ` +
         `(${originalLength} chars)`,
         'compressToolResult'
       );
@@ -201,8 +216,8 @@ export class SubAgentContextCompactor {
         ? content.substring(0, MAX_TOOL_RESULT_CHARS)
         : content;
 
-      const summaryPromise = ghcModelApi.callModel(
-        SUMMARIZE_MODEL,
+      const summaryPromise = ghcModelApi.callModelStrict(
+        modelId,
         `Below is the output from a tool called "${toolName}". ` +
         `Extract and summarize the KEY INFORMATION that would be useful for completing the user's task. ` +
         `Preserve:\n` +
@@ -226,7 +241,7 @@ export class SubAgentContextCompactor {
       const summary = await Promise.race([summaryPromise, timeoutPromise]);
 
       if (summary && summary.length > 0) {
-        const compressedResult = `[Summarized from ${originalLength} chars by ${SUMMARIZE_MODEL}]\n\n${summary}`;
+        const compressedResult = `[Summarized from ${originalLength} chars by ${modelId}]\n\n${summary}`;
         getLogger().info?.(
           `[SubAgentContextCompactor] Tool '${toolName}' result compressed: ` +
           `${originalLength} → ${compressedResult.length} chars ` +
@@ -385,15 +400,27 @@ export class SubAgentContextCompactor {
       })
       .join('\n\n');
 
+    const modelId = this.options.subAgent.inheritedModel?.trim();
+    if (!modelId) {
+      getLogger().warn?.(
+        `[SubAgentContextCompactor] No inheritedModel configured; skipping Phase 0 LLM summary, falling back to truncation`,
+        'compressEarlyMessages'
+      );
+    }
+
     try {
+      if (!modelId) {
+        throw new Error('No inheritedModel configured for sub-agent compaction');
+      }
+
       getLogger().info?.(
-        `[SubAgentContextCompactor] Compressing ${actualBatch} early messages via LLM ` +
+        `[SubAgentContextCompactor] Compressing ${actualBatch} early messages via ${modelId} ` +
         `(total text: ${conversationText.length} chars)`,
         'compressEarlyMessages'
       );
 
-      const summaryPromise = ghcModelApi.callModel(
-        TOOL_RESULT_SUMMARIZE_CONFIG.SUMMARIZE_MODEL,
+      const summaryPromise = ghcModelApi.callModelStrict(
+        modelId,
         `Below is the early conversation history of a sub-agent working on a task. ` +
         `Summarize the KEY PROGRESS and FINDINGS so far into a concise structured summary.\n\n` +
         `Preserve:\n` +

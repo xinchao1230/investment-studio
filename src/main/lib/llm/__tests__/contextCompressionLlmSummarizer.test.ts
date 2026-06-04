@@ -6,11 +6,14 @@
 import { ContextCompressionLlmSummarizer } from '../contextCompressionLlmSummarizer';
 import { TokenCounter } from '../../token';
 
-// Mock ghcModelApi to prevent real API calls
+// Mock ghcModelApi to prevent real API calls.
+// callModel and callModelStrict share the same spy so existing assertions
+// that target either name continue to work.
+const { _ctxSummarizerCallModelMock } = vi.hoisted(() => ({
+  _ctxSummarizerCallModelMock: vi.fn(),
+}));
 vi.mock('../ghcModelApi', () => ({
-  ghcModelApi: {
-    callModel: vi.fn(),
-  },
+  ghcModelApi: { callModel: _ctxSummarizerCallModelMock, callModelStrict: _ctxSummarizerCallModelMock },
 }));
 
 // Mock logger
@@ -28,23 +31,54 @@ import { ghcModelApi } from '../ghcModelApi';
 describe('ContextCompressionLlmSummarizer', () => {
   const tokenCounter = new TokenCounter({ enableCache: true, encoding: 'o200k_base' });
 
-  describe('configuration constants', () => {
-    it('uses claude-haiku-4.5 model', async () => {
+  describe('model routing', () => {
+    it('forwards the modelId from params to ghcModelApi.callModel (no hardcoded model)', async () => {
       const mockCallModel = vi.mocked(ghcModelApi.callModel);
       mockCallModel.mockResolvedValueOnce('test summary');
 
       await ContextCompressionLlmSummarizer.summarize({
         conversationText: 'hello world',
+        modelId: 'user-selected-model-xyz',
         maxRetries: 1,
       });
 
       expect(mockCallModel).toHaveBeenCalledWith(
-        'claude-haiku-4.5',
+        'user-selected-model-xyz',
         expect.any(String),
         expect.any(String),
-        16000,  // MAX_TOKENS — our change from 5096 → 16000
+        16000,  // MAX_TOKENS
         0.3,    // TEMPERATURE
       );
+    });
+
+    it('refuses to invoke LLM when modelId is empty (no hidden fallback)', async () => {
+      const mockCallModel = vi.mocked(ghcModelApi.callModel);
+      mockCallModel.mockClear();
+
+      const result = await ContextCompressionLlmSummarizer.summarize({
+        conversationText: 'hello world',
+        modelId: '',
+        maxRetries: 3,
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.attempts).toBe(0);
+      expect(result.error).toMatch(/No modelId/i);
+      expect(mockCallModel).not.toHaveBeenCalled();
+    });
+
+    it('refuses to invoke LLM when modelId is whitespace only', async () => {
+      const mockCallModel = vi.mocked(ghcModelApi.callModel);
+      mockCallModel.mockClear();
+
+      const result = await ContextCompressionLlmSummarizer.summarize({
+        conversationText: 'hello world',
+        modelId: '   ',
+        maxRetries: 3,
+      });
+
+      expect(result.success).toBe(false);
+      expect(mockCallModel).not.toHaveBeenCalled();
     });
 
     it('passes MAX_TOKENS=16000 to callModel', async () => {
@@ -53,6 +87,7 @@ describe('ContextCompressionLlmSummarizer', () => {
 
       await ContextCompressionLlmSummarizer.summarize({
         conversationText: 'test content',
+        modelId: 'test-model-id',
         maxRetries: 1,
       });
 
@@ -111,6 +146,7 @@ describe('ContextCompressionLlmSummarizer', () => {
 
       const result = await ContextCompressionLlmSummarizer.summarize({
         conversationText: 'test',
+        modelId: 'test-model-id',
         maxRetries: 3,
       });
 
@@ -126,6 +162,7 @@ describe('ContextCompressionLlmSummarizer', () => {
 
       const result = await ContextCompressionLlmSummarizer.summarize({
         conversationText: 'test',
+        modelId: 'test-model-id',
         maxRetries: 3,
       });
 
@@ -140,6 +177,7 @@ describe('ContextCompressionLlmSummarizer', () => {
 
       const result = await ContextCompressionLlmSummarizer.summarize({
         conversationText: 'test',
+        modelId: 'test-model-id',
         maxRetries: 2,
       });
 
@@ -155,6 +193,7 @@ describe('ContextCompressionLlmSummarizer', () => {
 
       const result = await ContextCompressionLlmSummarizer.summarize({
         conversationText: 'test',
+        modelId: 'test-model-id',
         maxRetries: 2,
       });
 
@@ -169,6 +208,7 @@ describe('ContextCompressionLlmSummarizer', () => {
 
       const result = await ContextCompressionLlmSummarizer.summarize({
         conversationText: 'test',
+        modelId: 'test-model-id',
         maxRetries: 1,
       });
 
@@ -183,6 +223,7 @@ describe('ContextCompressionLlmSummarizer', () => {
 
       const result = await ContextCompressionLlmSummarizer.summarize({
         conversationText: 'test without maxRetries',
+        modelId: 'test-model-id',
         // maxRetries omitted — defaults to 3
       });
 
@@ -196,6 +237,7 @@ describe('ContextCompressionLlmSummarizer', () => {
 
       const result = await ContextCompressionLlmSummarizer.summarize({
         conversationText: 'test',
+        modelId: 'test-model-id',
         maxRetries: 1,
       });
 

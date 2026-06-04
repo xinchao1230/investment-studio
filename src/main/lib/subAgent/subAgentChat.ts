@@ -84,26 +84,6 @@ const COMPACT_CONTEXT_CONFIG = {
   MSG_COUNT_COMPRESS_TIMEOUT_MS: 20000,
 } as const;
 
-/**
- * Tool result LLM smart compression configuration
- *
- * When a tool result exceeds SUMMARIZE_THRESHOLD characters, uses a fast and cheap LLM (claude-haiku-4.5)
- * to distill key information, compressing 20KB of web content into a 2-3KB structured summary.
- * MAX_TOOL_RESULT_CHARS serves as a safety net (fallback to hard truncation when LLM compression fails).
- */
-const TOOL_RESULT_SUMMARIZE_CONFIG = {
-  /** Character threshold for triggering LLM compression — tool results exceeding this will be distilled */
-  SUMMARIZE_THRESHOLD: 15000,
-  /** Model used for LLM compression (fast + cheap) */
-  SUMMARIZE_MODEL: 'claude-haiku-4.5' as const,
-  /** Maximum token count for summary output */
-  SUMMARIZE_MAX_TOKENS: 2000,
-  /** LLM compression timeout (ms) — falls back to hard truncation on timeout */
-  SUMMARIZE_TIMEOUT_MS: 15000,
-  /** Hard truncation safety net (characters) — fallback when LLM compression fails */
-  MAX_TOOL_RESULT_CHARS: 50000,
-} as const;
-
 export class SubAgentChat {
   private contextHistory: Message[] = [];
   /** Full uncompressed history for UI rendering (never compressed) */

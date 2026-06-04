@@ -146,6 +146,7 @@ function createSessionServiceForEdit(sessionOverrides?: {
     getChatId: () => 'chat-1',
     getChatSessionId: () => 'session-1',
     getAgentName: () => 'OpenKosmos',
+    getCurrentModelId: () => 'test-model-id',
     getFirstUserMessage: () => firstUserMessage,
     setFirstUserMessage: (message) => { firstUserMessage = message; },
     getSchedulerMetadata: () => ({}),

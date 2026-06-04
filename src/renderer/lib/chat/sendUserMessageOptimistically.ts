@@ -61,9 +61,37 @@ export async function sendUserMessage(message: UserMessage) {
   try {
     logger.debug('[SendUserMessage] 📤 Sending message...');
 
-    // After sign-out → sign-in the session may still be bootstrapping.
-    // Wait up to 8s for a current session to appear before giving up.
+    // Step 1: read our local view of the current session.
     let chatSessionId = agentChatSessionCacheManager.getCurrentChatSessionId();
+
+    // Step 2: detect a stale pointer. If we think we have a session but no
+    // cache entry exists for it (or chatStatus is null), the renderer's view
+    // is likely out of sync with the main process — typically because a
+    // deletion happened without the corresponding sessionDeleted event being
+    // received before this send was attempted. Ask main for the
+    // authoritative current session and apply it (compare-and-swap inside
+    // reconcileCurrentChatSession).
+    if (chatSessionId) {
+      const sendState = agentChatSessionCacheManager.getUserMessageSendState(chatSessionId);
+      const hasCache = agentChatSessionCacheManager.hasChatSessionCache(chatSessionId);
+      if (!sendState.canSend && (!hasCache || sendState.chatStatus === null)) {
+        logger.warn('[SendUserMessage] Stale current chat session detected; reconciling with main', {
+          chatSessionId, chatStatus: sendState.chatStatus, hasCache,
+        });
+        const reconciled = await agentChatSessionCacheManager.reconcileCurrentChatSession();
+        if (reconciled.applied && reconciled.chatSessionId) {
+          chatSessionId = reconciled.chatSessionId;
+        } else if (reconciled.chatSessionId === null) {
+          // Main has no current session either — fall through to the
+          // existing wait-then-fail path so ChatView's compact flow can
+          // spawn a new session.
+          chatSessionId = null;
+        }
+      }
+    }
+
+    // Step 3: after sign-out → sign-in or right after reconcile-to-null,
+    // wait up to 8s for a current session to appear before giving up.
     if (!chatSessionId) {
       chatSessionId = await new Promise<string | null>((resolve) => {
         const timeout = setTimeout(() => { unsub(); resolve(null); }, 8000);
@@ -78,6 +106,10 @@ export async function sendUserMessage(message: UserMessage) {
       if (chatSessionId) {
         await agentChatSessionCacheManager.waitForSendReady(chatSessionId, 5000);
       }
+    } else {
+      // A reconcile may have just updated chatSessionId — wait briefly for
+      // its cache to populate (chatStatus arrives via separate event).
+      await agentChatSessionCacheManager.waitForSendReady(chatSessionId, 2000);
     }
 
     await sendUserMessageOptimistically({

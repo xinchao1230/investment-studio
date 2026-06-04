@@ -82,6 +82,33 @@ export default function(ctx: Context) {
     }
   });
 
+  // Delete a chat session through the manager — keeps renderer state coherent
+  // by switching to a fallback (if current) and disposing any in-memory
+  // instance before removing the file. See agentChatManager.deleteChatSession
+  // for the full contract.
+  ipcMain.handle('agentChat:deleteChatSession', async (_event, chatId: string, chatSessionId: string) => {
+    try {
+      return await agentChatManager.deleteChatSession(chatId, chatSessionId);
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+    }
+  });
+
+  // Reconcile the renderer's view of the current chat session with the main
+  // process. Used as a defensive recovery when the renderer detects its cache
+  // is out of sync (e.g. cache miss for a session it thinks is current).
+  ipcMain.handle('agentChat:reconcileCurrentChatSession', async (_event, expected?: {
+    expectedChatId?: string | null;
+    expectedChatSessionId?: string | null;
+  }) => {
+    try {
+      const state = agentChatManager.reconcileCurrentChatSession(expected);
+      return { success: true, data: state };
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+    }
+  });
+
   // Process conversation (with streaming support)
   ipcMain.handle('agentChat:streamMessage', async (event, message: UserMessage, targetChatSessionId?: string) => {
     try {

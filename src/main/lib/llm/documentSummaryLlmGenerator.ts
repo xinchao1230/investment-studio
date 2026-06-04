@@ -14,11 +14,11 @@ export interface DocumentSummaryGeneratorResponse {
 
 /**
  * Document Summary LLM Generator
- * Uses GitHub Copilot LLM API (claude-haiku-4.5) to generate concise document summaries
- * from extracted text content.
+ * Uses the LLM API to generate concise document summaries from extracted text
+ * content. The caller must supply the modelId — there is no hardcoded model.
  *
  * This module is called from the renderer process via IPC:
- *   window.electronAPI.llm.generateDocumentSummary(fileName, content, truncated)
+ *   window.electronAPI.llm.generateDocumentSummary(fileName, content, truncated, modelId)
  */
 export class DocumentSummaryLlmGenerator {
   // System prompt for generating document summaries
@@ -35,12 +35,15 @@ export class DocumentSummaryLlmGenerator {
    * @param fileName  Original document filename (provides context for the model)
    * @param content   Extracted text content (may be truncated)
    * @param truncated Whether the content was truncated during extraction
+   * @param modelId   Required: the user's currently selected model. Empty
+   *   value short-circuits without invoking the LLM — no hidden fallback.
    * @returns         Summary generation result
    */
   static async generateSummary(
     fileName: string,
     content: string,
-    truncated: boolean = false,
+    truncated: boolean,
+    modelId: string,
   ): Promise<DocumentSummaryGeneratorResponse> {
     const logger = getGlobalLogger();
     const startTime = Date.now();
@@ -65,6 +68,19 @@ export class DocumentSummaryLlmGenerator {
       };
     }
 
+    const trimmedModelId = typeof modelId === 'string' ? modelId.trim() : '';
+    if (!trimmedModelId) {
+      logger.warn(
+        `[DocSummary] ⚠️ No modelId provided — fileName="${fileName}", refusing LLM call (no hidden model fallback)`,
+        this.LOG_SOURCE,
+      );
+      return {
+        success: false,
+        fileName,
+        errors: ['No modelId provided for document summary; refusing hidden model fallback'],
+      };
+    }
+
     try {
       const userPrompt =
         `Document filename: "${fileName}"\n\n` +
@@ -72,13 +88,14 @@ export class DocumentSummaryLlmGenerator {
         `${trimmedContent}`;
 
       logger.info(
-        `[DocSummary] 🤖 Calling LLM (claude-haiku-4.5) — fileName="${fileName}", userPromptLength=${userPrompt.length}, maxTokens=200, temperature=0.3`,
+        `[DocSummary] 🤖 Calling LLM (${trimmedModelId}) — fileName="${fileName}", userPromptLength=${userPrompt.length}, maxTokens=200, temperature=0.3`,
         this.LOG_SOURCE,
       );
 
-      // Use claude-haiku-4.5 — fast, low-cost, good at summarization
-      const rawResponse = await ghcModelApi.callModel(
-        'claude-haiku-4.5',
+      // callModelStrict throws if the model isn't available on the active
+      // provider, so we never silently summarize on a different model.
+      const rawResponse = await ghcModelApi.callModelStrict(
+        trimmedModelId,
         userPrompt,
         this.SYSTEM_PROMPT,
         200,   // maxTokens — short summary
