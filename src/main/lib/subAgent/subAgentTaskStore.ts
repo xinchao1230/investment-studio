@@ -112,7 +112,10 @@ export class SubAgentTaskStore {
 
     // Fire-and-forget: async LLM title generation
     if (metadata.taskDescription) {
-      this.generateTitleAsync(metadata.taskId, metadata.taskDescription);
+      // Pass the task's runtime model (= sub-agent's inheritedModel) so the
+      // title-generation LLM call runs on exactly the model that owns this
+      // task — no provider-side default fallback.
+      this.generateTitleAsync(metadata.taskId, metadata.taskDescription, metadata.model);
     }
   }
 
@@ -334,9 +337,13 @@ export class SubAgentTaskStore {
 
   // ─── Private ───
 
-  private async generateTitleAsync(taskId: string, taskDescription: string): Promise<void> {
+  private async generateTitleAsync(
+    taskId: string,
+    taskDescription: string,
+    modelId: string,
+  ): Promise<void> {
     try {
-      const response = await ChatSessionTitleLlmSummarizer.generateTitle(taskDescription);
+      const response = await ChatSessionTitleLlmSummarizer.generateTitle(taskDescription, modelId);
       if (response?.success && response.title) {
         const entry = this.tasksById.get(taskId);
         if (entry) {

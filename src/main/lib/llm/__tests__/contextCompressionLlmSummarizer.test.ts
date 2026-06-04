@@ -6,11 +6,14 @@
 import { ContextCompressionLlmSummarizer } from '../contextCompressionLlmSummarizer';
 import { TokenCounter } from '../../token';
 
-// Mock ghcModelApi to prevent real API calls
+// Mock ghcModelApi to prevent real API calls.
+// callModel and callModelStrict share the same spy so existing assertions
+// that target either name continue to work.
+const { _ctxSummarizerCallModelMock } = vi.hoisted(() => ({
+  _ctxSummarizerCallModelMock: vi.fn(),
+}));
 vi.mock('../ghcModelApi', () => ({
-  ghcModelApi: {
-    callModel: vi.fn(),
-  },
+  ghcModelApi: { callModel: _ctxSummarizerCallModelMock, callModelStrict: _ctxSummarizerCallModelMock },
 }));
 
 // Mock logger

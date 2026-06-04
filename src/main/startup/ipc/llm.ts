@@ -81,9 +81,9 @@ export default function(ctx: Context) {
   // ===============================
 
   // System Prompt optimization
-  ipcMain.handle('llm:improveSystemPrompt', async (event, userInputPrompt: string) => {
+  ipcMain.handle('llm:improveSystemPrompt', async (event, userInputPrompt: string, modelId: string) => {
     try {
-      const result = await SystemPromptLlmWriter.improveSystemPrompt(userInputPrompt);
+      const result = await SystemPromptLlmWriter.improveSystemPrompt(userInputPrompt, modelId);
       return { success: true, data: result };
     } catch (error) {
       return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
@@ -91,9 +91,9 @@ export default function(ctx: Context) {
   });
 
   // MCP config formatting
-  ipcMain.handle('llm:formatMcpConfig', async (event, userInputMcpConfig: string) => {
+  ipcMain.handle('llm:formatMcpConfig', async (event, userInputMcpConfig: string, modelId: string) => {
     try {
-      const result = await McpConfigLlmFormatter.formatMcpConfig(userInputMcpConfig);
+      const result = await McpConfigLlmFormatter.formatMcpConfig(userInputMcpConfig, modelId);
       return { success: true, data: result };
     } catch (error) {
       return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
@@ -101,9 +101,9 @@ export default function(ctx: Context) {
   });
 
   // Chat session title generation
-  ipcMain.handle('llm:generateChatTitle', async (event, userMessage: string) => {
+  ipcMain.handle('llm:generateChatTitle', async (event, userMessage: string, modelId: string) => {
     try {
-      const result = await ChatSessionTitleLlmSummarizer.generateTitle(userMessage);
+      const result = await ChatSessionTitleLlmSummarizer.generateTitle(userMessage, modelId);
       return { success: true, data: result };
     } catch (error) {
       return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
@@ -111,9 +111,9 @@ export default function(ctx: Context) {
   });
 
   // File name generation (auto-generate file name and extension based on content)
-  ipcMain.handle('llm:generateFileName', async (event, content: string) => {
+  ipcMain.handle('llm:generateFileName', async (event, content: string, modelId: string) => {
     try {
-      const result = await FileNameLlmGenerator.generateFileName(content);
+      const result = await FileNameLlmGenerator.generateFileName(content, modelId);
       return { success: true, data: result };
     } catch (error) {
       return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
@@ -121,12 +121,12 @@ export default function(ctx: Context) {
   });
 
   // Document summary generation (generate LLM summary from extracted document text content)
-  ipcMain.handle('llm:generateDocumentSummary', async (event, fileName: string, content: string, truncated: boolean = false) => {
+  ipcMain.handle('llm:generateDocumentSummary', async (event, fileName: string, content: string, truncated: boolean = false, modelId: string) => {
     const logger = getAdvancedLogger();
     const startTime = Date.now();
-    logger.info(`[DocSummary] IPC request — fileName="${fileName}", contentLength=${content?.length ?? 0}, truncated=${truncated}`, 'llm:generateDocumentSummary');
+    logger.info(`[DocSummary] IPC request — fileName="${fileName}", contentLength=${content?.length ?? 0}, truncated=${truncated}, modelId="${modelId ?? ''}"`, 'llm:generateDocumentSummary');
     try {
-      const result = await DocumentSummaryLlmGenerator.generateSummary(fileName, content, truncated);
+      const result = await DocumentSummaryLlmGenerator.generateSummary(fileName, content, truncated, modelId);
       const durationMs = Date.now() - startTime;
       if (result.success) {
         logger.info(`[DocSummary] IPC success — fileName="${fileName}", summaryLength=${result.summary?.length ?? 0}, summary="${(result.summary || '').substring(0, 120)}${(result.summary?.length ?? 0) > 120 ? '...' : ''}", duration=${durationMs}ms`, 'llm:generateDocumentSummary');

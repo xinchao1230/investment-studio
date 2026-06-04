@@ -9,8 +9,14 @@
 const mockCallModel = vi.fn();
 
 vi.mock('../ghcModelApi', () => ({
-  ghcModelApi: { callModel: (...args: any[]) => mockCallModel(...args) },
+  ghcModelApi: {
+    callModel: (...args: any[]) => mockCallModel(...args),
+    callModelStrict: (...args: any[]) => mockCallModel(...args),
+  },
 }));
+
+const TEST_MODEL_ID = 'test-model-id';
+
 
 vi.mock('../../unifiedLogger', () => ({
   createLogger: () => ({
@@ -39,14 +45,14 @@ describe('FileNameLlmGenerator', () => {
 
   describe('generateFileName — input validation', () => {
     it('returns failure for content shorter than 3 chars', async () => {
-      const result = await FileNameLlmGenerator.generateFileName('ab');
+      const result = await FileNameLlmGenerator.generateFileName('ab', TEST_MODEL_ID);
       expect(result.success).toBe(false);
       expect(result.fileName).toMatch(/^pasted-content-/);
       expect(result.extension).toBe('txt');
     });
 
     it('returns failure when content contains only symbols/numbers', async () => {
-      const result = await FileNameLlmGenerator.generateFileName('12345678');
+      const result = await FileNameLlmGenerator.generateFileName('12345678', TEST_MODEL_ID);
       expect(result.success).toBe(false);
       expect(result.warnings).toBeDefined();
     });
@@ -64,7 +70,7 @@ describe('FileNameLlmGenerator', () => {
       });
       mockCallModel.mockResolvedValue(raw);
 
-      const result = await FileNameLlmGenerator.generateFileName('# Project Roadmap\n\n## Q1 2025\n- Feature A');
+      const result = await FileNameLlmGenerator.generateFileName('# Project Roadmap\n\n## Q1 2025\n- Feature A', TEST_MODEL_ID);
       expect(result.success).toBe(true);
       expect(result.fileName).toBe('project-roadmap');
       expect(result.extension).toBe('md');
@@ -74,7 +80,7 @@ describe('FileNameLlmGenerator', () => {
     it('falls back to untitled and txt when fileName and extension are missing in response', async () => {
       // Covers: parsed.fileName || 'untitled' and parsed.extension || 'txt'
       mockCallModel.mockResolvedValue(JSON.stringify({ success: true }));
-      const result = await FileNameLlmGenerator.generateFileName('Content for fallback defaults test');
+      const result = await FileNameLlmGenerator.generateFileName('Content for fallback defaults test', TEST_MODEL_ID);
       expect(result.success).toBe(true);
       expect(result.fileName).toBe('untitled');
       expect(result.extension).toBe('txt');
@@ -85,7 +91,7 @@ describe('FileNameLlmGenerator', () => {
       const payload = { success: true, fileName: 'clean-file', extension: 'txt', fullFileName: 'clean-file.txt' };
       mockCallModel.mockResolvedValue('```json\n' + JSON.stringify(payload) + '\n```');
 
-      const result = await FileNameLlmGenerator.generateFileName('Some meaningful content for naming');
+      const result = await FileNameLlmGenerator.generateFileName('Some meaningful content for naming', TEST_MODEL_ID);
       expect(result.success).toBe(true);
       expect(result.fileName).toBe('clean-file');
     });
@@ -94,7 +100,7 @@ describe('FileNameLlmGenerator', () => {
       const payload = { success: true, fileName: 'my-file', extension: 'py', fullFileName: 'my-file.py' };
       mockCallModel.mockResolvedValue('```\n' + JSON.stringify(payload) + '\n```');
 
-      const result = await FileNameLlmGenerator.generateFileName('def hello(): pass -- python function');
+      const result = await FileNameLlmGenerator.generateFileName('def hello(): pass -- python function', TEST_MODEL_ID);
       expect(result.success).toBe(true);
     });
 
@@ -107,7 +113,7 @@ describe('FileNameLlmGenerator', () => {
       });
       mockCallModel.mockResolvedValue(raw);
 
-      const result = await FileNameLlmGenerator.generateFileName('Some meaningful text content for testing');
+      const result = await FileNameLlmGenerator.generateFileName('Some meaningful text content for testing', TEST_MODEL_ID);
       expect(result.fileName).not.toMatch(/[A-Z!]/);
     });
 
@@ -121,7 +127,7 @@ describe('FileNameLlmGenerator', () => {
       });
       mockCallModel.mockResolvedValue(raw);
 
-      const result = await FileNameLlmGenerator.generateFileName('Content with enough meaningful words to analyze properly');
+      const result = await FileNameLlmGenerator.generateFileName('Content with enough meaningful words to analyze properly', TEST_MODEL_ID);
       expect(result.fileName!.split('-').length).toBeLessThanOrEqual(10);
     });
 
@@ -131,7 +137,7 @@ describe('FileNameLlmGenerator', () => {
         success: true, fileName: 'truncated', extension: 'txt', fullFileName: 'truncated.txt',
       }));
 
-      await FileNameLlmGenerator.generateFileName(longContent);
+      await FileNameLlmGenerator.generateFileName(longContent, TEST_MODEL_ID);
       const promptArg = mockCallModel.mock.calls[0][1];
       expect(promptArg).toContain('[content truncated]');
     });
@@ -142,7 +148,7 @@ describe('FileNameLlmGenerator', () => {
   describe('generateFileName — parse failure fallback', () => {
     it('returns fallback timestamp-based name on parse failure', async () => {
       mockCallModel.mockResolvedValue('not valid json!!!');
-      const result = await FileNameLlmGenerator.generateFileName('Content that should be named by the LLM');
+      const result = await FileNameLlmGenerator.generateFileName('Content that should be named by the LLM', TEST_MODEL_ID);
       expect(result.success).toBe(false);
       expect(result.fileName).toMatch(/^pasted-content-/);
       expect(result.errors).toBeDefined();
@@ -150,7 +156,7 @@ describe('FileNameLlmGenerator', () => {
 
     it('returns fallback when API throws', async () => {
       mockCallModel.mockRejectedValue(new Error('API error'));
-      const result = await FileNameLlmGenerator.generateFileName('Content that should be named');
+      const result = await FileNameLlmGenerator.generateFileName('Content that should be named', TEST_MODEL_ID);
       expect(result.success).toBe(false);
       expect(result.fileName).toMatch(/^pasted-content-/);
     });
@@ -158,7 +164,7 @@ describe('FileNameLlmGenerator', () => {
     it('handles non-Error thrown value in outer catch', async () => {
       // Covers: error instanceof Error ? error.message : 'Unknown error' — false branch (line 247)
       mockCallModel.mockRejectedValue('plain string, not an Error');
-      const result = await FileNameLlmGenerator.generateFileName('Content that should be named');
+      const result = await FileNameLlmGenerator.generateFileName('Content that should be named', TEST_MODEL_ID);
       expect(result.success).toBe(false);
       expect(result.errors![0]).toBe('Unknown error');
     });
@@ -168,7 +174,7 @@ describe('FileNameLlmGenerator', () => {
       // JSON.parse itself always throws SyntaxError (an Error), but we can test via another path.
       // This is best-effort; the non-Error branch in parse catch is hard to trigger.
       mockCallModel.mockResolvedValue('{ invalid json ]');
-      const result = await FileNameLlmGenerator.generateFileName('Content here for parsing');
+      const result = await FileNameLlmGenerator.generateFileName('Content here for parsing', TEST_MODEL_ID);
       expect(result.success).toBe(false);
     });
   });
@@ -177,5 +183,32 @@ describe('FileNameLlmGenerator', () => {
 
   it('fileNameLlmGenerator is the class itself', () => {
     expect(fileNameLlmGenerator).toBe(FileNameLlmGenerator);
+  });
+
+  describe('model routing (regression)', () => {
+    it('forwards modelId to ghcModelApi.callModelStrict (no hardcoded model)', async () => {
+      mockCallModel.mockResolvedValue(JSON.stringify({ success: true, fileName: 'my-file', fileExtension: 'md' }));
+
+      await FileNameLlmGenerator.generateFileName('Content with enough words for naming logic to engage.', 'caller-provided-model-id');
+
+      expect(mockCallModel).toHaveBeenCalled();
+      const [model] = mockCallModel.mock.calls[0];
+      expect(model).toBe('caller-provided-model-id');
+    });
+
+    it('refuses to invoke LLM when modelId is empty (no hidden fallback)', async () => {
+      mockCallModel.mockClear();
+      const result = await FileNameLlmGenerator.generateFileName('Content with enough words for naming logic to engage.', '');
+      expect(result.success).toBe(false);
+      expect(mockCallModel).not.toHaveBeenCalled();
+    });
+
+    it('returns failure when callModelStrict throws (invalid model on active provider)', async () => {
+      mockCallModel.mockRejectedValueOnce(
+        new Error("Model 'foo' is not available on the active provider 'openai'."),
+      );
+      const result = await FileNameLlmGenerator.generateFileName('Content with enough words for naming logic to engage.', 'caller-provided-model-id');
+      expect(result.success).toBe(false);
+    });
   });
 });

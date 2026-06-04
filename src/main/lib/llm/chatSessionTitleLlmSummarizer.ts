@@ -145,7 +145,10 @@ If the message is too vague or unclear, return:
    * @param userMessage User message to generate title from
    * @returns Chat session title response
    */
-  static async generateTitle(userMessage: string): Promise<ChatSessionTitleSummarizerResponse> {
+  static async generateTitle(
+    userMessage: string,
+    modelId: string,
+  ): Promise<ChatSessionTitleSummarizerResponse> {
     // Analyze memory-related content in the user message
     const memoryKeywords = /memory|fact|extract|remember|search|retrieve|personal|context|history|learn|store|recall|knowledge|previous|conversation|chat/i;
 
@@ -159,6 +162,16 @@ If the message is too vague or unclear, return:
         warnings: [validation.suggestion || 'Invalid message for title generation'],
         errors: [],
         title: 'General Discussion'
+      };
+    }
+
+    const trimmedModelId = typeof modelId === 'string' ? modelId.trim() : '';
+    if (!trimmedModelId) {
+      return {
+        success: false,
+        originalMessage: userMessage,
+        errors: ['No modelId provided for chat title generation; refusing hidden model fallback'],
+        title: 'General Discussion',
       };
     }
 
@@ -176,9 +189,10 @@ If the message is too vague or unclear, return:
         temperature: 0.3 // Low temperature for consistency
       };
 
-      // Use the claude-haiku-4.5 model for title generation (faster and lower cost)
-      const rawResponse = await ghcModelApi.callModel(
-        'claude-haiku-4.5',
+      // callModelStrict refuses to silently fall back to a different model
+      // when the supplied modelId is not valid for the active provider.
+      const rawResponse = await ghcModelApi.callModelStrict(
+        trimmedModelId,
         llmParams.prompt,
         this.SYSTEM_PROMPT,
         llmParams.maxTokens,

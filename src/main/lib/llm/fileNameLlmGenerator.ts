@@ -198,9 +198,15 @@ CONTENT:
   /**
    * Generate file name from content using LLM
    * @param content Content to generate file name from
+   * @param modelId Required: the user's currently selected model. Empty value
+   *   short-circuits without calling the LLM and returns a deterministic
+   *   timestamp-based fallback — no hidden model fallback.
    * @returns File name generator response
    */
-  static async generateFileName(content: string): Promise<FileNameGeneratorResponse> {
+  static async generateFileName(
+    content: string,
+    modelId: string,
+  ): Promise<FileNameGeneratorResponse> {
     try {
       // Validate content
       const validation = this.validateContent(content);
@@ -215,6 +221,21 @@ CONTENT:
         };
       }
 
+      const trimmedModelId = typeof modelId === 'string' ? modelId.trim() : '';
+      if (!trimmedModelId) {
+        const timestamp = Date.now();
+        logger.warn(
+          `[FileNameLlmGenerator] No modelId provided; refusing LLM call and returning deterministic fallback name`,
+        );
+        return {
+          success: false,
+          fileName: `pasted-content-${timestamp}`,
+          extension: 'txt',
+          fullFileName: `pasted-content-${timestamp}.txt`,
+          errors: ['No modelId provided for file name generation; refusing hidden model fallback'],
+        };
+      }
+
       // Truncate content if too long (use first 2000 chars for analysis)
       const truncatedContent = content.length > 2000
         ? content.slice(0, 2000) + '\n...[content truncated]...'
@@ -223,9 +244,11 @@ CONTENT:
       // Build the prompt
       const userPrompt = `${this.GENERATION_PROMPT}${truncatedContent}`;
 
-      // Call LLM API - using claude-haiku-4.5 model (faster and lower cost)
-      const response = await ghcModelApi.callModel(
-        'claude-haiku-4.5',
+      // Use the caller-supplied modelId (the user's current model). callModelStrict
+      // throws if the model isn't available on the active provider — no silent
+      // fallback to a provider default.
+      const response = await ghcModelApi.callModelStrict(
+        trimmedModelId,
         userPrompt,
         this.SYSTEM_PROMPT,
         500,  // maxTokens

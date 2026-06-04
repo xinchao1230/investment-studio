@@ -186,7 +186,7 @@ Please generate a structured summary according to the above requirements:`;
           this.LOG_SOURCE,
         );
 
-        const response = await ghcModelApi.callModel(
+        const response = await ghcModelApi.callModelStrict(
           modelId,
           prompt,
           this.SYSTEM_PROMPT,
