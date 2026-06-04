@@ -26,7 +26,7 @@ import {
 import { BRAND_NAME } from '@shared/constants/branding';
 import { ChatSessionFile } from './chatSessionFileOps';
 import { chatSessionManager } from './chatSessionManager';
-import { getDefaultWorkspacePath, isDefaultWorkspacePath } from './pathUtils';
+import { getDefaultWorkspacePath, isDefaultWorkspacePath, PROFILE_DIR_NAME } from './pathUtils';
 // NOTE: getExternalAgentService is imported dynamically inside the IIFE
 // below to break a static cycle with src/main/startup/lazy.ts (lazy.ts
 // statically imports this module too). Under Rolldown chunking the cycle
@@ -178,14 +178,18 @@ export class ProfileCacheManager {
 
   /**
    * Get the profile directory path.
+   *
+   * NOTE: `alias` is accepted for backwards compatibility with existing callers
+   * but is ignored — all data lives in a single shared `profiles/<PROFILE_DIR_NAME>/`
+   * directory. See docs/plans/2026-06-03-profile-dir-default-design.md.
    */
-  private getProfileDirectoryPath(alias: string): string {
+  private getProfileDirectoryPath(_alias: string): string {
     const electronApp = getElectronApp();
     if (!electronApp) {
       throw new Error('Electron app not available');
     }
     const appPath = electronApp.getPath('userData');
-    return path.join(appPath, 'profiles', alias);
+    return path.join(appPath, 'profiles', PROFILE_DIR_NAME);
   }
 
   /**

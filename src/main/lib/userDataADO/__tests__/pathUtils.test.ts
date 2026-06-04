@@ -61,13 +61,16 @@ describe('pathUtils', () => {
   });
 
   describe('getProfileDirectoryPath', () => {
-    it('throws when alias is empty', () => {
-      expect(() => getProfileDirectoryPath('')).toThrow('alias is required');
+    it('resolves to the shared "default" directory regardless of alias', () => {
+      const a = getProfileDirectoryPath('alice');
+      const b = getProfileDirectoryPath('bob');
+      expect(a).toMatch(/profiles[\\/]default$/);
+      expect(b).toBe(a);
     });
 
-    it('returns path containing alias', () => {
-      const result = getProfileDirectoryPath('alice');
-      expect(result).toContain('alice');
+    it('accepts empty / missing alias', () => {
+      expect(() => getProfileDirectoryPath('')).not.toThrow();
+      expect(() => getProfileDirectoryPath()).not.toThrow();
     });
   });
 

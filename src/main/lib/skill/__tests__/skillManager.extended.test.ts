@@ -603,7 +603,7 @@ describe('SkillManager — extended coverage', () => {
 
       // Force renameSync to fail by making userSkillsDir a file (so mkdirSync on it throws)
       // We'll instead mock fs.renameSync indirectly by creating the destDir as a file
-      const userSkillsDir = path.join(tempRoot, 'profiles', 'tester2', 'skills');
+      const userSkillsDir = path.join(tempRoot, 'profiles', 'default', 'skills');
       fs.mkdirSync(path.dirname(userSkillsDir), { recursive: true });
       // write a file where the directory would be
       fs.writeFileSync(userSkillsDir, 'not a dir');

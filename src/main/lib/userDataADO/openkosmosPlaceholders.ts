@@ -14,7 +14,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import { getUserDataPath } from './pathUtils';
+import { getUserDataPath, PROFILE_DIR_NAME } from './pathUtils';
 import { createLogger } from '../unifiedLogger';
 const logger = createLogger();
 
@@ -205,11 +205,11 @@ export class OpenKosmosPlaceholderManager {
 
   /**
    * Get the chat_workspaces folder path for a profile
-   * Format: {OpenKosmos app user data folder}/profiles/{alias}/chat_workspaces
+   * Format: {OpenKosmos app user data folder}/profiles/<PROFILE_DIR_NAME>/chat_workspaces
    */
-  private getProfileWorkspacesFolderPath(alias: string): string {
+  private getProfileWorkspacesFolderPath(_alias: string): string {
     const userDataPath = getUserDataPath();
-    return path.join(userDataPath, 'profiles', alias, 'chat_workspaces');
+    return path.join(userDataPath, 'profiles', PROFILE_DIR_NAME, 'chat_workspaces');
   }
 
   /**

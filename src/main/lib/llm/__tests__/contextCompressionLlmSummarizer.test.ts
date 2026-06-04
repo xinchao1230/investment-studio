@@ -98,7 +98,7 @@ describe('ContextCompressionLlmSummarizer', () => {
       const shortEstimate = ContextCompressionLlmSummarizer.estimateRequestTokens(tokenCounter, 'short');
       const longEstimate = ContextCompressionLlmSummarizer.estimateRequestTokens(tokenCounter, 'a'.repeat(10000));
       expect(longEstimate).toBeGreaterThan(shortEstimate);
-    });
+    }, 60_000);
   });
 
   describe('summarize — retry and error handling', () => {

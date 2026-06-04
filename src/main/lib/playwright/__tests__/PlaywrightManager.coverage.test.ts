@@ -523,7 +523,7 @@ describe('PlaywrightManager — _getPlaywrightCacheDir platform paths', () => {
     Object.defineProperty(process, 'platform', { value: 'darwin' });
     const manager = freshManager();
     const dir = (manager as any)._getPlaywrightCacheDir();
-    expect(dir).toContain('Library/Caches');
+    expect(dir).toMatch(/Library[\\/]Caches/);
   });
 
   it('uses LOCALAPPDATA on win32', () => {
@@ -542,7 +542,7 @@ describe('PlaywrightManager — _getPlaywrightCacheDir platform paths', () => {
     process.env.XDG_CACHE_HOME = '/custom/cache';
     const manager = freshManager();
     const dir = (manager as any)._getPlaywrightCacheDir();
-    expect(dir).toContain('/custom/cache');
+    expect(dir).toMatch(/[\\/]custom[\\/]cache/);
     process.env.XDG_CACHE_HOME = saved;
   });
 });

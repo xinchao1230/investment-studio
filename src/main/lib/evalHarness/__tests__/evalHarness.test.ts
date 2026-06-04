@@ -9,6 +9,7 @@
  */
 
 import { RunTestBodySchema, JudgeBodySchema } from '../evalProtocol';
+import { BRAND_NAME } from '@shared/constants/branding';
 
 // ── Shared mocks for all test suites ──
 const mockStreamMessage = vi.fn().mockResolvedValue([
@@ -784,8 +785,13 @@ describe('EvalJudgeRunner', () => {
     ).rejects.toThrow('No model configured for primary agent');
   });
 
-  it('uses "Kobi" as default primary agent name when profile.primaryAgent is absent', async () => {
+  it('uses brand-default primary agent name when profile.primaryAgent is absent', async () => {
     mockJudgeGetCachedProfile.mockReturnValueOnce({}); // no primaryAgent field
+    // Brand-specific default: 'Stella' for investment-studio, 'Kobi' otherwise.
+    const expectedDefault = BRAND_NAME === 'investment-studio' ? 'Stella' : 'Kobi';
+    mockJudgeGetAllChatConfigs.mockReturnValueOnce([
+      { chat_id: 'chat-1', agent: { name: expectedDefault, model: 'gpt-4o' } },
+    ]);
     const runner = new EvalJudgeRunner('testuser');
 
     const result = await runner.run({

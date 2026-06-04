@@ -236,7 +236,7 @@ describe('expandPath', () => {
   it('expands ${HOME} style env vars', async () => {
     process.env.TEST_EXPAND_VAR = '/test/value';
     const result = await expandPath('${TEST_EXPAND_VAR}/sub');
-    expect(result).toContain('/test/value');
+    expect(result).toMatch(/[\\/]test[\\/]value/);
     delete process.env.TEST_EXPAND_VAR;
   });
 

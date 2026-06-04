@@ -54,17 +54,11 @@
   background: #FFFFFF;
   border: 1px solid rgba(0, 0, 0, 0.12);
   border-radius: 12px;
-  cursor: pointer;
   position: relative;
   transition: background 0.2s ease, border 0.2s ease;
 }
 
-.sub-agent-card-wrapper:not(.selected):hover {
-  background: var(--si-code-bg);
-  border: 1px solid rgba(0, 0, 0, 0.12);
-}
-
-.sub-agent-card-wrapper.selected {
+.sub-agent-card-wrapper:hover {
   background: var(--si-code-bg);
   border: 1px solid rgba(0, 0, 0, 0.12);
 }

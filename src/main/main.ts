@@ -60,6 +60,7 @@ import { getDebugInfoEntries } from './lib/utilities/debugInfoEntries';
 import { buildDebugInfoManifest } from './lib/utilities/debugInfoManifest';
 import { createRedactor, isTextFile, redactFileContent } from './lib/utilities/redact';
 import { featureFlagManager, isFeatureEnabled } from './lib/featureFlags';
+import { PROFILE_DIR_NAME } from './lib/userDataADO/pathUtils';
 
 import {
   getProfileCacheManager,
@@ -1581,7 +1582,7 @@ class ElectronApp {
                 const profileDirectory = path.join(
                   app.getPath('userData'),
                   'profiles',
-                  this.currentUserAlias,
+                  PROFILE_DIR_NAME,
                 );
                 // Ensure profile directory exists
                 if (!fs.existsSync(profileDirectory)) {

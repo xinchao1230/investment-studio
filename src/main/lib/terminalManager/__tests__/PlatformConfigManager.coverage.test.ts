@@ -404,7 +404,7 @@ describe('PlatformConfigManager.untildify', () => {
   it('expands ~/ to homedir', () => {
     const result = mgr.untildify('~/Documents/file.txt');
     expect(result).not.toContain('~');
-    expect(result).toContain('Documents/file.txt');
+    expect(result).toMatch(/Documents[\\/]file\.txt/);
   });
 
   it('returns path unchanged when not starting with ~/', () => {

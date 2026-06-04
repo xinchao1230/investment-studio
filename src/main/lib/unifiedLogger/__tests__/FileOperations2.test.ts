@@ -92,13 +92,13 @@ describe('FileOperations - additional coverage', () => {
 
   it('getLogFilePath with custom filename', () => {
     const p = getLogFilePath('/logs', 'custom.log');
-    expect(p).toBe('/logs/custom.log');
+    expect(p).toMatch(/^[\\/]logs[\\/]custom\.log$/);
   });
 
   it('getLogFilePath without filename uses getCurrentLogFileName', () => {
     process.env.NODE_ENV = 'production';
     const p = getLogFilePath('/logs');
-    expect(p).toContain('/logs/openkosmos-');
+    expect(p).toMatch(/[\\/]logs[\\/]openkosmos-/);
   });
 
   it('formatLogEntryForFile with source and metadata', () => {

@@ -27,7 +27,7 @@ describe('skillSnapshotBuilder', () => {
     });
 
     expect(snapshot.binding_signature).toBe(JSON.stringify(['pptx', 'missing-skill']));
-    const expectedSkillPath = path.join('/tmp/openkosmos-user-data', 'profiles', 'alice', 'skills', 'pptx', 'SKILL.md');
+    const expectedSkillPath = path.join('/tmp/openkosmos-user-data', 'profiles', 'default', 'skills', 'pptx', 'SKILL.md');
 
     expect(snapshot.skills).toEqual([
       {
@@ -113,7 +113,7 @@ describe('skillSnapshotBuilder', () => {
       userDataPath: '',
     });
 
-    expect(snapshot.skills[0].file_path).toMatch(/profiles[/\\]alice[/\\]skills[/\\]pptx[/\\]SKILL\.md/);
+    expect(snapshot.skills[0].file_path).toMatch(/profiles[/\\]default[/\\]skills[/\\]pptx[/\\]SKILL\.md/);
   });
 
   it('handles skills with missing description and version fields gracefully', () => {

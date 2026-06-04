@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import path from 'path';
 
 // ── Mock fs ───────────────────────────────────────────────────────────────────
 const { mockExistsSync, mockMkdirSync, mockReadFileSync, mockWriteFileSync } = vi.hoisted(() => ({
@@ -79,7 +80,7 @@ describe('getArchivedAgentsFilePath', () => {
   it('creates archive dir if it does not exist', () => {
     const ctx = makeCtx();
     const result = getArchivedAgentsFilePath(ctx, 'alice');
-    expect(mockMkdirSync).toHaveBeenCalledWith('/profiles/alice/archive', { recursive: true });
+    expect(mockMkdirSync).toHaveBeenCalledWith(path.join('/profiles/alice', 'archive'), { recursive: true });
     expect(result).toContain('archived_agents.json');
   });
 

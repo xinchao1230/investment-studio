@@ -9,6 +9,7 @@ import { SubAgentFileManager } from "../../lib/subAgent/subAgentFileManager";
 import { builtinAgentRegistry } from "../../lib/subAgent/builtinAgentRegistry";
 import { SubAgentTaskStore } from "../../lib/subAgent/subAgentTaskStore";
 import { SubAgentTaskWatcherRegistry } from "../../lib/subAgent/subAgentTaskWatcherRegistry";
+import { PROFILE_DIR_NAME } from '../../lib/userDataADO/pathUtils';
 
 export default function(ctx: Context) {
 
@@ -111,7 +112,7 @@ export default function(ctx: Context) {
       const pcManager = await getProfileCacheManager();
 
       const appPath = app.getPath('userData');
-      const profileDir = path.join(appPath, 'profiles', ctx.currentUserAlias);
+      const profileDir = path.join(appPath, 'profiles', PROFILE_DIR_NAME);
 
       // Import: parse .md → write AGENT.md
       const config = await fileManager.importClaudeCodeAgent(profileDir, filePath);
@@ -144,7 +145,7 @@ export default function(ctx: Context) {
       const fileManager = SubAgentFileManager.getInstance();
 
       const appPath = app.getPath('userData');
-      const profileDir = path.join(appPath, 'profiles', ctx.currentUserAlias);
+      const profileDir = path.join(appPath, 'profiles', PROFILE_DIR_NAME);
 
       const config = builtinAgentRegistry.get(name) ?? await fileManager.readAgentConfig(profileDir, name);
       if (!config) {
@@ -171,7 +172,7 @@ export default function(ctx: Context) {
       const fileManager = SubAgentFileManager.getInstance();
 
       const appPath = app.getPath('userData');
-      const profileDir = path.join(appPath, 'profiles', ctx.currentUserAlias);
+      const profileDir = path.join(appPath, 'profiles', PROFILE_DIR_NAME);
 
       // For built-ins, open the shipped resource directory (read-only).
       let agentDir: string;

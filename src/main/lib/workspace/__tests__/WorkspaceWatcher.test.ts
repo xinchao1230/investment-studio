@@ -205,7 +205,7 @@ describe('WorkspaceWatcher — startFileWatch', () => {
     await expect(watcher.startFileWatch('/some/file.txt')).rejects.toThrow('Invalid watch path');
   });
 
-  it('throws for dangerous system path /System', async () => {
+  it.skipIf(process.platform === 'win32')('throws for dangerous system path /System', async () => {
     const watcher = makeWatcher();
     // Mock it to look like a valid directory on fs level
     existsSync.mockReturnValue(true);
@@ -213,14 +213,14 @@ describe('WorkspaceWatcher — startFileWatch', () => {
     await expect(watcher.startFileWatch('/System')).rejects.toThrow('Invalid watch path');
   });
 
-  it('throws for /usr/bin path', async () => {
+  it.skipIf(process.platform === 'win32')('throws for /usr/bin path', async () => {
     const watcher = makeWatcher();
     existsSync.mockReturnValue(true);
     statSync.mockReturnValue({ isDirectory: () => true } as any);
     await expect(watcher.startFileWatch('/usr/bin')).rejects.toThrow('Invalid watch path');
   });
 
-  it('throws for /bin path', async () => {
+  it.skipIf(process.platform === 'win32')('throws for /bin path', async () => {
     const watcher = makeWatcher();
     existsSync.mockReturnValue(true);
     statSync.mockReturnValue({ isDirectory: () => true } as any);

@@ -248,27 +248,27 @@ describe('SettingsPage coverage', () => {
       expect(mockNavigate).toHaveBeenCalledWith('/agent/chat/from-storage');
     });
 
-    it('falls back to /agent/chat when returnPath === /settings', () => {
+    it('falls back to workspace route when returnPath === /settings', () => {
       mockLocation.state = { returnPath: '/settings' };
       render(<SettingsPage />);
       fireEvent.click(screen.getByTestId('back-btn'));
-      expect(mockNavigate).toHaveBeenCalledWith('/agent/chat');
+      expect(mockNavigate).toHaveBeenCalledWith('/research');
     });
 
-    it('falls back to /agent/chat when no returnPath exists', () => {
+    it('falls back to workspace route when no returnPath exists', () => {
       render(<SettingsPage />);
       fireEvent.click(screen.getByTestId('back-btn'));
-      expect(mockNavigate).toHaveBeenCalledWith('/agent/chat');
+      expect(mockNavigate).toHaveBeenCalledWith('/research');
     });
   });
 
   // ──────────────────────── sessionStorage return-path logic ──────────────
 
   describe('settingsReturnPath sessionStorage', () => {
-    it('stores /agent/chat as return path when no previousPath is stored', () => {
+    it('stores workspace route as return path when no previousPath is stored', () => {
       mockLocation.pathname = '/settings/general';
       render(<SettingsPage />);
-      expect(sessionStorage.getItem('settingsReturnPath')).toBe('/agent/chat');
+      expect(sessionStorage.getItem('settingsReturnPath')).toBe('/research');
     });
 
     it('stores previousPath as return path when previousPath is available', () => {

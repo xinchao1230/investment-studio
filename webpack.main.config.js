@@ -137,6 +137,8 @@ module.exports = (env, argv) => {
         '@kutalia/whisper-node-addon',
         // Additional AI/ML modules that may contain native bindings
         '@google/generative-ai',
+        '@google/genai',
+        '@anthropic-ai/sdk',
         'cohere-ai',
         'ollama',
         'neo4j-driver',

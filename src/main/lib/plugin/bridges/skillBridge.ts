@@ -20,6 +20,7 @@ import type { SkillConfig } from '../../skill/skillManager';
 import type { LoadedPlugin } from '../types';
 import { profileCacheManager } from "../../userDataADO/profileCacheManager";
 import { deleteInstalledSkill } from "../../skill/deleteInstalledSkill";
+import { PROFILE_DIR_NAME } from '../../userDataADO/pathUtils';
 
 const logger = createLogger();
 
@@ -68,7 +69,7 @@ export async function injectPluginSkills(
   // Dynamic import to avoid circular dependency
 
   const userSkillsDir = path.join(
-    app.getPath('userData'), 'profiles', userAlias, 'skills',
+    app.getPath('userData'), 'profiles', PROFILE_DIR_NAME, 'skills',
   );
   if (!fs.existsSync(userSkillsDir)) {
     fs.mkdirSync(userSkillsDir, { recursive: true });

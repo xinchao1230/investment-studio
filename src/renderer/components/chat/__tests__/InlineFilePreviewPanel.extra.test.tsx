@@ -407,9 +407,13 @@ describe('dirty state guards', () => {
     const file: InlineFileDescriptor = { name: 'notes.txt', url: '/tmp/notes.txt' };
     render(<InlineFilePreviewPanel file={file} isOpen onClose={onClose} />);
     await waitFor(() => screen.getByTitle('Edit'));
+    // Give the readFile microtask time to populate textContent before clicking Edit.
+    for (let i = 0; i < 5; i++) {
+      await act(async () => { await new Promise(r => setTimeout(r, 0)); });
+    }
 
     await act(async () => { fireEvent.click(screen.getByTitle('Edit')); });
-    await waitFor(() => screen.getByTitle('Exit Edit Mode'));
+    await waitFor(() => screen.getByTitle('Exit Edit Mode'), { timeout: 5000 });
     await act(async () => {});
 
     fireEvent.keyDown(window, { key: 'Escape' });

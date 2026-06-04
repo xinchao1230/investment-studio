@@ -140,7 +140,9 @@ describe('ChatSessionFileOps', () => {
       // Reset instances to clear previous writes
       (ChatSessionFileOps as any).instances = new Map();
       const freshOps = ChatSessionFileOps.getInstance('bob');
-      const result = await freshOps.updateChatSession(VALID_SESSION_ID, { title: 'New' });
+      // Use a session ID that was never written to disk
+      const missingId = 'chatSession_20260101120000_device_missing';
+      const result = await freshOps.updateChatSession(missingId, { title: 'New' });
       expect(result.success).toBe(false);
     });
 

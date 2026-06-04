@@ -254,7 +254,7 @@ describe('VscodeStdioTransport', () => {
     await t.start();
     const call = mockTerminalManager.createMcpTransport.mock.calls[0][0];
     expect(call.command).not.toContain('~');
-    expect(call.command).toContain('/bin/mcp-server');
+    expect(call.command).toMatch(/[\\/]bin[\\/]mcp-server/);
   });
 
   it('resolves relative cwd against home directory', async () => {

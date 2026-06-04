@@ -22,6 +22,7 @@ import { Message } from '@shared/types/chatTypes';
 import { deserializeMessage } from '@shared/utils/deserialize-message';
 import type { InteractionHistoryEntry } from '@shared/types/interactiveRequestTypes';
 import { isValidChatSessionIdFormat } from '../../../shared/utils/idFormats';
+import { PROFILE_DIR_NAME } from './pathUtils';
 
 /**
  * ChatSession File Structure
@@ -92,7 +93,7 @@ export class ChatSessionFileOps {
       userDataPath = path.join(os.tmpdir(), 'openkosmos-app-test');
     }
 
-    this.basePath = path.join(userDataPath, 'profiles', userAlias, 'chat_sessions');
+    this.basePath = path.join(userDataPath, 'profiles', PROFILE_DIR_NAME, 'chat_sessions');
     this.ensureDirectoryExists();
   }
 

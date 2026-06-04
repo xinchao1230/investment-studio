@@ -217,7 +217,7 @@ describe('AgentChatManager notifications', () => {
     expect(manager.sessionCoordinator.hasPendingUnread(activeSessionId)).toBe(true);
   });
 
-  it('does not treat the current session as protected when the main window is not foreground', () => {
+  it('treats the current session as protected even when the main window is not foreground', () => {
     const manager = createManager() as any;
     const window = createMockWindow({
       isVisible: true,
@@ -229,7 +229,8 @@ describe('AgentChatManager notifications', () => {
     manager.setMainWindow(window as any);
     registerInteractiveSession(manager, activeSessionId, { getChatStatus: vi.fn(() => 'idle') });
 
-    expect(manager.isProtectedSession(activeSessionId)).toBe(false);
+    // Active session is always protected from idle cleanup regardless of window foreground state.
+    expect(manager.isProtectedSession(activeSessionId)).toBe(true);
   });
 
   it('broadcasts runtime status changes for scheduled-silent instances without an attached sender', () => {
@@ -368,7 +369,7 @@ describe('AgentChatManager notifications', () => {
     expect(idleCalls).toHaveLength(1);
   });
 
-  it('shows a system notification when a blurred current session completes', async () => {
+  it('does not show a notification when a blurred current session completes (current session is protected)', async () => {
     const manager = createManager() as any;
     const window = createMockWindow();
     const activeSessionId = 'chatSession_active';
@@ -388,9 +389,9 @@ describe('AgentChatManager notifications', () => {
     window.emitEvent('blur');
     await manager.markChatSessionAsUnreadIfNeeded(activeSessionId);
 
-    expect(manager.updateChatSessionReadStatus).toHaveBeenCalledWith('chat_1', activeSessionId, 'unread');
-    expect(MockNotification.instances).toHaveLength(1);
-    expect(MockNotification.instances[0].show).toHaveBeenCalledTimes(1);
+    // Active session is always protected; markChatSessionAsUnreadIfNeeded early-returns.
+    expect(manager.updateChatSessionReadStatus).not.toHaveBeenCalled();
+    expect(MockNotification.instances).toHaveLength(0);
   });
 
   it('clears pending unread state when the current session regains foreground', () => {
@@ -566,7 +567,7 @@ describe('AgentChatManager notifications', () => {
     expect(manager.updateSessionTitle('missing_session', 'Renamed Title')).toBe(false);
   });
 
-  it('shows a system notification when a blurred current session finishes via retryChat', async () => {
+  it('does not show a notification when a blurred current session finishes via retryChat (current session is protected)', async () => {
     const manager = createManager() as any;
     const window = createMockWindow();
     const activeSessionId = 'chatSession_retry';
@@ -592,9 +593,9 @@ describe('AgentChatManager notifications', () => {
     const result = await manager.retryChat(activeSessionId);
 
     expect(result).toEqual({ success: true, data: [{ id: 'msg_1' }] });
-    expect(manager.updateChatSessionReadStatus).toHaveBeenCalledWith('chat_retry', activeSessionId, 'unread');
-    expect(MockNotification.instances).toHaveLength(1);
-    expect(MockNotification.instances[0].show).toHaveBeenCalledTimes(1);
+    // Active session is always protected; markChatSessionAsUnreadIfNeeded early-returns.
+    expect(manager.updateChatSessionReadStatus).not.toHaveBeenCalled();
+    expect(MockNotification.instances).toHaveLength(0);
   });
 
   it('resyncs frontend cache via notifyChatSessionCacheCreated after successful retryChat', async () => {

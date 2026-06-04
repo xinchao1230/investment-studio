@@ -13,6 +13,7 @@ import type { BrowserWindow } from 'electron';
 import type { McpServerConfig } from '../userDataADO/types/profile';
 import type { MemexResult } from '@shared/ipc/memex';
 import { safeConsole } from '../utilities/safeConsole';
+import { PROFILE_DIR_NAME } from '../userDataADO/pathUtils';
 
 const execAsync = promisify(exec);
 const MEMEX_SERVER_PREFIX = 'memex-';
@@ -43,8 +44,8 @@ function isMemexServer(serverName: string): boolean {
   return serverName.startsWith(MEMEX_SERVER_PREFIX);
 }
 
-function buildMemexHome(userDataDir: string, alias: string, chatId: string): string {
-  return path.join(userDataDir, 'profiles', alias, 'memex_memory', chatId);
+function buildMemexHome(userDataDir: string, _alias: string, chatId: string): string {
+  return path.join(userDataDir, 'profiles', PROFILE_DIR_NAME, 'memex_memory', chatId);
 }
 
 function buildMcpConfig(serverName: string, memexHome: string): McpServerConfig {

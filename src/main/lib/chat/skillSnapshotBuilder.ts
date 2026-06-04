@@ -2,6 +2,7 @@ import * as path from 'path';
 import { app } from 'electron';
 import { createLogger } from '../unifiedLogger';
 import { wrapInSystemReminder } from '../chat/systemReminderUtils';
+import { PROFILE_DIR_NAME } from '../userDataADO/pathUtils';
 import type {
   ChatSkillSnapshot,
   ChatSkillSnapshotItem,
@@ -60,13 +61,13 @@ function resolveUserDataPath(explicitUserDataPath?: string): string {
   return '';
 }
 
-function buildSkillFilePath(userAlias: string, skillName: string, userDataPath?: string): string {
+function buildSkillFilePath(_userAlias: string, skillName: string, userDataPath?: string): string {
   const resolvedUserDataPath = resolveUserDataPath(userDataPath);
   if (!resolvedUserDataPath) {
-    return path.join('profiles', userAlias, 'skills', skillName, 'SKILL.md');
+    return path.join('profiles', PROFILE_DIR_NAME, 'skills', skillName, 'SKILL.md');
   }
 
-  return path.join(resolvedUserDataPath, 'profiles', userAlias, 'skills', skillName, 'SKILL.md');
+  return path.join(resolvedUserDataPath, 'profiles', PROFILE_DIR_NAME, 'skills', skillName, 'SKILL.md');
 }
 
 function buildSkillsPrompt(snapshotSkills: ChatSkillSnapshotItem[]): string {

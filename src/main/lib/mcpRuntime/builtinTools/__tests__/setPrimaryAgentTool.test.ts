@@ -1,4 +1,5 @@
 import { SetPrimaryAgentTool } from '../setPrimaryAgentTool';
+import { BRAND_NAME } from '@shared/constants/branding';
 
 const mockGetCachedProfile = vi.fn();
 const mockUpdatePrimaryAgent = vi.fn();
@@ -81,13 +82,15 @@ describe('SetPrimaryAgentTool', () => {
     expect(mockUpdatePrimaryAgent).not.toHaveBeenCalled();
   });
 
-  it('uses "Kobi" as default previousPrimaryAgent when profile has no primaryAgent', async () => {
+  it('uses brand default as previousPrimaryAgent when profile has no primaryAgent', async () => {
     mockGetCachedProfile.mockReturnValue({ mcp_servers: [] }); // no primaryAgent field
     mockUpdatePrimaryAgent.mockResolvedValue(true);
 
     const result = await SetPrimaryAgentTool.execute({ agent_name: 'NewAgent' });
 
-    expect(result.previousPrimaryAgent).toBe('Kobi');
+    // Brand-specific default: 'Stella' for investment-studio, 'Kobi' otherwise.
+    const expectedDefault = BRAND_NAME === 'investment-studio' ? 'Stella' : 'Kobi';
+    expect(result.previousPrimaryAgent).toBe(expectedDefault);
   });
 
   // ========== Successful update ==========

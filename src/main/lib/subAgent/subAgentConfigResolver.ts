@@ -15,6 +15,7 @@ import type {
 import { profileCacheManager } from '../userDataADO/profileCacheManager';
 import * as path from 'path';
 import { extractMonthFromChatSessionId } from '../userDataADO/pathUtils';
+import { PROFILE_DIR_NAME } from '../userDataADO/pathUtils';
 import { app } from 'electron';
 import { getModelById } from '../llm/ghcModelsManager';
 import { INHERIT_MODEL_VALUE } from '@shared/constants/subAgent';
@@ -188,7 +189,7 @@ export function validateToolAvailability(
   try {
     const appPath = app.getPath('userData');
     for (const skill of resolved.resolvedSkills) {
-      const skillDir = path.join(appPath, 'profiles', userAlias, 'skills', skill.name);
+      const skillDir = path.join(appPath, 'profiles', PROFILE_DIR_NAME, 'skills', skill.name);
       if (!existsSync(skillDir)) {
         warnings.push(`Skill "${skill.name}" is not installed`);
       }

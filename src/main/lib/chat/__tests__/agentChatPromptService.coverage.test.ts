@@ -100,6 +100,7 @@ vi.mock('../../mcpRuntime/mcpClientManager', () => ({
   },
 }));
 
+import path from 'path';
 import { AgentChatPromptService } from '../agentChatPromptService';
 import type { AgentChatPromptServiceDeps } from '../agentChatPromptService';
 import { getGlobalSystemPromptAsMessages } from '../globalSystemPrompt';
@@ -164,15 +165,16 @@ describe('getAgentSpecificSystemPrompt — claude skills directory', () => {
       },
     ]);
 
-    const skillDirPath = '/my/kb/.claude/skills/my-skill';
+    const skillDirPath = path.join('/my/kb/.claude/skills/my-skill');
+    const expectedClaudeSkillsDir = path.join('/my/kb', '.claude', 'skills');
     fsMock.existsSync.mockImplementation((p: string) => {
-      if (p === '/my/kb/.claude/skills') return true;
+      if (p === expectedClaudeSkillsDir) return true;
       if (p.includes('SKILL.md')) return true;
       return false;
     });
 
     fsMock.readdirSync.mockImplementation((dir: string) => {
-      if (dir === '/my/kb/.claude/skills') {
+      if (dir === expectedClaudeSkillsDir) {
         return [{ name: 'my-skill', isDirectory: () => true }];
       }
       return [];
@@ -198,13 +200,14 @@ describe('getAgentSpecificSystemPrompt — claude skills directory', () => {
       },
     ]);
 
+    const expectedClaudeSkillsDir2 = path.join('/my/kb', '.claude', 'skills');
     fsMock.existsSync.mockImplementation((p: string) => {
-      if (p === '/my/kb/.claude/skills') return true;
+      if (p === expectedClaudeSkillsDir2) return true;
       return false; // No SKILL.md
     });
 
     fsMock.readdirSync.mockImplementation((dir: string) => {
-      if (dir === '/my/kb/.claude/skills') {
+      if (dir === expectedClaudeSkillsDir2) {
         return [{ name: 'skill-no-md', isDirectory: () => true }];
       }
       return [];
