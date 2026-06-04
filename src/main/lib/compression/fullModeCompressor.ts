@@ -105,7 +105,7 @@ export class FullModeCompressor {
    * Strategy: prioritize recent message continuity and tool-pairing integrity,
    * with optional extra anchors, then compress the middle portion.
    */
-  async compressMessages(messages: Message[]): Promise<FullModeCompressionResult> {
+  async compressMessages(messages: Message[], modelId: string): Promise<FullModeCompressionResult> {
     const startTime = Date.now();
     this.chunkSummaryCallCount = 0;
     this.totalLlmCallCount = 0;
@@ -127,7 +127,7 @@ export class FullModeCompressor {
       }
 
       // 3. Perform compression
-      const compressionResult = await this.performCompression(messages, analysis);
+      const compressionResult = await this.performCompression(messages, analysis, modelId);
 
       // 4. Return result
       return this.createResult(
@@ -285,7 +285,8 @@ export class FullModeCompressor {
    */
   private async performCompression(
     messages: Message[],
-    analysis: ReturnType<typeof this.analyzeMessageStructure>
+    analysis: ReturnType<typeof this.analyzeMessageStructure>,
+    modelId: string
   ): Promise<{ compressedMessages: Message[]; summary?: string }> {
     const { firstUserMessageIndex, firstSkillToolCallIndices, middleMessagesRange, recentMessagesStartIndex } = analysis;
 
@@ -307,7 +308,7 @@ export class FullModeCompressor {
     ).filter((_, idx) => !protectedMiddleIndices.has(middleMessagesRange.start + idx));
 
     // Generate summary
-    const summary = await this.generateSummary(this.prepareMessagesForCompression(middleMessages));
+    const summary = await this.generateSummary(this.prepareMessagesForCompression(middleMessages), modelId);
 
     // Build the compressed message list
     const compressedMessages: Message[] = [];
@@ -437,13 +438,14 @@ export class FullModeCompressor {
   /**
    * Generate an intelligent summary.
    */
-  private async generateSummary(messages: Message[]): Promise<string> {
-    return await this.summarizeMessagesRecursively(messages, 'conversation');
+  private async generateSummary(messages: Message[], modelId: string): Promise<string> {
+    return await this.summarizeMessagesRecursively(messages, 'conversation', modelId);
   }
 
   private async summarizeMessagesRecursively(
     messages: Message[],
     stage: 'conversation' | 'merge',
+    modelId: string,
     depth = 0,
   ): Promise<string> {
     if (depth >= this.config.maxSummaryRecursionDepth) {
@@ -457,12 +459,12 @@ export class FullModeCompressor {
 
     if (chunks.length === 1) {
       const conversationText = this.buildConversationText(chunks[0]);
-      return await this.callSummaryAPI(conversationText);
+      return await this.callSummaryAPI(conversationText, modelId);
     }
 
     const partialSummaries = stage === 'conversation'
-      ? await this.summarizeConversationChunksConcurrently(chunks)
-      : await this.summarizeChunksSequentially(chunks);
+      ? await this.summarizeConversationChunksConcurrently(chunks, modelId)
+      : await this.summarizeChunksSequentially(chunks, modelId);
 
     const mergeMessages = this.prepareMergeSummaryMessages(partialSummaries).map((summary, index) =>
       MessageHelper.createTextMessage(
@@ -472,10 +474,10 @@ export class FullModeCompressor {
       )
     );
 
-    return await this.summarizeMessagesRecursively(mergeMessages, 'merge', depth + 1);
+    return await this.summarizeMessagesRecursively(mergeMessages, 'merge', modelId, depth + 1);
   }
 
-  private async summarizeConversationChunksConcurrently(chunks: Message[][]): Promise<string[]> {
+  private async summarizeConversationChunksConcurrently(chunks: Message[][], modelId: string): Promise<string[]> {
     const maxConcurrency = Math.max(1, this.config.maxConcurrentChunkSummaries);
     const partialSummaries = new Array<string>(chunks.length);
     let nextChunkIndex = 0;
@@ -493,7 +495,7 @@ export class FullModeCompressor {
         }
 
         const conversationText = this.buildConversationText(chunks[chunkIndex]);
-        partialSummaries[chunkIndex] = await this.callSummaryAPI(conversationText);
+        partialSummaries[chunkIndex] = await this.callSummaryAPI(conversationText, modelId);
       }
     });
 
@@ -501,11 +503,11 @@ export class FullModeCompressor {
     return partialSummaries;
   }
 
-  private async summarizeChunksSequentially(chunks: Message[][]): Promise<string[]> {
+  private async summarizeChunksSequentially(chunks: Message[][], modelId: string): Promise<string[]> {
     const partialSummaries: string[] = [];
     for (const chunk of chunks) {
       const conversationText = this.buildConversationText(chunk);
-      partialSummaries.push(await this.callSummaryAPI(conversationText));
+      partialSummaries.push(await this.callSummaryAPI(conversationText, modelId));
     }
 
     return partialSummaries;
@@ -889,10 +891,11 @@ export class FullModeCompressor {
   /**
    * Call the summary API.
    */
-  private async callSummaryAPI(conversationText: string): Promise<string> {
+  private async callSummaryAPI(conversationText: string, modelId: string): Promise<string> {
     this.chunkSummaryCallCount += 1;
     const result = await contextCompressionLlmSummarizer.summarize({
       conversationText,
+      modelId,
       maxRetries: this.config.maxRetries,
     });
     this.totalLlmCallCount += result.attempts;

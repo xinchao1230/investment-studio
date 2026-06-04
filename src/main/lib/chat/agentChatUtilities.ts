@@ -496,10 +496,11 @@ export async function checkCompressionNeeds(
 export async function compressContextHistoryWithFullMode(
   contextHistory: Message[],
   fullModeCompressor: FullModeCompressor,
-  agentName: string
+  agentName: string,
+  modelId: string
 ): Promise<{ success: boolean; compressedMessages: Message[] }> {
   try {
-    const compressionResult = await fullModeCompressor.compressMessages(contextHistory);
+    const compressionResult = await fullModeCompressor.compressMessages(contextHistory, modelId);
     const compressedMessages = compressionResult.compressedMessages;
     const compressionMethod = compressionResult.metadata.compressionMethod;
     const hasUsableSummary = compressionMethod !== 'summary' || Boolean(compressionResult.summary?.trim());

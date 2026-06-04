@@ -1985,18 +1985,20 @@ describe('SubAgentChat', () => {
     });
   });
 
-  // ─── TOOL_RESULT_SUMMARIZE_CONFIG ───
+  // ─── TOOL_RESULT_SUMMARIZE_CONFIG (threshold-only constants in SubAgentContextCompactor) ───
   describe('TOOL_RESULT_SUMMARIZE_CONFIG', () => {
-    it('should have correct configuration values', () => {
+    it('should have correct threshold and budget values', () => {
+      // The actual config lives in SubAgentContextCompactor; this test documents
+      // the expected runtime constants. The summarization MODEL is intentionally
+      // NOT pinned here — compression uses the sub-agent's runtime inheritedModel
+      // so the user's selected provider/model is always honored.
       const config = {
         SUMMARIZE_THRESHOLD: 15000,
-        SUMMARIZE_MODEL: 'claude-haiku-4.5',
         SUMMARIZE_MAX_TOKENS: 2000,
         SUMMARIZE_TIMEOUT_MS: 15000,
         MAX_TOOL_RESULT_CHARS: 50000,
       };
       expect(config.SUMMARIZE_THRESHOLD).toBe(15000);
-      expect(config.SUMMARIZE_MODEL).toBe('claude-haiku-4.5');
       expect(config.SUMMARIZE_MAX_TOKENS).toBe(2000);
       expect(config.SUMMARIZE_TIMEOUT_MS).toBe(15000);
       expect(config.MAX_TOOL_RESULT_CHARS).toBe(50000);
