@@ -5,7 +5,7 @@ import { getProfileCacheManager } from '../lazy';
 import type { Context } from './shared';
 import { mcpClientManager } from "../../lib/mcpRuntime/mcpClientManager";
 import { chatSessionStore } from "../../lib/chat/chatSessionStore";
-import { AgentChatManager } from "../../lib/chat/agentChatManager";
+import { AgentChatManager, agentChatManager } from "../../lib/chat/agentChatManager";
 import { chatSessionManager } from "../../lib/userDataADO/chatSessionManager";
 import { schedulerManager } from '../../lib/scheduler/SchedulerManager';
 
@@ -339,17 +339,15 @@ export default function(ctx: Context) {
   });
 
   // deleteChatSession - supports new parameter format (alias, chatId, sessionId)
-  ipcMain.handle('profile:deleteChatSession', async (event, alias: string, chatId: string, sessionId: string) => {
+  // Routed through agentChatManager so the renderer's current-session pointer
+  // stays coherent (fallback switch + instance dispose + sessionDeleted event).
+  ipcMain.handle('profile:deleteChatSession', async (event, _alias: string, chatId: string, sessionId: string) => {
     try {
-      const pcManager = await getProfileCacheManager();
-      const success = await pcManager.deleteChatSession(alias, chatId, sessionId);
-      if (!success) {
-        return { success: false, error: 'Failed to delete chat session' };
+      const result = await agentChatManager.deleteChatSession(chatId, sessionId);
+      if (!result.success) {
+        return { success: false, error: result.error || 'Failed to delete chat session' };
       }
-
-      // Remote channel notification removed (integration deleted)
-
-      return { success: true };
+      return { success: true, nextChatSessionId: result.nextChatSessionId ?? null };
     } catch (error) {
       return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
     }

@@ -250,6 +250,41 @@ export class AgentChatSessionCacheManager {
       }
     );
     if (cleanupInteractionProcessed) this.ipcCleanupFunctions.push(cleanupInteractionProcessed);
+
+    // 9. Listen for chat-session deletion from the store. The main process
+    // disposes its AgentChat instance separately (firing
+    // `chatSessionCacheDestroyed`), but a session can be deleted while no
+    // instance exists for it (e.g. an empty session that was never opened on
+    // this app launch). In that case `chatSessionCacheDestroyed` would not
+    // fire, so we also listen to the store-level deletion event to keep our
+    // cache and the current-session pointer in sync.
+    const profileApi = (window as any).electronAPI?.profile;
+    const cleanupSessionDeleted = profileApi?.onChatSessionStoreSessionDeleted?.(
+      (data: { alias: string; chatId: string; chatSessionId: string; timestamp: number }) => {
+        if (!data?.chatSessionId) return;
+        logger.debug('[AgentChatSessionCacheManager] Store reported chat session deleted', data);
+        this.handleChatSessionDeletedFromStore(data.chatSessionId);
+      }
+    );
+    if (cleanupSessionDeleted) this.ipcCleanupFunctions.push(cleanupSessionDeleted);
+  }
+
+  /**
+   * Drop the cache entry for a deleted session and clear the current pointer
+   * if it referenced the deleted session. Safe to call multiple times.
+   */
+  private handleChatSessionDeletedFromStore(chatSessionId: string): void {
+    // Reuse the cache-destroyed cleanup path. It is idempotent (returns false
+    // when nothing is cached) and already clears `currentChatSessionId` when
+    // the deleted session was current.
+    this.handleChatSessionCacheDestroyed(chatSessionId);
+    if (this.currentChatSessionId === chatSessionId) {
+      // Belt-and-suspenders: handleChatSessionCacheDestroyed only clears
+      // current when its cache lookup hits. For sessions that never had a
+      // cache entry (purely metadata-only), the current pointer can still
+      // dangle here. Clear it explicitly.
+      this.setCurrentChatSessionId(null, null);
+    }
   }
 
   // ========== IPC Event Handler Methods ==========
@@ -397,6 +432,64 @@ export class AgentChatSessionCacheManager {
 
   hasChatSessionCache(chatSessionId: string | null | undefined): boolean {
     return this.sessions.hasChatSessionCache(chatSessionId);
+  }
+
+  /**
+   * Defensive recovery: ask the main process for the authoritative current
+   * chat session and apply it locally if our snapshot is stale. Uses a
+   * compare-and-swap to avoid stomping on changes the user made between the
+   * request and the response (e.g. clicking a different chat in flight).
+   *
+   * Returns the same fields the main process reports so the caller can decide
+   * whether to retry the operation that triggered the reconcile.
+   */
+  async reconcileCurrentChatSession(): Promise<{
+    applied: boolean;
+    chatId: string | null;
+    chatSessionId: string | null;
+    chatStatus: string | null;
+  }> {
+    const api = window.electronAPI?.agentChat;
+    if (!api?.reconcileCurrentChatSession) {
+      return { applied: false, chatId: this.currentChatId, chatSessionId: this.currentChatSessionId, chatStatus: null };
+    }
+    const expectedChatId = this.currentChatId;
+    const expectedChatSessionId = this.currentChatSessionId;
+    try {
+      const resp = await api.reconcileCurrentChatSession({ expectedChatId, expectedChatSessionId });
+      if (!resp?.success || !resp.data) {
+        return { applied: false, chatId: expectedChatId, chatSessionId: expectedChatSessionId, chatStatus: null };
+      }
+      const main = resp.data;
+      // Compare-and-swap: only apply if our local state still matches what
+      // we sent. If the user navigated mid-flight, drop the response.
+      if (
+        this.currentChatId !== expectedChatId ||
+        this.currentChatSessionId !== expectedChatSessionId
+      ) {
+        logger.debug('[AgentChatSessionCacheManager] Reconcile response stale; skipping apply', {
+          expectedChatId, expectedChatSessionId,
+          currentChatId: this.currentChatId, currentChatSessionId: this.currentChatSessionId,
+        });
+        return { applied: false, chatId: main.chatId, chatSessionId: main.chatSessionId, chatStatus: main.chatStatus };
+      }
+      // Skip apply when main reports the same state we already have.
+      if (
+        main.chatId === this.currentChatId &&
+        main.chatSessionId === this.currentChatSessionId
+      ) {
+        return { applied: false, chatId: main.chatId, chatSessionId: main.chatSessionId, chatStatus: main.chatStatus };
+      }
+      logger.info('[AgentChatSessionCacheManager] Reconciling current chat session from main', {
+        from: { chatId: expectedChatId, chatSessionId: expectedChatSessionId },
+        to: { chatId: main.chatId, chatSessionId: main.chatSessionId },
+      });
+      this.setCurrentChatSessionId(main.chatId, main.chatSessionId);
+      return { applied: true, chatId: main.chatId, chatSessionId: main.chatSessionId, chatStatus: main.chatStatus };
+    } catch (err) {
+      logger.warn('[AgentChatSessionCacheManager] reconcileCurrentChatSession failed', err);
+      return { applied: false, chatId: expectedChatId, chatSessionId: expectedChatSessionId, chatStatus: null };
+    }
   }
 
   /**
