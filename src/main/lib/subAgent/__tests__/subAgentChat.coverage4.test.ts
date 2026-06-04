@@ -61,7 +61,11 @@ const { mockGetEndpointForModel, mockCallModel } = vi.hoisted(() => ({
 
 vi.mock('../../llm/ghcModelApi', () => ({
   getEndpointForModel: mockGetEndpointForModel,
-  ghcModelApi: { callModel: mockCallModel },
+  // Include both callModel (legacy) and callModelStrict (current). The compaction paths
+  // (compressEarlyMessages / compressToolResult) were switched to callModelStrict in 2460c11;
+  // omitting it would silently turn the timeout=null tests below into TypeError swallowers
+  // instead of exercising the real Promise.race fallback path.
+  ghcModelApi: { callModel: mockCallModel, callModelStrict: mockCallModel },
 }));
 
 vi.mock('../../llm/ghcModelsManager', () => ({
