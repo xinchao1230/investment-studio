@@ -1,6 +1,12 @@
 /**
- * BingWebSearchTool built-in tool - uses Playwright browser automation
- * Provides LLM-callable Bing web search with parallel search support and result merging
+ * BingWebSearchTool built-in tool — web search built on Microsoft Web IQ
+ * (preferred) with a Playwright + Bing scraping fallback when no Web IQ
+ * API key has been configured by the user.
+ *
+ * The tool name is kept as `bing_web_search` for backward compatibility
+ * with existing agent profiles, system prompts, persisted chat sessions
+ * and the renderer tool-call display config that all key on this string.
+ *
  * Note: This is a built-in tool, not an MCP protocol tool
  */
 
@@ -12,6 +18,8 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import { WebSearchResultItem, WebSearchToolArgs, WebSearchToolResult } from '@shared/types/toolCallArgs';
+import { getResearchApiToken } from '../../researchApi/tokenStorage';
+import { mapLocaleToWebIQ, searchWebIQ } from './webIQSearchClient';
 
 export type BingSearchResult = WebSearchResultItem;
 export type BingWebSearchToolArgs = WebSearchToolArgs & { lang: string; locale: string; };
@@ -255,6 +263,13 @@ export class BingWebSearchTool {
    * Static method, supports direct LLM invocation
    */
   static async execute(args: BingWebSearchToolArgs, options?: { signal?: AbortSignal }): Promise<BingWebSearchToolResult> {
+    // Prefer Microsoft Web IQ when the user has configured an API key.
+    // Otherwise fall back to the legacy Playwright + Bing scraping path.
+    const webIQKey = getResearchApiToken('webiq');
+    if (webIQKey) {
+      return BingWebSearchTool.executeViaWebIQ(args, webIQKey, options);
+    }
+
     try {
       // 🔍 Check and ensure Playwright browser is installed before execution
       logger.debug('[BingWebSearchTool] Checking Playwright Chromium browser...');
@@ -407,6 +422,86 @@ export class BingWebSearchTool {
         timestamp: new Date().toISOString()
       };
     }
+  }
+
+  /**
+   * Web IQ-backed implementation. Runs all queries in parallel; aggregates
+   * results into the same shape produced by the Playwright fallback so
+   * downstream consumers (renderer view, prompts, agent profiles) don't
+   * need to care which backend ran.
+   *
+   * Default per-result content cap is intentionally small (1500 chars)
+   * to keep token usage comparable to the snippet-sized output of the
+   * old Bing scraper. Callers can raise it via `args.maxResults` for
+   * deeper investigations; we still cap each result content at 1500 chars
+   * unless a higher cap is explicitly negotiated by the caller schema.
+   */
+  private static async executeViaWebIQ(
+    args: BingWebSearchToolArgs,
+    apiKey: string,
+    options?: { signal?: AbortSignal },
+  ): Promise<BingWebSearchToolResult> {
+    const queries = Array.isArray(args.queries) ? args.queries.filter(q => typeof q === 'string' && q.trim().length > 0) : [];
+    if (queries.length === 0) {
+      return {
+        success: false,
+        totalQueries: 0,
+        totalResults: 0,
+        results: [],
+        errors: ['No valid queries provided'],
+        timestamp: new Date().toISOString(),
+      };
+    }
+
+    const maxResults = Math.min(Math.max(args.maxResults ?? 5, 1), 10);
+    const { language, region } = mapLocaleToWebIQ(args.lang, args.locale);
+    const timeoutMs = (args.timeout && args.timeout > 0 ? args.timeout : 60) * 1000;
+
+    logger.debug(`[BingWebSearchTool] Using Web IQ backend: queries=${queries.length} lang=${language} region=${region}`);
+
+    const settled = await Promise.allSettled(queries.map(query =>
+      searchWebIQ(apiKey, {
+        query,
+        maxResults,
+        language,
+        region,
+        contentFormat: 'text',
+        maxLength: 1500,
+      }, { timeoutMs, signal: options?.signal })
+    ));
+
+    const allResults: WebSearchResultItem[] = [];
+    const errors: string[] = [];
+    settled.forEach((s, idx) => {
+      if (s.status === 'fulfilled') {
+        const outcome = s.value;
+        allResults.push(...outcome.results);
+        if (outcome.error) {
+          errors.push(`Search query "${outcome.query}" failed: ${outcome.error}`);
+        }
+      } else {
+        // Defensive: searchWebIQ is designed never to throw, but if some
+        // future bug breaks that contract we still want fan-out isolation
+        // (matching the legacy Playwright path's Promise.allSettled fan-out).
+        const query = queries[idx];
+        const reason = s.reason instanceof Error ? s.reason.message : String(s.reason);
+        logger.error(`[BingWebSearchTool] Web IQ query "${query}" threw unexpectedly: ${reason}`);
+        errors.push(`Search query "${query}" failed: ${reason}`);
+      }
+    });
+
+    // Align with the legacy Playwright contract: completed fan-out is
+    // reported as `success: true` even when individual queries failed,
+    // with details surfaced via `errors`. `success: false` is reserved
+    // for top-level execution failures (bad args, tool-level exception).
+    return {
+      success: true,
+      totalQueries: queries.length,
+      totalResults: allResults.length,
+      results: allResults,
+      errors: errors.length > 0 ? errors : undefined,
+      timestamp: new Date().toISOString(),
+    };
   }
 
   /**
@@ -703,7 +798,7 @@ export class BingWebSearchTool {
   static getDefinition(): BuiltinToolDefinition {
     return {
       name: 'bing_web_search',
-      description: 'Search the web using Bing search engine with advanced browser automation. Supports multiple queries and returns up to 5 results per query. Results include title, URL, description, and source site.\n\nFeatures:\n- Advanced browser automation with anti-detection measures\n- Persistent browser fingerprint and session\n- Automatic handling of page navigation\n\nIMPORTANT: Language and locale detection:\n- If the user query contains Chinese characters, set lang="zh" and locale="cn"\n- For all other cases (English, numbers, symbols, etc.), use lang="en" and locale="us"\n- The AI model should analyze the query content and determine the appropriate language parameters before calling this tool',
+      description: 'Search the web for up-to-date information. Supports multiple parallel queries and returns up to 5 results per query, each with title, URL, an extracted content snippet and source domain.\n\nIMPORTANT: Language and locale detection:\n- If the user query contains Chinese characters, set lang="zh" and locale="cn"\n- For all other cases (English, numbers, symbols, etc.), use lang="en" and locale="us"\n- The AI model should analyze the query content and determine the appropriate language parameters before calling this tool',
       inputSchema: {
         type: 'object',
         properties: {

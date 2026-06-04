@@ -11,6 +11,11 @@ import * as path from 'path';
 import { PortfolioTools } from '../lib/mcpRuntime/builtinTools/portfolioTools';
 import { ExcelService } from './excelService';
 import { agentChatManager } from '../lib/chat/agentChatManager';
+import {
+  getResearchApiToken,
+  isResearchApiProvider,
+  setResearchApiToken,
+} from '../lib/researchApi/tokenStorage';
 
 export interface InvestmentStudioDeps {
   getCurrentUserAlias: () => string | null;
@@ -21,27 +26,6 @@ const BRAND_INVESTMENT_STUDIO = 'investment-studio';
 
 function seedLog(msg: string): void {
   console.log(`[investment-studio] ${msg}`);
-}
-
-// ---------------------------------------------------------------------------
-// Research API token storage (simple file-based in userData)
-// ---------------------------------------------------------------------------
-
-function getTokenFilePath(): string {
-  return path.join(app.getPath('userData'), 'research-api-tokens.json');
-}
-
-function readTokens(): Record<string, string> {
-  try {
-    const content = fs.readFileSync(getTokenFilePath(), 'utf-8');
-    return JSON.parse(content);
-  } catch {
-    return {};
-  }
-}
-
-function writeTokens(tokens: Record<string, string>): void {
-  fs.writeFileSync(getTokenFilePath(), JSON.stringify(tokens, null, 2), 'utf-8');
 }
 
 // ---------------------------------------------------------------------------
@@ -191,9 +175,8 @@ function registerExcelIpc(_deps: InvestmentStudioDeps): void {
 function registerResearchApiIpc(_deps: InvestmentStudioDeps): void {
   ipcMain.handle('researchApi:getToken', async (_event, provider: string) => {
     try {
-      if (provider !== 'tushare' && provider !== 'eastmoney') return undefined;
-      const tokens = readTokens();
-      return tokens[provider] || undefined;
+      if (!isResearchApiProvider(provider)) return undefined;
+      return getResearchApiToken(provider);
     } catch {
       return undefined;
     }
@@ -201,16 +184,10 @@ function registerResearchApiIpc(_deps: InvestmentStudioDeps): void {
 
   ipcMain.handle('researchApi:setToken', async (_event, provider: string, token: string | null) => {
     try {
-      if (provider !== 'tushare' && provider !== 'eastmoney') {
+      if (!isResearchApiProvider(provider)) {
         return { ok: false, error: 'unknown provider' };
       }
-      const tokens = readTokens();
-      if (token) {
-        tokens[provider] = token;
-      } else {
-        delete tokens[provider];
-      }
-      writeTokens(tokens);
+      setResearchApiToken(provider, token);
 
       // Restart research-mcp so new tushare token is picked up
       if (provider === 'tushare') {
@@ -229,16 +206,19 @@ function registerResearchApiIpc(_deps: InvestmentStudioDeps): void {
 
   ipcMain.handle('researchApi:testConnection', async (_event, provider: string) => {
     try {
-      if (provider !== 'tushare' && provider !== 'eastmoney') {
+      if (!isResearchApiProvider(provider)) {
         return { ok: false, error: 'unknown provider' };
       }
-      const tokens = readTokens();
-      const token = tokens[provider];
+      const token = getResearchApiToken(provider);
       if (!token) return { ok: false, error: 'token not configured' };
-      const { testTushareToken, testEastmoneyToken } = await import('../lib/researchApi/testConnection');
-      return provider === 'tushare'
-        ? await testTushareToken(token)
-        : await testEastmoneyToken(token);
+      const { testTushareToken, testEastmoneyToken, testWebIQToken } =
+        await import('../lib/researchApi/testConnection');
+      switch (provider) {
+        case 'tushare':   return await testTushareToken(token);
+        case 'eastmoney': return await testEastmoneyToken(token);
+        case 'webiq':     return await testWebIQToken(token);
+        default:          return { ok: false, error: 'unknown provider' };
+      }
     } catch (err: any) {
       return { ok: false, error: err?.message ?? String(err) };
     }

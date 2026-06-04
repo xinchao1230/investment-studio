@@ -1293,9 +1293,9 @@ export interface ElectronAPI {
 
   // Research API token management (investment-studio brand)
   researchApi: {
-    getToken: (provider: 'tushare' | 'eastmoney') => Promise<string | undefined>;
-    setToken: (provider: 'tushare' | 'eastmoney', token: string | null) => Promise<{ ok: boolean; error?: string }>;
-    testConnection: (provider: 'tushare' | 'eastmoney') => Promise<{ ok: boolean; error?: string }>;
+    getToken: (provider: 'tushare' | 'eastmoney' | 'webiq') => Promise<string | undefined>;
+    setToken: (provider: 'tushare' | 'eastmoney' | 'webiq', token: string | null) => Promise<{ ok: boolean; error?: string }>;
+    testConnection: (provider: 'tushare' | 'eastmoney' | 'webiq') => Promise<{ ok: boolean; error?: string }>;
   };
 
   // Excel / xlsx reading (investment-studio brand). Reads files into
@@ -2531,11 +2531,11 @@ export const electronAPI: ElectronAPI = {
     getPathForFile: (file: File) => webUtils.getPathForFile(file),
   },
   researchApi: {
-    getToken: (provider: 'tushare' | 'eastmoney') =>
+    getToken: (provider: 'tushare' | 'eastmoney' | 'webiq') =>
       ipcRenderer.invoke('researchApi:getToken', provider) as Promise<string | undefined>,
-    setToken: (provider: 'tushare' | 'eastmoney', token: string | null) =>
+    setToken: (provider: 'tushare' | 'eastmoney' | 'webiq', token: string | null) =>
       ipcRenderer.invoke('researchApi:setToken', provider, token) as Promise<{ ok: boolean; error?: string }>,
-    testConnection: (provider: 'tushare' | 'eastmoney') =>
+    testConnection: (provider: 'tushare' | 'eastmoney' | 'webiq') =>
       ipcRenderer.invoke('researchApi:testConnection', provider) as Promise<{ ok: boolean; error?: string }>,
   },
   excel: {

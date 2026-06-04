@@ -326,10 +326,10 @@ export class BuiltinToolsManager {
       // These tools depend on heavy modules like playwright, mammoth, etc.
       // Only register metadata, do not load actual modules; dynamically imported at execution time
 
-      // 🐢 BingWebSearchTool - depends on playwright
+      // 🐢 BingWebSearchTool - depends on playwright (fallback path; Web IQ path is HTTP-only)
       this.tools.set('bing_web_search', {
         name: 'bing_web_search',
-        description: 'Search Bing for web pages. Supports multiple queries in parallel.',
+        description: 'Search the web for up-to-date information. Returns top results with titles, URLs, snippets, and source sites. Supports multiple queries in parallel.',
         inputSchema: {
           type: 'object',
           properties: {

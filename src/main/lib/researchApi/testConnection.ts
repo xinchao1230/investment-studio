@@ -47,3 +47,39 @@ export async function testEastmoneyToken(token: string): Promise<TestResult> {
     return { ok: false, error: err?.message ?? String(err) };
   }
 }
+
+/**
+ * Lightweight ping to Microsoft Web IQ to validate the user's API key.
+ * Uses the smallest possible request (maxResults=1, maxLength=100, query="ping").
+ */
+export async function testWebIQToken(token: string): Promise<TestResult> {
+  if (!token) return { ok: false, error: 'token is empty' };
+  try {
+    const res = await withTimeout(fetch('https://api.microsoft.ai/v3/search/web', {
+      method: 'POST',
+      headers: {
+        'host': 'api.microsoft.ai',
+        'x-apikey': token,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        query: 'ping',
+        maxResults: 1,
+        language: 'en',
+        region: 'US',
+        contentFormat: 'text',
+        maxLength: 100,
+      }),
+    }), TIMEOUT_MS);
+    if (res.ok) return { ok: true };
+    try {
+      const body: any = await res.json();
+      const msg = body?.userMessage || body?.errorCode || `HTTP ${res.status}`;
+      return { ok: false, error: String(msg) };
+    } catch {
+      return { ok: false, error: `HTTP ${res.status}` };
+    }
+  } catch (err: any) {
+    return { ok: false, error: err?.message ?? String(err) };
+  }
+}
