@@ -459,7 +459,7 @@ export class BingWebSearchTool {
 
     logger.debug(`[BingWebSearchTool] Using Web IQ backend: queries=${queries.length} lang=${language} region=${region}`);
 
-    const outcomes = await Promise.all(queries.map(query =>
+    const settled = await Promise.allSettled(queries.map(query =>
       searchWebIQ(apiKey, {
         query,
         maxResults,
@@ -472,15 +472,30 @@ export class BingWebSearchTool {
 
     const allResults: WebSearchResultItem[] = [];
     const errors: string[] = [];
-    for (const outcome of outcomes) {
-      allResults.push(...outcome.results);
-      if (outcome.error) {
-        errors.push(`Search query "${outcome.query}" failed: ${outcome.error}`);
+    settled.forEach((s, idx) => {
+      if (s.status === 'fulfilled') {
+        const outcome = s.value;
+        allResults.push(...outcome.results);
+        if (outcome.error) {
+          errors.push(`Search query "${outcome.query}" failed: ${outcome.error}`);
+        }
+      } else {
+        // Defensive: searchWebIQ is designed never to throw, but if some
+        // future bug breaks that contract we still want fan-out isolation
+        // (matching the legacy Playwright path's Promise.allSettled fan-out).
+        const query = queries[idx];
+        const reason = s.reason instanceof Error ? s.reason.message : String(s.reason);
+        logger.error(`[BingWebSearchTool] Web IQ query "${query}" threw unexpectedly: ${reason}`);
+        errors.push(`Search query "${query}" failed: ${reason}`);
       }
-    }
+    });
 
+    // Align with the legacy Playwright contract: completed fan-out is
+    // reported as `success: true` even when individual queries failed,
+    // with details surfaced via `errors`. `success: false` is reserved
+    // for top-level execution failures (bad args, tool-level exception).
     return {
-      success: errors.length < queries.length,
+      success: true,
       totalQueries: queries.length,
       totalResults: allResults.length,
       results: allResults,
