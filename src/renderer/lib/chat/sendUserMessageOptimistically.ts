@@ -81,11 +81,18 @@ export async function sendUserMessage(message: UserMessage) {
         const reconciled = await agentChatSessionCacheManager.reconcileCurrentChatSession();
         if (reconciled.applied && reconciled.chatSessionId) {
           chatSessionId = reconciled.chatSessionId;
-        } else if (reconciled.chatSessionId === null) {
-          // Main has no current session either — fall through to the
-          // existing wait-then-fail path so ChatView's compact flow can
-          // spawn a new session.
-          chatSessionId = null;
+        } else {
+          // applied=false covers three sub-cases (see reconcileCurrentChatSession):
+          //   (a) main no-ops because its view matches ours,
+          //   (b) compare-and-swap rejected — the local pointer mutated mid-flight
+          //       (typically because the chatSessionStore:sessionDeleted listener
+          //       added in de14b72 fired between the IPC send and response),
+          //   (c) main reports no current session at all (chatSessionId === null).
+          // In (b) the value we captured before the await is now stale, so always
+          // re-read the latest local pointer rather than reusing the pre-reconcile
+          // value. This collapses cleanly: (a) gives back the same id, (b) returns
+          // the new id, (c) returns null and falls through to the wait-then-fail path.
+          chatSessionId = agentChatSessionCacheManager.getCurrentChatSessionId();
         }
       }
     }
