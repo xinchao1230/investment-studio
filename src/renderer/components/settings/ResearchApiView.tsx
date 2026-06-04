@@ -4,7 +4,7 @@ import '../../styles/Header.css';
 import '../../styles/ContentView.css';
 import '../../styles/RuntimeSettings.css';
 
-type Provider = 'tushare' | 'eastmoney';
+type Provider = 'tushare' | 'eastmoney' | 'webiq';
 
 interface ProviderSpec {
   id: Provider;
@@ -24,6 +24,13 @@ const PROVIDERS: ProviderSpec[] = [
     id: 'eastmoney',
     title: 'Eastmoney',
     helper: <>Leave empty to use the app's built-in token; a custom token is for higher-frequency call quotas.</>,
+  },
+  {
+    id: 'webiq',
+    title: 'Microsoft Web IQ (Web Search)',
+    helper: (
+      <>API key for <a href="https://webiq.microsoft.ai/" target="_blank" rel="noreferrer" className="text-blue-600 hover:underline">Microsoft Web IQ</a>. When set, the built-in web search tool calls Web IQ directly. Leave empty to fall back to the bundled Bing scraper (requires Playwright Chromium).</>
+    ),
   },
 ];
 
@@ -49,6 +56,7 @@ export const ResearchApiView: React.FC = () => {
   const [cards, setCards] = useState<Record<Provider, CardState>>({
     tushare: emptyState(''),
     eastmoney: emptyState(''),
+    webiq: emptyState(''),
   });
 
   // Initial load
@@ -57,11 +65,16 @@ export const ResearchApiView: React.FC = () => {
     (async () => {
       const api = (window as any).electronAPI?.researchApi;
       if (!api) return;
-      const [t, e] = await Promise.all([api.getToken('tushare'), api.getToken('eastmoney')]);
+      const [t, e, w] = await Promise.all([
+        api.getToken('tushare'),
+        api.getToken('eastmoney'),
+        api.getToken('webiq'),
+      ]);
       if (!alive) return;
       setCards({
         tushare: emptyState(t ?? ''),
         eastmoney: emptyState(e ?? ''),
+        webiq: emptyState(w ?? ''),
       });
     })();
     return () => { alive = false; };
