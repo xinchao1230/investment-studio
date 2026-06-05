@@ -136,35 +136,6 @@ interface TargetListSidebarProps {
   targetPillLookup?: (targetCode: string) => string;
 }
 
-// The standard target subcategories. These strings are the *on-disk*
-// directory names AND a protocol contract: the stock-analyze family of
-// skills write reports to literal paths like `研报/stock-analyze/{date}/`.
-// They MUST stay Chinese — do not rename them. Display-only English labels
-// live in SUBCATEGORY_LABELS and are applied solely when rendering a folder
-// row; every path / drag-drop / context-menu code path keeps using the raw
-// Chinese `cat` value.
-const SUBCATEGORIES = ['纪要', '专家交流', '公司交流', '研报', '模型', '公告', '其它'];
-
-/** Render-only English labels for the standard subcategory folders. */
-const SUBCATEGORY_LABELS: Record<string, string> = {
-  '纪要': 'Meeting Notes',
-  '专家交流': 'Expert Calls',
-  '公司交流': 'Management Meetings',
-  '研报': 'Research',
-  '模型': 'Models',
-  '公告': 'Filings & Announcements',
-  '其它': 'Other',
-};
-
-/**
- * Display label for a folder-row category. Standard subcategories map to a
- * fixed English label; user-created folders (the `extras`) fall back to their
- * raw on-disk name unchanged.
- */
-function subcategoryLabel(cat: string): string {
-  return SUBCATEGORY_LABELS[cat] ?? cat;
-}
-
 function fileIcon(relPath: string) {
   if (/\.(md|yaml|txt)$/i.test(relPath)) return FileText;
   if (/\.json$/i.test(relPath)) return FileCode;
@@ -541,11 +512,11 @@ export const TargetListSidebar: React.FC<TargetListSidebarProps> = ({
         source,
         destDirAbs,
         fromTargetName: fromTarget?.name ?? source.ownerCode,
-        toTargetName: `${destTarget.name} / ${subcategoryLabel(cat)}`,
+        toTargetName: `${destTarget.name} / ${cat}`,
       });
       return;
     }
-    await tryMove(source, destDirAbs, `${destTarget.name} / ${subcategoryLabel(cat)}`);
+    await tryMove(source, destDirAbs, `${destTarget.name} / ${cat}`);
   }, [findFileByAbsPath, targets, tryMove]);
 
   const confirmCrossTargetMove = useCallback(async () => {
@@ -1154,23 +1125,16 @@ export const TargetListSidebar: React.FC<TargetListSidebarProps> = ({
                     );
                   })}
 
-                  {/* Sub-categories — standard 7 first, plus any extra
-                      top-level folders we find under this target (so files
-                      placed in user-created subfolders remain visible).
-                      Also includes optimistic folders just created via the
-                      right-click "New Folder" action — those are empty on disk
-                      and would otherwise be invisible. */}
+                  {/* Sub-categories: the union of (a) top-level folders inferred from on-disk files and (b) optimistic folders just created via the right-click "New Folder" action (those are empty on disk and would otherwise be invisible). Sorted alphabetically. The canonical schema lives in the LLM prompt, not in the UI — the sidebar mirrors disk reality. */}
                   {(() => {
                     const optimistic = optimisticFolders[code] ?? [];
                     const fromFiles = files
                       .filter((f) => f.relPath.includes('/'))
                       .map((f) => f.relPath.split('/')[0]);
                     const fromOptimistic = optimistic.map((p) => p.split('/')[0]);
-                    const extras = Array.from(new Set(
-                      [...fromFiles, ...fromOptimistic]
-                        .filter((c) => c && !SUBCATEGORIES.includes(c))
-                    ));
-                    return [...SUBCATEGORIES, ...extras];
+                    return Array.from(new Set([...fromFiles, ...fromOptimistic]))
+                      .filter((c) => !!c)
+                      .sort();
                   })().map((cat) => {
                     const catFiles = files.filter((f) => f.relPath.startsWith(cat + '/'));
                     const catKey = `${code}::${cat}`;
@@ -1212,13 +1176,13 @@ export const TargetListSidebar: React.FC<TargetListSidebarProps> = ({
                             className={`rw-tree-row ${!hasFiles ? 'is-disabled' : ''} ${dropHover === catKey ? 'rw-tree-row-drop' : ''}`}
                             style={{ paddingLeft: 12 }}
                             onClick={hasFiles ? () => onToggleCat(catKey) : undefined}
-                            onContextMenu={(e) => openFolderContextMenu(e, catDirAbs, `${target.name} / ${subcategoryLabel(cat)}`, code)}
+                            onContextMenu={(e) => openFolderContextMenu(e, catDirAbs, `${target.name} / ${cat}`, code)}
                           >
                             {hasFiles
                               ? (isCatExpanded ? <ChevronDown size={13} /> : <ChevronRight size={13} />)
                               : <span style={{ width: 13 }} />}
                             <Folder size={13} className="flex-shrink-0 mr-1" />
-                            <span className="truncate" style={{ color: 'var(--rw-text)' }}>{subcategoryLabel(cat)}</span>
+                            <span className="truncate" style={{ color: 'var(--rw-text)' }}>{cat}</span>
                           </div>
 
                           {hasFiles && isCatExpanded && (() => {
@@ -1483,19 +1447,17 @@ export const TargetListSidebar: React.FC<TargetListSidebarProps> = ({
       {folderContextMenu && (() => {
         const fcm = folderContextMenu;
         const ownerTarget = targets.find((t) => t.stock_code === fcm.ownerCode);
-        // Disallow deleting the target root (handled by deleteTarget) and
-        // the seven standard subcategory rows (they're virtual folders the
-        // user shouldn't trash). Everything else — user-created subfolders
-        // at any depth — is deletable.
+        // Disallow deleting the target root (handled by deleteTarget). Every
+        // other folder reflects real on-disk state and is user-deletable —
+        // including pre-created inputs/, which will be re-created the next
+        // time the user attaches a file in chat.
         let canDelete = false;
         if (ownerTarget) {
           const baseDir = ownerTarget.directory;
           const sep = baseDir.includes('\\') ? '\\' : '/';
           const prefix = baseDir.endsWith(sep) ? baseDir : baseDir + sep;
           if (fcm.folderAbsPath !== baseDir && fcm.folderAbsPath.startsWith(prefix)) {
-            const relPosix = fcm.folderAbsPath.slice(prefix.length).replace(/\\/g, '/');
-            const isStandardCategoryRoot = SUBCATEGORIES.includes(relPosix);
-            canDelete = !isStandardCategoryRoot;
+            canDelete = true;
           }
         }
         return (
