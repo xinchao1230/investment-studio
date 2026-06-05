@@ -98,7 +98,18 @@ export class PortfolioTools {
   static getInitTargetDefinition(): BuiltinToolDefinition {
     return {
       name: 'portfolio_init_target',
-      description: 'Create a new research target folder with standard template files (profile.yaml, key-drivers.md, notes.md, tracking.md, inputs/, earnings/, research/, models/). For unlisted/private companies, pass an empty string (or omit) for stock_code.',
+      description: [
+        'Create a new research target folder. Pre-creates four root template files (profile.yaml, key-drivers.md, notes.md, tracking.md) and the inputs/ subdirectory.',
+        'Business subdirectories are NOT pre-created — create them on demand as you produce content, following the canonical schema:',
+        '  inputs/   — user-attached files (pre-created; chat attachments land here)',
+        '  earnings/ — financial CSVs and earnings reviews',
+        '  research/ — industry, comparable, and stock-analyze reports',
+        '  models/   — valuation scripts and spreadsheets',
+        '  meetings/ — meeting notes, expert calls, management interactions',
+        '  filings/  — prospectuses, annual reports, regulatory filings',
+        'Do NOT pre-create empty business directories. Loose/uncategorized files belong at the target root.',
+        'For unlisted/private companies, pass an empty string (or omit) for stock_code.',
+      ].join('\n'),
       inputSchema: {
         type: 'object',
         properties: {
@@ -378,13 +389,6 @@ export class PortfolioTools {
 
     fs.mkdirSync(targetDir, { recursive: true });
     fs.mkdirSync(path.join(targetDir, 'inputs'), { recursive: true });
-    fs.mkdirSync(path.join(targetDir, 'earnings'), { recursive: true });
-    // Note: Do NOT pre-create a `research/` (English) dir. The sidebar's
-    // SUBCATEGORIES are Chinese (纪要/研报/公告/...), and stock-analyze writes
-    // to `研报/stock-analyze/{date}/`. An empty pre-created English `research/`
-    // biases the LLM into the "复用既有结构" branch and lands reports in
-    // an extras row that users miss. Let the skill create its own path.
-    fs.mkdirSync(path.join(targetDir, 'models'), { recursive: true });
 
     // ISO datetime with millisecond precision so the renderer can sort
     // "newest first" even when multiple targets are added the same day

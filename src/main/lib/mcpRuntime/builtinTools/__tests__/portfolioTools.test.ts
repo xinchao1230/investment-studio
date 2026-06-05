@@ -24,8 +24,10 @@ describe('PortfolioTools', () => {
       // New dirname scheme: just the company name (no `_${code}` suffix).
       const targetDir = path.join(tmpDir, '洛阳钼业');
       expect(fs.existsSync(targetDir)).toBe(true);
-      expect(fs.existsSync(path.join(targetDir, 'earnings'))).toBe(true);
-      expect(fs.existsSync(path.join(targetDir, 'models'))).toBe(true);
+      expect(fs.existsSync(path.join(targetDir, 'inputs'))).toBe(true);
+      expect(fs.existsSync(path.join(targetDir, 'earnings'))).toBe(false);
+      expect(fs.existsSync(path.join(targetDir, 'models'))).toBe(false);
+      expect(fs.existsSync(path.join(targetDir, 'research'))).toBe(false);
       expect(fs.existsSync(path.join(targetDir, 'profile.yaml'))).toBe(true);
       expect(fs.existsSync(path.join(targetDir, 'key-drivers.md'))).toBe(true);
       expect(fs.existsSync(path.join(targetDir, 'notes.md'))).toBe(true);

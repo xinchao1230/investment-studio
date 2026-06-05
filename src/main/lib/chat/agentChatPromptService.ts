@@ -230,18 +230,30 @@ export class AgentChatPromptService {
           sections.push(`- DO NOT call \`portfolio_init_target\` for this target — it already exists. Write any new files (财报/分析/笔记等) directly under the Target Directory above. Creating a new target folder for the same company will produce a duplicate in the workspace sidebar.`);
           sections.push(`- When the user asks for "深度研究 / 深度分析 / 深度报告 / 个股分析 / Initiation Report" without naming a company, treat **this** target as the subject — do NOT ask the user to specify the company, market or stock code again. Proceed by routing to the appropriate Skill (e.g. \`stock-analyze\`) with the target's name + code.`);
 
-          sections.push(`\n**Target Directory Conventions (推荐结构，可创建其他目录但请尽量复用):**`);
-          sections.push(`- \`inputs/\` — User-attached files (PDFs, research reports, notes). Auto-populated when user attaches files in chat.`);
+          sections.push(`\n**Target Directory Schema (canonical layout — keep your files in these locations):**`);
+          sections.push('');
+          sections.push('| Path | Purpose |');
+          sections.push('|------|---------|');
+          sections.push('| `profile.yaml` | Target metadata (pre-created; update in place) |');
+          sections.push('| `key-drivers.md` | Investment thesis & key drivers (pre-created; update in place) |');
+          sections.push('| `notes.md` | Free-form research notes (pre-created; update in place) |');
+          sections.push('| `tracking.md` | Marginal-change tracking log (pre-created; append in place) |');
+          sections.push('| `inputs/` | User-attached files (PDFs, reports). Auto-populated when user attaches files in chat. |');
           if (targetListed) {
-            sections.push(`- \`earnings/\` — Financial CSV data from \`tushare_collect\` / \`yfinance_collect\`.`);
+            sections.push('| `earnings/` | Financial CSVs (`tushare_collect` / `yfinance_collect`) and earnings reviews |');
           } else {
-            sections.push(`- \`earnings/\` — Comparable-company financial CSV data (二级市场可比公司). Use \`tushare_collect\` / \`yfinance_collect\` to fetch comparables, NOT the target itself — this is an unlisted/private company.`);
+            sections.push('| `earnings/` | Comparable-company financial CSVs (二级市场可比公司). Use `tushare_collect` / `yfinance_collect` to fetch **comparables**, NOT the target itself — this is an unlisted/private company. |');
           }
-          sections.push(`- \`research/\` — AI-generated analysis reports.`);
-          sections.push(`- \`models/\` — Valuation models and scripts.`);
-          sections.push(`- \`profile.yaml\`, \`key-drivers.md\`, \`notes.md\`, \`tracking.md\` — pre-created templates; update in place.`);
+          sections.push('| `research/` | Industry, comparable, and stock-analyze reports |');
+          sections.push('| `models/` | Valuation scripts and spreadsheets |');
+          sections.push('| `meetings/` | Meeting notes, expert calls, management interactions |');
+          sections.push('| `filings/` | Prospectuses, annual reports, regulatory filings |');
+          sections.push('');
+          sections.push(`**Rules:**`);
+          sections.push(`- Business subdirectories (earnings/ research/ models/ meetings/ filings/) are NOT pre-created. Create them on demand the first time you write a file into one. Do NOT call any mkdir tool to pre-create empty business directories.`);
+          sections.push(`- Loose / uncategorized files belong at the target root (next to profile.yaml). There is no catch-all "other/" folder.`);
+          sections.push(`- Use full absolute paths in all file/command operations — never abbreviate with \`...\` or \`~\`.`);
           sections.push(`- Naming: reports use \`{date}-{topic}.md\` (e.g. \`2026Q1-earnings-review.md\`); scripts use \`fetch_*.py\` (download) / \`analyze_*.py\` (process).`);
-          sections.push(`- Prefer reusing existing subdirectories. Only create new top-level directories when none of the above fit.`);
 
           if (!targetListed) {
             sections.push(`\n**Unlisted Company Research Guidance:**`);
