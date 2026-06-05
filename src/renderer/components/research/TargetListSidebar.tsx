@@ -955,7 +955,7 @@ export const TargetListSidebar: React.FC<TargetListSidebarProps> = ({
           const isExpanded = expandedCodes.has(code);
           const files = filesByCode[code];
 
-          const rootFiles = files?.filter((f) => !f.relPath.includes('/')) ?? [];
+          const rootFiles = files?.filter((f) => !f.relPath.includes('/') && f.relPath.toLowerCase() !== 'profile.yaml') ?? [];
 
           return (
             <React.Fragment key={code}>
