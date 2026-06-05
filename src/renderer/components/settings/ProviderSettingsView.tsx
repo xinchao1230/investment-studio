@@ -46,18 +46,26 @@ const BASE_URL_PRESETS: { label: string; url: string }[] = [
 
 interface CardState {
   /** Mirrors the persisted `enabled` flag. There is no UI toggle anymore — a
-   *  successful "Save and Connect" forces this true so the backend's switch and
+   *  save forces this true so the backend's switch and
    *  workspace-unlock gates (which require `enabled`) are satisfied. */
   enabled: boolean;
   apiKey: string;
   apiKeyHasValue: boolean; // true if main process has a stored key (masked)
   baseUrl: string;
+  initialBaseUrl: string;
   showKey: boolean;
   saving: boolean;
   testing: boolean;
+  saveStatus: { ok: boolean; error?: string } | null;
   status: { ok: boolean; error?: string; latencyMs?: number; models?: string[] } | null;
   /** The auto-detected wire protocol for this endpoint, once known. */
   detectedProtocol?: 'openai' | 'anthropic' | 'gemini';
+  verified: boolean;
+  verifiedAt: string | null;
+  lastConnectionError: string | null;
+  lastConnectionLatencyMs: number | null;
+  models: string[];
+  rawModels: unknown[];
 }
 
 const emptyCard = (): CardState => ({
@@ -65,11 +73,19 @@ const emptyCard = (): CardState => ({
   apiKey: '',
   apiKeyHasValue: false,
   baseUrl: '',
+  initialBaseUrl: '',
   showKey: false,
   saving: false,
   testing: false,
+  saveStatus: null,
   status: null,
   detectedProtocol: undefined,
+  verified: false,
+  verifiedAt: null,
+  lastConnectionError: null,
+  lastConnectionLatencyMs: null,
+  models: [],
+  rawModels: [],
 });
 
 /** Display metadata for the auto-detected protocol badge. */
@@ -95,12 +111,77 @@ const formatModelList = (models: string[], maxShown = 3): string => {
   return `${shown} +${models.length - maxShown} more`;
 };
 
+const getStringOrNull = (value: unknown): string | null =>
+  typeof value === 'string' && value.length > 0 ? value : null;
+
+const getFiniteNumberOrNull = (value: unknown): number | null =>
+  typeof value === 'number' && Number.isFinite(value) ? value : null;
+
+const getStoredModels = (value: unknown): string[] =>
+  Array.isArray(value) ? value.filter((model): model is string => typeof model === 'string' && model.length > 0) : [];
+
+const getStoredRawModels = (value: unknown): unknown[] =>
+  Array.isArray(value) ? value : [];
+
+const cardFromConfig = (config: any): CardState => {
+  const baseUrl = typeof config?.baseUrl === 'string' ? config.baseUrl : '';
+  return {
+    ...emptyCard(),
+    enabled: config?.enabled === true,
+    apiKeyHasValue: config?.apiKey === '••••••••',
+    baseUrl,
+    initialBaseUrl: baseUrl,
+    detectedProtocol: config?.detectedProtocol,
+    verified: config?.verified === true,
+    verifiedAt: getStringOrNull(config?.verifiedAt),
+    lastConnectionError: getStringOrNull(config?.lastConnectionError),
+    lastConnectionLatencyMs: getFiniteNumberOrNull(config?.lastConnectionLatencyMs),
+    models: getStoredModels(config?.models),
+    rawModels: getStoredRawModels(config?.rawModels),
+  };
+};
+
+const isDirty = (card: CardState): boolean =>
+  card.baseUrl.trim() !== card.initialBaseUrl || card.apiKey.trim().length > 0;
+
+const getStatusDot = (card: CardState) => {
+  if (isDirty(card)) return { color: 'bg-amber-400', label: 'Unsaved changes' };
+  if (!card.apiKeyHasValue) return { color: 'bg-gray-400', label: 'No API key saved' };
+  if (card.verified) return { color: 'bg-green-500', label: 'Verified' };
+  if (card.lastConnectionError) return { color: 'bg-red-500', label: 'Verification failed' };
+  return { color: 'bg-amber-400', label: 'Saved, not verified' };
+};
+
+const formatVerifiedAt = (iso: string | null): string | null => {
+  if (!iso) return null;
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return null;
+  return date.toLocaleString();
+};
+
+const formatModelSummary = (models: string[]): string | null => {
+  if (models.length === 0) return null;
+  const label = models.length === 1 ? 'model' : 'models';
+  return `${models.length} ${label} (${formatModelList(models)})`;
+};
+
+const formatRawModels = (rawModels: unknown[]): string => {
+  if (rawModels.length === 0) return 'No rawModels saved yet.';
+  try {
+    return JSON.stringify(rawModels, null, 2);
+  } catch (error) {
+    return `Failed to render rawModels: ${error instanceof Error ? error.message : String(error)}`;
+  }
+};
+
 export const ProviderSettingsView: React.FC = () => {
   const [card, setCard] = useState<CardState>(emptyCard());
   const [activeProvider, setActiveProvider] = useState<string>('copilot');
   /** True when the user is signed in with a real GitHub account (not skip-login) */
   const [isCopilotAvailable, setIsCopilotAvailable] = useState(false);
   const [copilotUser, setCopilotUser] = useState<{ login: string; name?: string; email?: string; avatarUrl?: string; copilotPlan?: string } | null>(null);
+  const [configOpenError, setConfigOpenError] = useState<string | null>(null);
+  const [rawModelsPanelOpen, setRawModelsPanelOpen] = useState(false);
 
   // Sign in/out — same auth context, same three-state logic (spinner → sign-out
   // glyph → GitHub mark), rendered as a header action button on the right.
@@ -151,13 +232,7 @@ export const ProviderSettingsView: React.FC = () => {
       }
 
       if (configResult.success && configResult.data) {
-        setCard({
-          ...emptyCard(),
-          enabled: configResult.data.enabled || false,
-          apiKeyHasValue: configResult.data.apiKey === '••••••••',
-          baseUrl: configResult.data.baseUrl || '',
-          detectedProtocol: configResult.data.detectedProtocol,
-        });
+        setCard(cardFromConfig(configResult.data));
       }
     })();
 
@@ -185,63 +260,112 @@ export const ProviderSettingsView: React.FC = () => {
     setCard((prev) => ({ ...prev, ...patch }));
   }, []);
 
-  /**
-   * One atomic flow: persist the config (always `enabled: true`), test the
-   * connection, and — on success — switch this provider to active. There is no
-   * separate "Enable" toggle or "Set as Active" step; connecting IS activating.
-   * Auto-activation fires `provider:switched` + `models:updated` in the main
-   * process, which the Settings nav listens to and uses to unlock the workspace.
-   */
-  const handleSaveAndConnect = useCallback(async () => {
+  const reloadProviderConfig = useCallback(async (patch?: Partial<CardState>) => {
     const api = window.electronAPI.provider;
-    if (!api) return;
+    if (!api) return false;
+    const configResult = await api.getConfig(MY_PROVIDER_ID);
+    if (!configResult.success) return false;
+    setCard({
+      ...cardFromConfig(configResult.data),
+      ...(patch ?? {}),
+    });
+    return true;
+  }, []);
+
+  const handleSave = useCallback(async (): Promise<boolean> => {
+    const api = window.electronAPI.provider;
+    if (!api) return false;
 
     const c = card;
-    updateCard({ saving: true, status: null });
+    updateCard({ saving: true, saveStatus: null, status: null });
 
     // Persist. enabled is forced true; only send the API key if the user typed a
     // fresh one (a blank field means "keep the stored key").
     const updates: Record<string, unknown> = { enabled: true };
-    if (c.apiKey.length > 0) updates.apiKey = c.apiKey;
-    if (c.baseUrl.length > 0) updates.baseUrl = c.baseUrl;
+    if (c.apiKey.trim().length > 0) updates.apiKey = c.apiKey.trim();
+    updates.baseUrl = c.baseUrl.trim();
 
     const saveResult = await api.updateConfig(MY_PROVIDER_ID, updates);
     if (!saveResult.success) {
-      updateCard({ saving: false, status: { ok: false, error: saveResult.error || 'Save failed' } });
-      return;
+      updateCard({ saving: false, saveStatus: { ok: false, error: saveResult.error || 'Save failed' } });
+      return false;
     }
 
-    updateCard({
-      saving: false,
-      enabled: true,
-      apiKeyHasValue: c.apiKey.length > 0 || c.apiKeyHasValue,
-      testing: true,
-    });
+    const reloaded = await reloadProviderConfig({ saveStatus: { ok: true } });
+    if (!reloaded) {
+      updateCard({
+        saving: false,
+        enabled: true,
+        apiKey: '',
+        apiKeyHasValue: c.apiKey.trim().length > 0 || c.apiKeyHasValue,
+        initialBaseUrl: c.baseUrl.trim(),
+        baseUrl: c.baseUrl.trim(),
+        verified: c.apiKey.trim().length > 0 || c.baseUrl.trim() !== c.initialBaseUrl ? false : c.verified,
+        saveStatus: { ok: true },
+      });
+    }
+    return true;
+  }, [card, reloadProviderConfig, updateCard]);
 
-    // Test connectivity (this also re-runs protocol auto-detection in the backend).
+  const handleVerify = useCallback(async () => {
+    const api = window.electronAPI.provider;
+    if (!api) return;
+
+    if (isDirty(card)) {
+      const saved = await handleSave();
+      if (!saved) return;
+    }
+
+    updateCard({ testing: true, status: null, saveStatus: null });
     const result = await api.testConnection(MY_PROVIDER_ID);
     if (result.success && result.data) {
       const t = result.data;
-      updateCard({
-        testing: false,
-        ...(t.detectedProtocol ? { detectedProtocol: t.detectedProtocol } : {}),
-        status: {
-          ok: t.success,
-          error: t.error,
-          latencyMs: t.latencyMs,
-          models: t.sampleModels,
-        },
-      });
-
       // Success → make this the active provider automatically.
       if (t.success) {
         const sw = await api.switch(MY_PROVIDER_ID);
         if (sw.success) setActiveProvider(MY_PROVIDER_ID);
       }
+      const reloaded = await reloadProviderConfig({
+        testing: false,
+        status: {
+          ok: t.success,
+          error: t.error,
+          latencyMs: t.latencyMs,
+          models: t.models,
+        },
+      });
+      if (!reloaded) {
+        updateCard({
+          testing: false,
+          ...(t.detectedProtocol ? { detectedProtocol: t.detectedProtocol } : {}),
+          verified: t.success === true,
+          verifiedAt: t.success === true ? new Date().toISOString() : null,
+          lastConnectionError: t.success ? null : (t.error || 'Verification failed'),
+          lastConnectionLatencyMs: typeof t.latencyMs === 'number' ? t.latencyMs : null,
+          models: Array.isArray(t.models) ? t.models : [],
+          rawModels: Array.isArray(t.rawModels) ? t.rawModels : [],
+          status: {
+            ok: t.success,
+            error: t.error,
+            latencyMs: t.latencyMs,
+            models: t.models,
+          },
+        });
+      }
     } else {
       updateCard({ testing: false, status: { ok: false, error: result.error || 'Test failed' } });
     }
-  }, [card, updateCard]);
+  }, [card, handleSave, reloadProviderConfig, updateCard]);
+
+  const handleOpenConfigFile = useCallback(async () => {
+    const api = window.electronAPI.provider;
+    if (!api?.openConfigFile) return;
+    setConfigOpenError(null);
+    const result = await api.openConfigFile();
+    if (!result.success) {
+      setConfigOpenError(result.error || 'Failed to open provider config file');
+    }
+  }, []);
 
   // When Copilot is available (signed in), the app defaults to Copilot only —
   // the My LLM Provider card is hidden and its slot is not offered.
@@ -258,7 +382,11 @@ export const ProviderSettingsView: React.FC = () => {
     return 'My LLM Provider';
   }, []);
 
-  const MyProviderIcon = PROVIDER_ICONS[MY_PROVIDER_ID];
+  const cardDirty = isDirty(card);
+  const statusDot = getStatusDot(card);
+  const canVerify = card.baseUrl.trim().length > 0 && (card.apiKeyHasValue || card.apiKey.trim().length > 0);
+  const verifiedAt = formatVerifiedAt(card.verifiedAt);
+  const modelSummary = formatModelSummary(card.models);
 
   return (
     <div className="runtime-settings-view">
@@ -312,9 +440,23 @@ export const ProviderSettingsView: React.FC = () => {
 
       <div className="content-view-container">
         <div className="settings-form-centered">
-          <p className="text-xs text-[var(--si-muted)] mb-4">
-            Connect your own LLM endpoint. Enter a base URL and API key, then click Save and Connect — once the test passes it becomes the active provider automatically.
-          </p>
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <p className="text-xs text-[var(--si-muted)]">
+              Save your LLM endpoint and API key, then connect to activate it.
+            </p>
+            <button
+              type="button"
+              onClick={handleOpenConfigFile}
+              className="shrink-0 text-xs text-blue-600 hover:underline"
+            >
+              Open raw config file
+            </button>
+          </div>
+          {configOpenError && (
+            <div className="mb-3 text-xs text-red-600">
+              Failed to open provider config file: {configOpenError}
+            </div>
+          )}
 
           <div className="space-y-3">
             {/* GitHub Copilot card — shown only when signed in (Copilot
@@ -398,13 +540,13 @@ export const ProviderSettingsView: React.FC = () => {
             <div className="relative border border-[var(--si-border)] rounded-md p-3 bg-[var(--si-card)]">
               {/* Header */}
               <div className="flex items-center gap-2 mb-2">
-                {MyProviderIcon && React.createElement(MyProviderIcon, { size: 18 })}
-                <h2 className="text-sm font-medium">My LLM Provider</h2>
+                <span
+                  className={`inline-block h-2.5 w-2.5 rounded-full ${statusDot.color}`}
+                  aria-hidden="true"
+                />
+                <h2 className="text-sm font-medium">Custom LLM API endpoint</h2>
+                <span className="text-xs text-[var(--si-muted)]">{statusDot.label}</span>
               </div>
-
-              <p className="text-xs text-[var(--si-muted)] mb-2">
-                Any OpenAI-, Claude-, or Gemini-compatible endpoint — the protocol is auto-detected.
-              </p>
 
               <div className="space-y-2">
                 {/* Base URL input with preset suggestions */}
@@ -414,7 +556,7 @@ export const ProviderSettingsView: React.FC = () => {
                     type="text"
                     list="my-llm-base-url-presets"
                     value={card.baseUrl}
-                    onChange={(e) => updateCard({ baseUrl: e.target.value, status: null, detectedProtocol: undefined })}
+                    onChange={(e) => updateCard({ baseUrl: e.target.value, status: null, saveStatus: null, detectedProtocol: undefined })}
                     placeholder="Select a preset or paste your endpoint URL"
                     className="w-full border border-[var(--si-border)] rounded px-3 py-1.5 text-sm focus:outline-none focus:border-[var(--si-ink)]"
                     autoComplete="off"
@@ -435,7 +577,7 @@ export const ProviderSettingsView: React.FC = () => {
                     <input
                       type={card.showKey ? 'text' : 'password'}
                       value={card.apiKey}
-                      onChange={(e) => updateCard({ apiKey: e.target.value, status: null, detectedProtocol: undefined })}
+                      onChange={(e) => updateCard({ apiKey: e.target.value, status: null, saveStatus: null, detectedProtocol: undefined })}
                       placeholder={card.apiKeyHasValue ? 'Key saved (enter new to replace)' : 'Paste your API key'}
                       className="w-full border border-[var(--si-border)] rounded px-3 py-1.5 text-sm pr-10 focus:outline-none focus:border-[var(--si-ink)]"
                       autoComplete="off"
@@ -451,16 +593,16 @@ export const ProviderSettingsView: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Action button */}
+                {/* Actions */}
                 <div className="flex gap-2">
                   <button
-                    disabled={card.saving || card.testing || (!card.apiKeyHasValue && !card.apiKey)}
-                    onClick={handleSaveAndConnect}
+                    disabled={card.saving || card.testing || !canVerify}
+                    onClick={handleVerify}
                     className="px-3 py-1.5 text-sm rounded bg-[var(--si-gold)] text-white disabled:bg-[var(--si-border)] disabled:cursor-not-allowed hover:bg-[var(--si-accent-strong)]"
                   >
                     {card.saving || card.testing ? (
                       <span className="flex items-center gap-1">
-                        <Loader2 size={12} className="animate-spin" /> {card.saving ? 'Saving...' : 'Connecting...'}
+                        <Loader2 size={12} className="animate-spin" /> Connecting...
                       </span>
                     ) : (
                       'Save and Connect'
@@ -469,15 +611,23 @@ export const ProviderSettingsView: React.FC = () => {
                 </div>
 
                 {/* Status */}
+                {card.saveStatus && (
+                  <div className={`mt-1 text-xs flex items-start gap-1 ${card.saveStatus.ok ? 'text-amber-400' : 'text-red-600'}`}>
+                    {card.saveStatus.ok ? <Check size={12} className="mt-0.5 flex-shrink-0" /> : <AlertCircle size={12} className="mt-0.5 flex-shrink-0" />}
+                    <div className="min-w-0 truncate">
+                      {card.saveStatus.ok ? 'Saved. Click Save and Connect to confirm this endpoint works.' : card.saveStatus.error || 'Save failed'}
+                    </div>
+                  </div>
+                )}
                 {card.status && (
                   <div className={`mt-1 text-xs flex items-start gap-1 ${card.status.ok ? 'text-green-600' : 'text-red-600'}`}>
                     {card.status.ok ? <Check size={12} className="mt-0.5 flex-shrink-0" /> : <AlertCircle size={12} className="mt-0.5 flex-shrink-0" />}
                     <div className="min-w-0 truncate">
                       {card.status.ok ? (
                         <>
-                          Connected ({card.status.latencyMs}ms)
-                          {card.status.models && card.status.models.length > 0 && (
-                            <span className="text-[var(--si-muted)]" title={card.status.models.join(', ')}> — Models: {formatModelList(card.status.models)}</span>
+                          Verified ({card.status.latencyMs}ms)
+                          {modelSummary && (
+                            <span className="text-[var(--si-muted)]" title={card.models.join(', ')}> — {modelSummary}</span>
                           )}
                         </>
                       ) : (
@@ -486,24 +636,60 @@ export const ProviderSettingsView: React.FC = () => {
                     </div>
                   </div>
                 )}
+                {!card.status && !card.saveStatus && cardDirty && (
+                  <div className="mt-1 text-xs text-amber-400">
+                    Unsaved changes. Save and Connect will save first.
+                  </div>
+                )}
+                {!card.status && !card.saveStatus && !cardDirty && card.verified && (
+                  <div className="mt-1 text-xs text-green-600">
+                    Verified{verifiedAt ? ` at ${verifiedAt}` : ''}
+                    {card.lastConnectionLatencyMs !== null ? ` (${card.lastConnectionLatencyMs}ms)` : ''}
+                    {modelSummary ? <span className="text-[var(--si-muted)]"> — {modelSummary}</span> : null}
+                  </div>
+                )}
+                {!card.status && !card.saveStatus && !cardDirty && card.apiKeyHasValue && !card.verified && (
+                  <div className={`mt-1 text-xs ${card.lastConnectionError ? 'text-red-600' : 'text-amber-400'}`}>
+                    {card.lastConnectionError ? `Last verification failed: ${card.lastConnectionError}` : 'Saved. Click Save and Connect to confirm.'}
+                  </div>
+                )}
               </div>
 
-              {/* Auto-detected protocol badge — bottom-right corner */}
+              {/* Auto-detected protocol badge. Click to inspect persisted model metadata. */}
               {card.detectedProtocol && (() => {
                 const badge = PROTOCOL_BADGE[card.detectedProtocol];
                 return (
-                  <span
-                    className="absolute bottom-2 right-2 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium border"
-                    style={{
-                      backgroundColor: 'var(--si-accent-soft)',
-                      color: 'var(--si-gold)',
-                      borderColor: 'var(--si-accent-strong)',
-                    }}
-                    title={`Endpoint auto-detected as ${badge.label}`}
-                  >
-                    {badge.Icon && <badge.Icon size={11} />}
-                    {badge.label}
-                  </span>
+                  <>
+                    <div className="mt-3 flex justify-end">
+                      <button
+                        type="button"
+                        onClick={() => setRawModelsPanelOpen((open) => !open)}
+                        aria-expanded={rawModelsPanelOpen}
+                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium border"
+                        style={{
+                          backgroundColor: 'var(--si-accent-soft)',
+                          color: 'var(--si-gold)',
+                          borderColor: 'var(--si-accent-strong)',
+                        }}
+                        title={`Endpoint auto-detected as ${badge.label}. Click to ${rawModelsPanelOpen ? 'collapse' : 'expand'} raw model metadata.`}
+                      >
+                        {badge.Icon && <badge.Icon size={11} />}
+                        {badge.label}
+                        <span aria-hidden="true">{rawModelsPanelOpen ? '▴' : '▾'}</span>
+                      </button>
+                    </div>
+                    {rawModelsPanelOpen && (
+                      <div className="mt-2 rounded-md border border-[var(--si-border)] bg-[var(--si-code-bg)] p-2">
+                        <div className="mb-1 flex items-center justify-between gap-3 text-[10px] text-[var(--si-muted)]">
+                          <span>rawModels</span>
+                          <span>Last verified: {verifiedAt ?? 'Never'}</span>
+                        </div>
+                        <pre className="max-h-56 overflow-auto whitespace-pre-wrap break-words text-[10px] leading-4 text-[var(--si-ink)]">
+                          {formatRawModels(card.rawModels)}
+                        </pre>
+                      </div>
+                    )}
+                  </>
                 );
               })()}
             </div>

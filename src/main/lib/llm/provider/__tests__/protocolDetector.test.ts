@@ -50,7 +50,8 @@ describe('detectProtocol', () => {
     const r = await detectProtocol('https://api.openai.com', KEY);
     expect(r.protocol).toBe('openai');
     expect(r.protocol && r.normalizedBaseUrl).toBe('https://api.openai.com/v1');
-    expect(r.protocol && r.sampleModels).toContain('gpt-4o');
+    expect(r.protocol && r.models).toContain('gpt-4o');
+    expect(r.protocol && r.rawModels).toEqual([{ id: 'gpt-4o' }, { id: 'gpt-4.1' }]);
   });
 
   it('detects Anthropic when OpenAI probe 404s but anthropic lists models', async () => {
@@ -70,7 +71,8 @@ describe('detectProtocol', () => {
       .mockReturnValueOnce(ok({ models: [{ name: 'models/gemini-2.5-pro' }] }));
     const r = await detectProtocol('https://host.example.com', KEY);
     expect(r.protocol).toBe('gemini');
-    expect(r.protocol && r.sampleModels).toContain('gemini-2.5-pro');
+    expect(r.protocol && r.models).toContain('gemini-2.5-pro');
+    expect(r.protocol && r.rawModels).toEqual([{ name: 'models/gemini-2.5-pro' }]);
   });
 
   it('prioritizes anthropic when the host name hints it', async () => {

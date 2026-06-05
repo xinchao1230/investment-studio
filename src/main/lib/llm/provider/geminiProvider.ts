@@ -362,7 +362,8 @@ export class GeminiProvider implements ILlmProvider {
       return {
         success: true,
         latencyMs,
-        sampleModels: models.slice(0, 5).map(m => m.id),
+        models: models.map(m => m.id),
+        rawModels: models.map(m => m.raw).filter((raw) => raw !== undefined),
       };
     } catch (error) {
       const latencyMs = Date.now() - startTime;

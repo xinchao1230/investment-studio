@@ -376,7 +376,7 @@ export default function(ctx: Context) {
         for (const info of allInfos) {
           if (info.id === 'copilot') continue;
           const cfg = providerManager.getProviderConfig(info.id);
-          if (cfg?.enabled && (!info.requiresApiKey || cfg.apiKey)) {
+          if (cfg?.enabled && (!info.requiresApiKey || (cfg.apiKey && cfg.verified === true))) {
             await providerManager.switchProvider(info.id);
             break;
           }

@@ -7,8 +7,8 @@
  *
  * Design notes:
  *   - This is a PURE module: no singletons, no class state. The same `detect()`
- *     function backs all three call sites (Test Connection, Save, run-time
- *     self-heal), eliminating "works in Test, breaks at run" divergence.
+ *     function backs Verify/Test Connection and run-time self-heal, eliminating
+ *     "works in Verify, breaks at run" divergence.
  *   - Each protocol wants a DIFFERENT base-URL shape (see normalizeBaseUrl). The
  *     detector resolves and returns the normalized URL per protocol, not just the
  *     protocol name — callers persist and reuse it verbatim.
@@ -38,8 +38,10 @@ export interface DetectionSuccess {
   protocol: CustomProtocol;
   /** Base URL normalized to the shape the chosen engine expects. Persist & reuse. */
   normalizedBaseUrl: string;
-  /** First few model ids returned by the probe — surfaced in the Test UI. */
-  sampleModels: string[];
+  /** Full model ids returned by the probe. */
+  models: string[];
+  /** Raw model records returned by the probe. */
+  rawModels: unknown[];
   /** Total detection latency in milliseconds. */
   latencyMs: number;
 }
@@ -107,8 +109,8 @@ function probeOrder(baseUrl: string): CustomProtocol[] {
   return ['openai', 'anthropic', 'gemini'];
 }
 
-/** Extract up to 5 model ids from a protocol-specific listing payload. */
-function extractSampleModels(protocol: CustomProtocol, data: unknown): string[] {
+/** Extract model ids from a protocol-specific listing payload. */
+function extractModelIds(protocol: CustomProtocol, data: unknown): string[] {
   const ids: string[] = [];
   const pushId = (v: unknown) => {
     if (typeof v === 'string' && v) ids.push(v);
@@ -129,12 +131,23 @@ function extractSampleModels(protocol: CustomProtocol, data: unknown): string[] 
       for (const m of arr) pushId((m as { id?: string })?.id);
     }
   }
-  return ids.slice(0, 5);
+  return ids;
+}
+
+/** Extract raw model records from a protocol-specific listing payload. */
+function extractRawModels(protocol: CustomProtocol, data: unknown): unknown[] {
+  if (protocol === 'gemini') {
+    const models = (data as { models?: unknown[] })?.models;
+    return Array.isArray(models) ? models : [];
+  }
+  if (Array.isArray(data)) return data;
+  const arr = (data as { data?: unknown[] })?.data;
+  return Array.isArray(arr) ? arr : [];
 }
 
 /**
  * Probe a single protocol's model-listing endpoint.
- * Returns sample model ids on success, or null if this protocol doesn't match.
+ * Returns model ids and raw model records on success, or null if this protocol doesn't match.
  * Throws only on auth failures we want to surface verbatim (401/403), so the
  * caller can stop early instead of misreporting "no protocol matched".
  */
@@ -143,7 +156,7 @@ async function probeProtocol(
   rawBaseUrl: string,
   apiKey: string,
   signal?: AbortSignal,
-): Promise<{ models: string[]; normalizedBaseUrl: string } | null> {
+): Promise<{ models: string[]; rawModels: unknown[]; normalizedBaseUrl: string } | null> {
   const normalizedBaseUrl = normalizeBaseUrl(rawBaseUrl, protocol);
 
   let url: string;
@@ -201,11 +214,12 @@ async function probeProtocol(
     return null; // Not JSON — not a match.
   }
 
-  const models = extractSampleModels(protocol, data);
+  const models = extractModelIds(protocol, data);
+  const rawModels = extractRawModels(protocol, data);
   // A protocol matches only if its listing shape parsed into at least one model.
   if (models.length === 0) return null;
 
-  return { models, normalizedBaseUrl };
+  return { models, rawModels, normalizedBaseUrl };
 }
 
 /** Internal: an auth failure against a positively-identified protocol server. */
@@ -253,7 +267,8 @@ export async function detectProtocol(
         return {
           protocol,
           normalizedBaseUrl: hit.normalizedBaseUrl,
-          sampleModels: hit.models,
+          models: hit.models,
+          rawModels: hit.rawModels,
           latencyMs: Date.now() - startTime,
         };
       }

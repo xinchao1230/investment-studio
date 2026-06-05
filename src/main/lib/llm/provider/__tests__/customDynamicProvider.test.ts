@@ -63,12 +63,13 @@ describe('CustomDynamicProvider', () => {
       expect(r.error).toMatch(/endpoint/i);
     });
 
-    it('returns success with sample models on a clean detection', async () => {
+    it('returns success with model metadata on a clean detection', async () => {
       provider.configure({ enabled: true, apiKey: 'k', baseUrl: 'https://api.openai.com' });
       fetchSpy.mockReturnValueOnce(ok({ data: [{ id: 'gpt-4o' }, { id: 'gpt-4.1' }] }));
       const r = await provider.testConnection();
       expect(r.success).toBe(true);
-      expect(r.sampleModels).toContain('gpt-4o');
+      expect(r.models).toEqual(['gpt-4o', 'gpt-4.1']);
+      expect(r.rawModels).toEqual([{ id: 'gpt-4o' }, { id: 'gpt-4.1' }]);
     });
   });
 

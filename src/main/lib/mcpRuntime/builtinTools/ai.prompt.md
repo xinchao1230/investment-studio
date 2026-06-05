@@ -1,4 +1,4 @@
-<!-- Last verified: 2026-06-04 -->
+<!-- Last verified: 2026-06-05 -->
 # Built-in Tools
 
 > Central registry and dispatcher for all 50+ built-in MCP tools, organized into eager (lightweight) and lazy (heavy-dependency) loading tiers.
@@ -18,7 +18,7 @@
 | `subAgentTool.ts` | `SubAgentTool` — unified sub-agent tool (named + ad-hoc + background). Consumes `BuiltinToolsManager.currentExecutionContext`. | medium |
 | `requestInteractiveInputTool.ts` | Validates model-supplied JSON schema; returns normalized `choice`/`form` cards to `AgentChat`. | small |
 | `updateAgentTool.ts` | Persists agent config including knowledge sources; mirrors deprecated top-level fields for compat. | medium |
-| `bingWebSearchTool.ts` | Web search — **lazy**. Prefers Microsoft Web IQ (`api.microsoft.ai/v3/search/web`) when a `webiq` token is configured under Settings → Financial Data API; otherwise falls back to a Playwright Bing scraper. | medium |
+| `bingWebSearchTool.ts` | Web search — **lazy**. Prefers Microsoft Web IQ (`api.microsoft.ai/v3/search/web`) when a `webiq` token is configured and verified under Settings → Financial Data API; otherwise falls back to a Playwright Bing scraper. | medium |
 | `webIQSearchClient.ts` | Pure HTTP wrapper for the Web IQ search endpoint. No Electron/Playwright/fs deps so it's trivially mockable in tests. | small |
 | `fetchWebContentTool.ts` | Full-page web fetch — **lazy**, depends on Playwright. | medium |
 | `readOfficeFileTool.ts` | DOCX/XLSX/PPTX/PDF reading via mammoth/jszip/pdfreader — **lazy**. IRM-encrypted fallback uses AppleScript/PowerShell. | medium |
@@ -140,7 +140,7 @@ finally { signal?.removeEventListener('abort', onAbort); }
 
 ## Gotchas
 - ⚠️ **Schema/interface mismatch is silent.** The CRITICAL CHECKLIST comment at line ~292 of the manager is there for this reason — always verify param names, types, and required fields match between the inline `inputSchema` and the tool's TypeScript interface.
-- ⚠️ **`bing_web_search` has two backends.** It prefers Microsoft Web IQ when `getResearchApiToken('webiq')` returns a token (UI: Settings → Financial Data API). Otherwise it falls back to the Playwright + Bing scraping path. The token file is read on every call (cheap; runs in main process), so changing the token under settings takes effect immediately without restarting any process. The tool name and `inputSchema` are unchanged for backward compatibility with agent profiles and persisted chat sessions that reference `bing_web_search`.
+- ⚠️ **`bing_web_search` has two backends.** It prefers Microsoft Web IQ when `getVerifiedResearchApiToken('webiq')` returns a verified token (UI: Settings → Financial Data API). Otherwise it falls back to the Playwright + Bing scraping path. The token file is read on every call (cheap; runs in main process), so changing the token under settings takes effect immediately without restarting any process. The tool name and `inputSchema` are unchanged for backward compatibility with agent profiles and persisted chat sessions that reference `bing_web_search`.
 - ⚠️ **Lazy tools have first-call latency.** Playwright-dependent tools import the entire browser automation stack on first call; this can take 1–2 s on a cold start.
 - ⚠️ **`list_teams_chats` intentionally excludes unsupported chat types.** Even with `chatTypeFilter: 'all'`, selector/search-oriented consumers should only receive `group`, `meeting`, and `oneOnOne`; do not reintroduce `unknownFutureValue` into user-facing chat pickers.
 - ⚠️ **`list_teams_chats` search must not depend on recent chat enumeration breadth.** Preserve Graph search hit breadth by resolving supported metadata per hit `chatId`, and keep `hit.chatDisplay` as the preferred label when it is present.

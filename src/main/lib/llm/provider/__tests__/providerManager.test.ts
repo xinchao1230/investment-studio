@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import * as fs from 'fs';
 
 // Mock electron modules before any imports
 vi.mock('electron', () => ({
@@ -67,9 +68,16 @@ describe('ProviderManager', () => {
   let manager: ProviderManager;
 
   beforeEach(() => {
+    vi.clearAllMocks();
+    (fs.existsSync as unknown as ReturnType<typeof vi.fn>).mockReturnValue(false);
+    (fs.promises.readFile as unknown as ReturnType<typeof vi.fn>).mockReset();
+    (fs.promises.mkdir as unknown as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
+    (fs.promises.writeFile as unknown as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
+
     // Reset the singleton for each test
     (ProviderManager as any).instance = undefined;
     manager = ProviderManager.getInstance();
+    (manager as any).currentAlias = '_local';
   });
 
   it('should be a singleton', () => {
@@ -101,6 +109,18 @@ describe('ProviderManager', () => {
     expect(manager.hasApiKeyProvider()).toBe(false);
   });
 
+  it('does not treat a saved but unverified API-key provider as configured', () => {
+    (manager as any).config = {
+      version: '1.0.0',
+      activeProvider: 'custom-dynamic',
+      providers: {
+        'custom-dynamic': { enabled: true, apiKey: 'enc:stored', baseUrl: 'https://box', verified: false },
+      },
+    };
+
+    expect(manager.hasApiKeyProvider()).toBe(false);
+  });
+
   it('redirects the active pointer to custom-dynamic for a skip-login user with no configured provider', async () => {
     // A _local (skip-login) user cannot use Copilot. With no non-Copilot
     // provider configured yet, the active pointer must NOT stay at 'copilot'
@@ -129,7 +149,7 @@ describe('ProviderManager', () => {
       (manager as any).config = {
         version: '1.0.0',
         activeProvider: 'copilot',
-        providers: { copilot: { enabled: true } },
+        providers: {},
       };
       (manager as any).activeProviderId = 'copilot';
       expect(manager.isActiveProviderUsable()).toBe(false);
@@ -144,7 +164,6 @@ describe('ProviderManager', () => {
         version: '1.0.0',
         activeProvider: 'custom-dynamic',
         providers: {
-          copilot: { enabled: true },
           'custom-dynamic': { enabled: false, apiKey: 'enc:stale', baseUrl: 'http://localhost:4141/', detectedProtocol: 'openai' },
         },
       };
@@ -162,11 +181,21 @@ describe('ProviderManager', () => {
       expect(manager.isActiveProviderUsable()).toBe(false);
     });
 
-    it('returns true when the active provider is non-copilot, enabled, and has a key', () => {
+    it('returns false when the active provider is enabled and has a key but is not verified', () => {
       (manager as any).config = {
         version: '1.0.0',
         activeProvider: 'anthropic',
         providers: { anthropic: { enabled: true, apiKey: 'enc:real' } },
+      };
+      (manager as any).activeProviderId = 'anthropic';
+      expect(manager.isActiveProviderUsable()).toBe(false);
+    });
+
+    it('returns true when the active provider is non-copilot, enabled, keyed, and verified', () => {
+      (manager as any).config = {
+        version: '1.0.0',
+        activeProvider: 'anthropic',
+        providers: { anthropic: { enabled: true, apiKey: 'enc:real', verified: true } },
       };
       (manager as any).activeProviderId = 'anthropic';
       expect(manager.isActiveProviderUsable()).toBe(true);
@@ -282,6 +311,10 @@ describe('ProviderManager', () => {
     vi.unstubAllGlobals();
 
     expect(result.success).toBe(true);
+    expect(manager.getProviderConfig('custom-dynamic')?.verified).toBe(true);
+    expect(manager.getProviderConfig('custom-dynamic')?.models).toEqual(['gpt-4o']);
+    expect(manager.getProviderConfig('custom-dynamic')?.rawModels).toEqual([{ id: 'gpt-4o' }]);
+    expect(manager.getProviderConfig('custom-dynamic')?.detectedProtocol).toBe('openai');
     expect(sent.filter((s) => s.channel === 'models:updated').length).toBeGreaterThan(0);
   });
 
@@ -303,35 +336,103 @@ describe('ProviderManager', () => {
     expect(sent.filter((s) => s.channel === 'models:updated').length).toBe(0);
   });
 
-  it('clears the stale detectedProtocol when a custom-dynamic endpoint changes', async () => {
-    const okJson = (body: unknown) =>
-      Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(body) } as Response);
-    const notFound = () =>
-      Promise.resolve({ ok: false, status: 404, json: () => Promise.resolve({}) } as Response);
-    const fetchSpy = vi.fn();
+  it('clears stale verification metadata when a custom-dynamic endpoint changes', async () => {
+    (manager as any).config = {
+      version: '1.0.0',
+      activeProvider: 'custom-dynamic',
+      providers: {
+        'custom-dynamic': {
+          enabled: true,
+          apiKey: 'b64:b2xkLWtleQ==',
+          baseUrl: 'https://old-box',
+          detectedProtocol: 'anthropic',
+          verified: true,
+          verifiedAt: '2026-01-01T00:00:00.000Z',
+          lastConnectionError: null,
+          lastConnectionLatencyMs: 123,
+          models: ['claude-sonnet-4.6', 'claude-haiku-4.5'],
+          rawModels: [{ id: 'claude-sonnet-4.6' }, { id: 'claude-haiku-4.5' }],
+        },
+      },
+    };
+
+    await manager.updateProviderConfig('custom-dynamic', { enabled: true, baseUrl: 'https://new-box/v1' });
+
+    const cfg = manager.getProviderConfig('custom-dynamic');
+    expect(cfg?.detectedProtocol).toBeUndefined();
+    expect(cfg?.verified).toBe(false);
+    expect(cfg?.verifiedAt).toBeNull();
+    expect(cfg?.lastConnectionError).toBeNull();
+    expect(cfg?.lastConnectionLatencyMs).toBeNull();
+    expect(cfg?.models).toEqual([]);
+    expect(cfg?.rawModels).toEqual([]);
+  });
+
+  it('does not persist a copilot provider config block', async () => {
+    (manager as any).currentAlias = '_local';
+    const config = {
+      version: '1.0.0',
+      activeProvider: 'custom-dynamic',
+      providers: {
+        copilot: { enabled: true },
+        'custom-dynamic': { enabled: true, apiKey: 'b64:aw==', baseUrl: 'https://box', verified: true },
+      },
+    };
+
+    await (manager as any).saveConfig(config);
+
+    const write = fs.promises.writeFile as unknown as ReturnType<typeof vi.fn>;
+    const payload = JSON.parse(write.mock.calls.at(-1)?.[1] as string);
+    expect(payload.providers.copilot).toBeUndefined();
+    expect(payload.providers['custom-dynamic']).toBeDefined();
+  });
+
+  it('surfaces provider config write failures and leaves the in-memory config unchanged', async () => {
+    const writeFile = fs.promises.writeFile as unknown as ReturnType<typeof vi.fn>;
+    const existing = {
+      enabled: true,
+      apiKey: 'b64:b2xkLWtleQ==',
+      baseUrl: 'https://old-box',
+      verified: true,
+      verifiedAt: '2026-01-01T00:00:00.000Z',
+      models: ['old-model'],
+      rawModels: [{ id: 'old-model' }],
+    };
+    (manager as any).config = {
+      version: '1.0.0',
+      activeProvider: 'custom-dynamic',
+      providers: { 'custom-dynamic': existing },
+    };
+    writeFile.mockRejectedValueOnce(new Error('disk full'));
+
+    await expect(
+      manager.updateProviderConfig('custom-dynamic', { enabled: true, baseUrl: 'https://new-box' }),
+    ).rejects.toThrow('disk full');
+
+    expect(manager.getProviderConfig('custom-dynamic')).toEqual(existing);
+  });
+
+  it('does not mark a provider verified when persisting the connection result fails', async () => {
+    const writeFile = fs.promises.writeFile as unknown as ReturnType<typeof vi.fn>;
+    const fetchSpy = vi.fn(() =>
+      Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({ data: [{ id: 'gpt-4o' }] }) } as Response),
+    );
     vi.stubGlobal('fetch', fetchSpy);
 
-    // First save → the OLD box genuinely speaks Anthropic. Detection probes
-    // OpenAI first (404 miss), then Anthropic (hit), and persists 'anthropic'.
-    fetchSpy.mockReturnValueOnce(notFound());                               // openai probe miss
-    fetchSpy.mockReturnValueOnce(okJson({ data: [{ id: 'claude-sonnet-4.6' }] })); // anthropic hit
     await manager.updateProviderConfig('custom-dynamic', {
-      enabled: true, apiKey: 'old-key', baseUrl: 'https://old-box',
+      enabled: true,
+      apiKey: 'k',
+      baseUrl: 'https://example.com',
     });
-    await new Promise((r) => setTimeout(r, 0));
-    expect(manager.getProviderConfig('custom-dynamic')?.detectedProtocol).toBe('anthropic');
+    writeFile.mockRejectedValue(new Error('disk full'));
 
-    // User changes ONLY the base URL. This time the new box is unreachable, so
-    // re-detection FAILS (every probe misses). The stale 'anthropic' verdict
-    // must NOT survive: clearing it on endpoint change means a failed re-detect
-    // leaves NO protocol cached, rather than silently keeping the previous one
-    // and routing the new endpoint through the wrong engine. Without the clear,
-    // detectedProtocol would still read 'anthropic' here.
-    fetchSpy.mockReturnValue(notFound());                                   // all probes miss
-    await manager.updateProviderConfig('custom-dynamic', { enabled: true, baseUrl: 'https://new-box/v1' });
-    await new Promise((r) => setTimeout(r, 0));
+    await expect(manager.testConnection('custom-dynamic')).rejects.toThrow('disk full');
+
+    const cfg = manager.getProviderConfig('custom-dynamic');
+    expect(cfg?.verified).not.toBe(true);
+    expect(cfg?.models).toEqual([]);
+    expect(cfg?.rawModels).toEqual([]);
+
     vi.unstubAllGlobals();
-
-    expect(manager.getProviderConfig('custom-dynamic')?.detectedProtocol).toBeUndefined();
   });
 });

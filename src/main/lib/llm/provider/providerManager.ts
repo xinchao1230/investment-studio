@@ -42,6 +42,7 @@ const logger = createLogger();
 /** Config file name stored per user profile */
 const CONFIG_FILE_NAME = 'provider-config.json';
 const CONFIG_VERSION = '1.0.0';
+type ProviderConfigWithLegacyCount = ProviderConfig & { lastModelCount?: unknown };
 
 /**
  * Provider factories for the fixed-config providers. `custom-dynamic` is created
@@ -105,8 +106,15 @@ export class ProviderManager {
       if (!this.config) this.config = this.getDefaultConfig();
       const existing = this.config.providers['custom-dynamic'] || { enabled: false };
       if (existing.detectedProtocol === protocol) return; // no-op if unchanged
-      this.config.providers['custom-dynamic'] = { ...existing, detectedProtocol: protocol };
-      await this.saveConfig(this.config);
+      const nextConfig: AllProvidersConfig = {
+        ...this.config,
+        providers: {
+          ...this.config.providers,
+          'custom-dynamic': { ...existing, detectedProtocol: protocol },
+        },
+      };
+      await this.saveConfig(nextConfig);
+      this.config = nextConfig;
       logger.debug(`[ProviderManager] Persisted custom-dynamic protocol: ${protocol}`);
     } catch (error) {
       logger.warn(`[ProviderManager] Failed to persist detected protocol: ${error instanceof Error ? error.message : String(error)}`);
@@ -159,9 +167,10 @@ export class ProviderManager {
     if (this.currentAlias === SKIP_LOGIN_ALIAS && this.activeProviderId === 'copilot') {
       const fallbackProvider = this.getFirstConfiguredNonCopilotProvider();
       if (fallbackProvider) {
+        const nextConfig: AllProvidersConfig = { ...this.config, activeProvider: fallbackProvider };
+        await this.saveConfig(nextConfig);
+        this.config = nextConfig;
         this.activeProviderId = fallbackProvider;
-        this.config.activeProvider = fallbackProvider;
-        await this.saveConfig(this.config);
       } else {
         // No non-Copilot provider configured yet. A skip-login (_local) user can
         // NOT use Copilot (it needs GitHub auth), so leaving the active pointer
@@ -188,9 +197,10 @@ export class ProviderManager {
     // manually within a session via Settings; this only applies at sign-in.
     if (this.currentAlias && this.currentAlias !== SKIP_LOGIN_ALIAS && this.activeProviderId !== 'copilot') {
       logger.debug(`[ProviderManager] Copilot user detected, auto-switching from ${this.activeProviderId} to copilot`);
+      const nextConfig: AllProvidersConfig = { ...this.config, activeProvider: 'copilot' };
+      await this.saveConfig(nextConfig);
+      this.config = nextConfig;
       this.activeProviderId = 'copilot';
-      this.config.activeProvider = 'copilot';
-      await this.saveConfig(this.config);
       this.notifyRenderer('provider:switched', { activeProvider: 'copilot' });
     }
 
@@ -279,6 +289,27 @@ export class ProviderManager {
       return { success: false, error: `Unknown provider: ${targetId}` };
     }
 
+    // Copilot is authenticated by the GitHub session, not provider-config.json.
+    // It intentionally has no persisted provider block.
+    if (targetId === 'copilot') {
+      if (this.currentAlias === SKIP_LOGIN_ALIAS) {
+        return { success: false, error: 'Copilot requires GitHub sign-in.' };
+      }
+      if (!this.config) this.config = this.getDefaultConfig();
+      const nextConfig: AllProvidersConfig = { ...this.config, activeProvider: targetId };
+      await this.saveConfig(nextConfig);
+      this.config = nextConfig;
+      this.activeProviderId = targetId;
+      this.notifyRenderer('provider:switched', { activeProvider: targetId });
+      this.notifyRenderer('models:updated', {
+        count: 0,
+        timestamp: Date.now(),
+        source: 'provider-switch',
+      });
+      logger.info(`[ProviderManager] Switched active provider to: ${targetId}`);
+      return { success: true };
+    }
+
     const config = this.config?.providers[targetId];
     if (!config?.enabled) {
       return { success: false, error: `Provider ${targetId} is not enabled. Configure it in Settings first.` };
@@ -289,14 +320,18 @@ export class ProviderManager {
       return { success: false, error: `Provider ${targetId} requires an API key. Add one in Settings.` };
     }
 
-    // Atomic switch
-    this.activeProviderId = targetId;
-
-    // Persist
-    if (this.config) {
-      this.config.activeProvider = targetId;
-      await this.saveConfig(this.config);
+    if (provider.info.requiresApiKey && config.verified !== true) {
+      return { success: false, error: `Provider ${targetId} has not been verified. Click Verify in Settings first.` };
     }
+
+    if (this.config) {
+      const nextConfig: AllProvidersConfig = { ...this.config, activeProvider: targetId };
+      await this.saveConfig(nextConfig);
+      this.config = nextConfig;
+    }
+
+    // Atomic switch after persistence succeeds.
+    this.activeProviderId = targetId;
 
     // Notify renderer of provider switch
     this.notifyRenderer('provider:switched', { activeProvider: targetId });
@@ -304,28 +339,17 @@ export class ProviderManager {
     // Warm model cache then notify renderer so it fetches the new model list.
     // The notification must wait until the cache is warm; otherwise the renderer's
     // syncFromBackend() races with the cache-warm fetch and may get an empty list.
-    if (targetId !== 'copilot') {
-      provider.listModels()
-        .catch((err) => {
-          logger.warn(`[ProviderManager] Model cache warm on switch failed: ${err instanceof Error ? err.message : String(err)}`);
-        })
-        .finally(() => {
-          this.notifyRenderer('models:updated', {
-            count: 0,
-            timestamp: Date.now(),
-            source: 'provider-switch',
-          });
+    provider.listModels()
+      .catch((err) => {
+        logger.warn(`[ProviderManager] Model cache warm on switch failed: ${err instanceof Error ? err.message : String(err)}`);
+      })
+      .finally(() => {
+        this.notifyRenderer('models:updated', {
+          count: 0,
+          timestamp: Date.now(),
+          source: 'provider-switch',
         });
-    } else {
-      // Copilot models are managed by GhcModelsManager which fires its own
-      // models:updated event, but push one immediately so the renderer clears
-      // the stale non-Copilot list and re-syncs.
-      this.notifyRenderer('models:updated', {
-        count: 0,
-        timestamp: Date.now(),
-        source: 'provider-switch',
       });
-    }
 
     logger.info(`[ProviderManager] Switched active provider to: ${targetId}`);
     return { success: true };
@@ -372,13 +396,15 @@ export class ProviderManager {
         (updates.apiKey !== undefined && updates.apiKey !== decryptedExisting.apiKey);
       if (endpointChanged) {
         delete merged.detectedProtocol;
+        merged.verified = false;
+        merged.verifiedAt = null;
+        merged.lastConnectionError = null;
+        merged.lastConnectionLatencyMs = null;
+        merged.models = [];
+        merged.rawModels = [];
+        const mergedWithLegacyCount: ProviderConfigWithLegacyCount = merged;
+        delete mergedWithLegacyCount.lastModelCount;
       }
-    }
-
-    // Apply to the live provider instance (with decrypted/plaintext key)
-    const provider = this.providers.get(id);
-    if (provider) {
-      provider.configure(merged);
     }
 
     // Encrypt API key for persistence
@@ -387,23 +413,22 @@ export class ProviderManager {
       persistConfig.apiKey = this.encryptApiKey(persistConfig.apiKey);
     }
 
-    this.config.providers[id] = persistConfig;
-    await this.saveConfig(this.config);
+    const nextConfig: AllProvidersConfig = {
+      ...this.config,
+      providers: {
+        ...this.config.providers,
+        [id]: persistConfig,
+      },
+    };
 
-    // For custom-dynamic, Save is a detection trigger: probe the endpoint, resolve
-    // the protocol, and persist it (via the provider's onProtocolDetected callback
-    // → persistDetectedProtocol). Best-effort — a detection failure here does NOT
-    // fail the Save; the user can still click Test to see the error, and run-time
-    // self-heal covers a wrong/missing verdict. Only runs when both URL + key exist.
-    if (id === 'custom-dynamic' && merged.baseUrl && merged.apiKey) {
-      const dynamic = provider as CustomDynamicProvider | undefined;
-      if (dynamic?.detect) {
-        try {
-          await dynamic.detect();
-        } catch (error) {
-          logger.warn(`[ProviderManager] custom-dynamic detection on save failed: ${error instanceof Error ? error.message : String(error)}`);
-        }
-      }
+    await this.saveConfig(nextConfig);
+    this.config = nextConfig;
+
+    // Apply to the live provider instance only after persistence succeeds so a
+    // failed save does not create a misleading in-memory-only provider state.
+    const provider = this.providers.get(id);
+    if (provider) {
+      provider.configure(merged);
     }
 
     // If we just reconfigured the ACTIVE provider, its model list may have changed
@@ -428,6 +453,14 @@ export class ProviderManager {
    */
   private notifyActiveModelsUpdated(id: ProviderId, source: string): void {
     if (id !== this.activeProviderId || id === 'copilot') return;
+    if (!this.isActiveProviderUsable()) {
+      this.notifyRenderer('models:updated', {
+        count: 0,
+        timestamp: Date.now(),
+        source,
+      });
+      return;
+    }
     const provider = this.providers.get(id);
     if (!provider) return;
     provider.listModels()
@@ -460,6 +493,9 @@ export class ProviderManager {
   /** List models from the active provider */
   async listModels(): Promise<ProviderModel[]> {
     await this.waitUntilReady();
+    if (this.activeProviderId !== 'copilot' && !this.isActiveProviderUsable()) {
+      return [];
+    }
     return this.getActiveProvider().listModels();
   }
 
@@ -537,6 +573,9 @@ export class ProviderManager {
    * Used by synchronous code paths (e.g., getCurrentModelConfig) that need model metadata.
    */
   getCachedModels(): ProviderModel[] {
+    if (this.activeProviderId !== 'copilot' && !this.isActiveProviderUsable()) {
+      return [];
+    }
     const provider = this.providers.get(this.activeProviderId);
     return provider?.getCachedModels() ?? [];
   }
@@ -549,6 +588,7 @@ export class ProviderManager {
       return { success: false, error: `Provider ${targetId} not found` };
     }
     const result = await provider.testConnection();
+    await this.recordConnectionTestResult(targetId, result);
     // Test/Connect runs detection for custom-dynamic, which can resolve a new
     // protocol and thus a new model set. If this is the active provider and the
     // connection succeeded, re-sync the renderer's model list (same as Save).
@@ -556,6 +596,42 @@ export class ProviderManager {
       this.notifyActiveModelsUpdated(targetId, 'provider-test-connection');
     }
     return result;
+  }
+
+  private async recordConnectionTestResult(
+    id: ProviderId,
+    result: ConnectionTestResult,
+  ): Promise<void> {
+    if (id === 'copilot') return;
+    if (!this.config) this.config = this.getDefaultConfig();
+
+    const existing = this.config.providers[id] || { enabled: false };
+    const models = result.success ? (result.models ?? []) : [];
+    const rawModels = result.success ? (result.rawModels ?? []) : [];
+    const existingWithoutLegacyCount: ProviderConfigWithLegacyCount = { ...existing };
+    delete existingWithoutLegacyCount.lastModelCount;
+
+    const nextProviderConfig = {
+      ...existingWithoutLegacyCount,
+      ...(result.detectedProtocol ? { detectedProtocol: result.detectedProtocol } : {}),
+      verified: result.success,
+      verifiedAt: result.success ? new Date().toISOString() : null,
+      lastConnectionError: result.success ? null : (result.error ?? 'Connection test failed'),
+      lastConnectionLatencyMs: typeof result.latencyMs === 'number' ? result.latencyMs : null,
+      models,
+      rawModels,
+    };
+
+    const nextConfig: AllProvidersConfig = {
+      ...this.config,
+      providers: {
+        ...this.config.providers,
+        [id]: nextProviderConfig,
+      },
+    };
+
+    await this.saveConfig(nextConfig);
+    this.config = nextConfig;
   }
 
   // ── Config Persistence ────────────────────────────────────────────────
@@ -569,6 +645,19 @@ export class ProviderManager {
     } catch {
       return null;
     }
+  }
+
+  async ensureConfigFile(): Promise<string> {
+    if (!this.config) this.config = this.getDefaultConfig();
+    const filePath = this.getConfigFilePath();
+    if (!filePath) {
+      throw new Error('Provider config file is not available until a user profile is active.');
+    }
+    await this.saveConfig(this.config);
+    if (!fs.existsSync(filePath)) {
+      throw new Error('Provider config file could not be created.');
+    }
+    return filePath;
   }
 
   /** Load provider config from disk */
@@ -589,7 +678,14 @@ export class ProviderManager {
         return this.getDefaultConfig();
       }
 
-      return this.migrateLegacyCustomOpenAI(parsed);
+      const migrated = this.migrateLegacyCustomOpenAI(parsed);
+      const providers = migrated.providers as Record<string, ProviderConfig | undefined>;
+      const hadCopilotBlock = providers.copilot !== undefined;
+      delete providers.copilot;
+      if (hadCopilotBlock) {
+        await this.saveConfig(migrated);
+      }
+      return migrated;
     } catch (error) {
       logger.warn(`[ProviderManager] Failed to load config: ${error instanceof Error ? error.message : String(error)}`);
       return this.getDefaultConfig();
@@ -631,8 +727,7 @@ export class ProviderManager {
   private async saveConfig(config: AllProvidersConfig): Promise<void> {
     const filePath = this.getConfigFilePath();
     if (!filePath) {
-      logger.warn('[ProviderManager] Cannot save config: no user alias set');
-      return;
+      throw new Error('Provider config file is not available until a user profile is active.');
     }
 
     try {
@@ -640,11 +735,23 @@ export class ProviderManager {
       if (!fs.existsSync(dir)) {
         await fs.promises.mkdir(dir, { recursive: true });
       }
-      await fs.promises.writeFile(filePath, JSON.stringify(config, null, 2), 'utf-8');
+      await fs.promises.writeFile(filePath, JSON.stringify(this.toPersistedConfig(config), null, 2), 'utf-8');
       logger.debug(`[ProviderManager] Config saved to ${filePath}`);
     } catch (error) {
       logger.error(`[ProviderManager] Failed to save config: ${error instanceof Error ? error.message : String(error)}`);
+      throw error;
     }
+  }
+
+  private toPersistedConfig(config: AllProvidersConfig): AllProvidersConfig {
+    const providers: Partial<Record<ProviderId, ProviderConfig>> = {};
+    for (const [id, providerConfig] of Object.entries(config.providers)) {
+      if (id === 'copilot' || !providerConfig) continue;
+      const sanitizedProviderConfig: ProviderConfigWithLegacyCount = { ...providerConfig };
+      delete sanitizedProviderConfig.lastModelCount;
+      providers[id as ProviderId] = sanitizedProviderConfig;
+    }
+    return { ...config, providers };
   }
 
   /** Get the default config (Copilot as active, nothing else configured) */
@@ -652,9 +759,7 @@ export class ProviderManager {
     return {
       version: CONFIG_VERSION,
       activeProvider: 'copilot',
-      providers: {
-        copilot: { enabled: true },
-      },
+      providers: {},
     };
   }
 
@@ -724,7 +829,7 @@ export class ProviderManager {
     for (const [id, providerConfig] of Object.entries(this.config.providers)) {
       if (id === 'copilot') continue; // Skip Copilot — it needs GitHub auth
       const provider = this.providers.get(id as ProviderId);
-      if (providerConfig?.enabled && (!provider?.info.requiresApiKey || providerConfig.apiKey)) {
+      if (this.isProviderUsableForApiKeyMode(id as ProviderId, providerConfig, provider)) {
         return true;
       }
     }
@@ -753,9 +858,19 @@ export class ProviderManager {
     const activeId = this.activeProviderId;
     if (activeId === 'copilot') return false; // Copilot needs GitHub auth, not a key
     const activeConfig = this.config.providers[activeId];
-    if (!activeConfig?.enabled) return false; // active points at a disabled provider
     const provider = this.providers.get(activeId);
-    return !provider?.info.requiresApiKey || !!activeConfig.apiKey;
+    return this.isProviderUsableForApiKeyMode(activeId, activeConfig, provider);
+  }
+
+  private isProviderUsableForApiKeyMode(
+    id: ProviderId,
+    providerConfig: ProviderConfig | undefined,
+    provider: ILlmProvider | undefined,
+  ): boolean {
+    if (!providerConfig?.enabled) return false;
+    if (provider?.info.requiresApiKey && !providerConfig.apiKey) return false;
+    if (id !== 'copilot' && provider?.info.requiresApiKey && providerConfig.verified !== true) return false;
+    return true;
   }
 
   private getFirstConfiguredNonCopilotProvider(): ProviderId | undefined {
@@ -765,7 +880,7 @@ export class ProviderManager {
       if (id === 'copilot') continue;
       const providerId = id as ProviderId;
       const provider = this.providers.get(providerId);
-      if (providerConfig?.enabled && (!provider?.info.requiresApiKey || providerConfig.apiKey)) {
+      if (this.isProviderUsableForApiKeyMode(providerId, providerConfig, provider)) {
         return providerId;
       }
     }

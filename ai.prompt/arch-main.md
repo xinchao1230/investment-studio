@@ -102,6 +102,7 @@ Use this only when a keyword does not obviously map to a module name in §3.
 
 ```
 {userData}/
+├── research-api-tokens.json              # Investment Studio financial API keys + verification metadata
 ├── profiles/{userAlias}/
 │   ├── auth.json
 │   ├── profile.json

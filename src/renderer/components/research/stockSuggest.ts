@@ -42,7 +42,7 @@ const REQUEST_TIMEOUT_MS = 5000;
 async function resolveToken(): Promise<string> {
   try {
     const api = (window as any).electronAPI?.researchApi;
-    const t = await api?.getToken('eastmoney');
+    const t = await api?.getVerifiedToken('eastmoney');
     return typeof t === 'string' && t.length > 0 ? t : FALLBACK_TOKEN;
   } catch {
     return FALLBACK_TOKEN;
