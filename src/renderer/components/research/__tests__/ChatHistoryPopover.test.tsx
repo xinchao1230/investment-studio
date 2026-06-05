@@ -1,5 +1,5 @@
 /** @vitest-environment happy-dom */
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
 import { ChatHistoryPopover } from '../ChatHistoryPopover';
 
@@ -60,5 +60,52 @@ describe('ChatHistoryPopover — basic rendering', () => {
       />,
     );
     expect(screen.getByText(/untitled chat/i)).toBeInTheDocument();
+  });
+});
+
+describe('ChatHistoryPopover — interactions', () => {
+  it('row click calls onSelectChat with the right id then onClose', () => {
+    const onSelectChat = vi.fn();
+    const onClose = vi.fn();
+    render(<ChatHistoryPopover {...baseProps} onSelectChat={onSelectChat} onClose={onClose} />);
+    fireEvent.click(screen.getByText('First chat'));
+    expect(onSelectChat).toHaveBeenCalledWith('s1');
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('Escape key calls onClose', () => {
+    const onClose = vi.fn();
+    render(<ChatHistoryPopover {...baseProps} onClose={onClose} />);
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('mousedown outside calls onClose', () => {
+    const onClose = vi.fn();
+    render(
+      <div>
+        <button data-testid="outside">outside</button>
+        <ChatHistoryPopover {...baseProps} onClose={onClose} />
+      </div>,
+    );
+    fireEvent.mouseDown(screen.getByTestId('outside'));
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('mousedown inside the popover does NOT call onClose', () => {
+    const onClose = vi.fn();
+    render(<ChatHistoryPopover {...baseProps} onClose={onClose} />);
+    fireEvent.mouseDown(screen.getByText('First chat'));
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('removes event listeners on unmount', () => {
+    const onClose = vi.fn();
+    const { unmount } = render(<ChatHistoryPopover {...baseProps} onClose={onClose} />);
+    unmount();
+    // After unmount, Esc should NOT fire onClose (listener removed)
+    fireEvent.keyDown(window, { key: 'Escape' });
+    fireEvent.mouseDown(document.body);
+    expect(onClose).not.toHaveBeenCalled();
   });
 });

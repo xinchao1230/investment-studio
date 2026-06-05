@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import React, { useEffect, useRef } from 'react';
 import type { ChatHistoryPopoverChat } from './ResearchChatPane';
 
 export interface ChatHistoryPopoverProps {
@@ -31,8 +31,26 @@ function formatRelative(ts?: number | string): string {
 export const ChatHistoryPopover: React.FC<ChatHistoryPopoverProps> = ({
   chats,
   activeChatSessionId,
+  onSelectChat,
+  onClose,
 }) => {
   const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    const handleMouse = (e: MouseEvent) => {
+      if (!ref.current?.contains(e.target as Node)) onClose();
+    };
+    window.addEventListener('keydown', handleKey);
+    window.addEventListener('mousedown', handleMouse, true);
+    return () => {
+      window.removeEventListener('keydown', handleKey);
+      window.removeEventListener('mousedown', handleMouse, true);
+    };
+  }, [onClose]);
+
   return (
     <div
       ref={ref}
@@ -64,6 +82,7 @@ export const ChatHistoryPopover: React.FC<ChatHistoryPopoverProps> = ({
               aria-selected={isActive}
               aria-current={isActive ? 'true' : 'false'}
               className="px-3 py-2 text-sm cursor-pointer hover:bg-gray-50"
+              onClick={() => { void onSelectChat(c.chatSession_id); onClose(); }}
             >
               <div className="truncate">{displayTitle}</div>
               <div className="text-xs text-gray-500">{formatRelative(c.updated_at)}</div>
