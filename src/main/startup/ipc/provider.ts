@@ -10,11 +10,12 @@
  *   provider:updateConfig     — update config for a specific provider
  *   provider:testConnection   — test connectivity for a provider
  *   provider:listModels       — list models from a specific provider
+ *   provider:openConfigFile   — open the raw provider-config.json file
  *   provider:hasApiKeyProvider — check if any API-key provider is configured
  *   provider:isActiveProviderUsable — check if the active provider is usable now
  */
 
-import { ipcMain } from 'electron';
+import { ipcMain, shell } from 'electron';
 import type { Context } from './shared';
 import { providerManager, type ProviderId, type ProviderConfig } from '../../lib/llm/provider';
 
@@ -56,9 +57,24 @@ export default function handleProviderIPC(ctx: Context) {
     try {
       await providerManager.waitUntilReady();
       const config = providerManager.getProviderConfig(id);
-      // Strip encrypted API key from the response — renderer only needs to know if one exists
+      // Strip encrypted API key from the response. Keep rawModels so Settings can
+      // show the user exactly what the latest model-listing API returned.
       const safeConfig = config ? { ...config, apiKey: config.apiKey ? '••••••••' : undefined } : undefined;
       return { success: true, data: safeConfig };
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+    }
+  });
+
+  ipcMain.handle('provider:openConfigFile', async () => {
+    try {
+      await providerManager.waitUntilReady();
+      const filePath = await providerManager.ensureConfigFile();
+      const error = await shell.openPath(filePath);
+      if (error) {
+        return { success: false, filePath, error };
+      }
+      return { success: true, filePath };
     } catch (error) {
       return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
     }

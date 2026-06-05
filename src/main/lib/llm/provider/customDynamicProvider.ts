@@ -280,7 +280,8 @@ export class CustomDynamicProvider implements ILlmProvider {
     return {
       success: true,
       latencyMs: result.latencyMs ?? latencyMs,
-      sampleModels: result.sampleModels,
+      models: result.models,
+      rawModels: result.rawModels,
       detectedProtocol: result.protocol,
     };
   }

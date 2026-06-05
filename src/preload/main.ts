@@ -521,6 +521,7 @@ export interface ElectronAPI {
     getActive: () => Promise<{ success: boolean; data?: string; error?: string }>;
     switch: (targetId: string) => Promise<{ success: boolean; error?: string }>;
     getConfig: (id: string) => Promise<{ success: boolean; data?: any; error?: string }>;
+    openConfigFile: () => Promise<{ success: boolean; filePath?: string; error?: string }>;
     updateConfig: (id: string, updates: Record<string, unknown>) => Promise<{ success: boolean; error?: string }>;
     testConnection: (id?: string) => Promise<{ success: boolean; data?: any; error?: string }>;
     listModels: (id?: string) => Promise<{ success: boolean; data?: any[]; error?: string }>;
@@ -2062,6 +2063,7 @@ export const electronAPI: ElectronAPI = {
     getActive: () => ipcRenderer.invoke('provider:getActive'),
     switch: (targetId: string) => ipcRenderer.invoke('provider:switch', targetId),
     getConfig: (id: string) => ipcRenderer.invoke('provider:getConfig', id),
+    openConfigFile: () => ipcRenderer.invoke('provider:openConfigFile'),
     updateConfig: (id: string, updates: Record<string, unknown>) =>
       ipcRenderer.invoke('provider:updateConfig', id, updates),
     testConnection: (id?: string) => ipcRenderer.invoke('provider:testConnection', id),

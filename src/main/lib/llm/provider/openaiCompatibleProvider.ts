@@ -348,6 +348,9 @@ export class OpenAICompatibleProvider implements ILlmProvider {
     const startTime = Date.now();
 
     try {
+      // Invalidate cache so Verify reflects the current /models response.
+      this.modelsCache = [];
+      this.modelsCacheTime = 0;
       const models = await this.listModels();
       const latencyMs = Date.now() - startTime;
 
@@ -362,7 +365,8 @@ export class OpenAICompatibleProvider implements ILlmProvider {
       return {
         success: true,
         latencyMs,
-        sampleModels: models.slice(0, 5).map(m => m.id),
+        models: models.map(m => m.id),
+        rawModels: models.map(m => m.raw).filter((raw) => raw !== undefined),
       };
     } catch (error) {
       const latencyMs = Date.now() - startTime;

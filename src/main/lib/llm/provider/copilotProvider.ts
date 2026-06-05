@@ -271,7 +271,8 @@ export class CopilotProvider implements ILlmProvider {
       return {
         success: true,
         latencyMs,
-        sampleModels: models.slice(0, 5).map((m: any) => m.id),
+        models: models.map((m: any) => m.id).filter((id: unknown): id is string => typeof id === 'string' && id.length > 0),
+        rawModels: models,
       };
     } catch (error) {
       return {

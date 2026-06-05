@@ -79,6 +79,21 @@ export interface ProviderConfig {
    * legacy custom-openai behavior) for backward compatibility.
    */
   detectedProtocol?: 'openai' | 'anthropic' | 'gemini';
+  /**
+   * True only after the latest explicit Verify/Test Connection succeeded.
+   * Saving endpoint credentials resets this until the user verifies again.
+   */
+  verified?: boolean;
+  /** ISO timestamp of the latest successful verification. */
+  verifiedAt?: string | null;
+  /** Last failed verification error, cleared on success or endpoint changes. */
+  lastConnectionError?: string | null;
+  /** Latency from the latest verification attempt. */
+  lastConnectionLatencyMs?: number | null;
+  /** Full model IDs from the latest successful verification. */
+  models?: string[];
+  /** Raw model records returned by the latest successful verification. */
+  rawModels?: unknown[];
 }
 
 /** Root configuration for all providers */
@@ -208,8 +223,10 @@ export interface ConnectionTestResult {
   latencyMs?: number;
   /** Error message if failed */
   error?: string;
-  /** Models available (first few) as proof of connectivity */
-  sampleModels?: string[];
+  /** Full model IDs observed during verification. */
+  models?: string[];
+  /** Raw model records observed during verification. */
+  rawModels?: unknown[];
   /**
    * For `custom-dynamic` only: the protocol detected during this test, so the
    * renderer can show a "compatible with X" badge without a second round-trip.
