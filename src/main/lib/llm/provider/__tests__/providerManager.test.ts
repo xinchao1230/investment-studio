@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import * as fs from 'fs';
 
 // Mock electron modules before any imports
 vi.mock('electron', () => ({
@@ -67,9 +68,16 @@ describe('ProviderManager', () => {
   let manager: ProviderManager;
 
   beforeEach(() => {
+    vi.clearAllMocks();
+    (fs.existsSync as unknown as ReturnType<typeof vi.fn>).mockReturnValue(false);
+    (fs.promises.readFile as unknown as ReturnType<typeof vi.fn>).mockReset();
+    (fs.promises.mkdir as unknown as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
+    (fs.promises.writeFile as unknown as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
+
     // Reset the singleton for each test
     (ProviderManager as any).instance = undefined;
     manager = ProviderManager.getInstance();
+    (manager as any).currentAlias = '_local';
   });
 
   it('should be a singleton', () => {
@@ -361,7 +369,6 @@ describe('ProviderManager', () => {
   });
 
   it('does not persist a copilot provider config block', async () => {
-    const fs = await import('fs');
     (manager as any).currentAlias = '_local';
     const config = {
       version: '1.0.0',
@@ -378,5 +385,54 @@ describe('ProviderManager', () => {
     const payload = JSON.parse(write.mock.calls.at(-1)?.[1] as string);
     expect(payload.providers.copilot).toBeUndefined();
     expect(payload.providers['custom-dynamic']).toBeDefined();
+  });
+
+  it('surfaces provider config write failures and leaves the in-memory config unchanged', async () => {
+    const writeFile = fs.promises.writeFile as unknown as ReturnType<typeof vi.fn>;
+    const existing = {
+      enabled: true,
+      apiKey: 'b64:b2xkLWtleQ==',
+      baseUrl: 'https://old-box',
+      verified: true,
+      verifiedAt: '2026-01-01T00:00:00.000Z',
+      models: ['old-model'],
+      rawModels: [{ id: 'old-model' }],
+    };
+    (manager as any).config = {
+      version: '1.0.0',
+      activeProvider: 'custom-dynamic',
+      providers: { 'custom-dynamic': existing },
+    };
+    writeFile.mockRejectedValueOnce(new Error('disk full'));
+
+    await expect(
+      manager.updateProviderConfig('custom-dynamic', { enabled: true, baseUrl: 'https://new-box' }),
+    ).rejects.toThrow('disk full');
+
+    expect(manager.getProviderConfig('custom-dynamic')).toEqual(existing);
+  });
+
+  it('does not mark a provider verified when persisting the connection result fails', async () => {
+    const writeFile = fs.promises.writeFile as unknown as ReturnType<typeof vi.fn>;
+    const fetchSpy = vi.fn(() =>
+      Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({ data: [{ id: 'gpt-4o' }] }) } as Response),
+    );
+    vi.stubGlobal('fetch', fetchSpy);
+
+    await manager.updateProviderConfig('custom-dynamic', {
+      enabled: true,
+      apiKey: 'k',
+      baseUrl: 'https://example.com',
+    });
+    writeFile.mockRejectedValue(new Error('disk full'));
+
+    await expect(manager.testConnection('custom-dynamic')).rejects.toThrow('disk full');
+
+    const cfg = manager.getProviderConfig('custom-dynamic');
+    expect(cfg?.verified).not.toBe(true);
+    expect(cfg?.models).toEqual([]);
+    expect(cfg?.rawModels).toEqual([]);
+
+    vi.unstubAllGlobals();
   });
 });
