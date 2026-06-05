@@ -238,7 +238,7 @@ export const TargetListSidebar: React.FC<TargetListSidebarProps> = ({
   // categories (Set), and become harmless once files are added.
   // Tracks user-created folders that may be empty on disk. Each value is
   // a list of POSIX-style relPaths under that target's directory (e.g.
-  // "test" for a top-level folder or "研报/test" for a nested one).
+  // "test" for a top-level folder or "research/test" for a nested one).
   // Empty dirs aren't returned by the file listing tool, so without this
   // state they would be invisible until a file is added.
   const [optimisticFolders, setOptimisticFolders] = useState<Record<string, string[]>>({});
@@ -1140,12 +1140,12 @@ export const TargetListSidebar: React.FC<TargetListSidebarProps> = ({
                     const catKey = `${code}::${cat}`;
                     const isCatExpanded = expandedCats.has(catKey);
                     // Optimistic empty folders living directly under this
-                    // category (e.g. "研报/test"). Top-level optimistic
+                    // category (e.g. "research/test"). Top-level optimistic
                     // entries (no '/') manifest themselves as their own
                     // category row instead, so they're excluded here.
                     // All optimistic folder relPaths under this category
-                    // (any depth). e.g. for cat='纪要', this includes
-                    // '纪要/eee', '纪要/foo/bar', etc.
+                    // (any depth). e.g. for cat='meetings', this includes
+                    // 'meetings/eee', 'meetings/foo/bar', etc.
                     const optimisticUnderCat = (optimisticFolders[code] ?? [])
                       .filter((p) => p.startsWith(cat + '/'));
                     const hasFiles = catFiles.length > 0 || optimisticUnderCat.length > 0;
@@ -1188,7 +1188,7 @@ export const TargetListSidebar: React.FC<TargetListSidebarProps> = ({
                           {hasFiles && isCatExpanded && (() => {
                             // Build a hierarchical tree of files + optimistic
                             // folders under this category, so nested paths
-                            // (e.g. '纪要/eee/eee.md') render as a folder
+                            // (e.g. 'meetings/eee/eee.md') render as a folder
                             // containing the file rather than a flat row
                             // with '/' in the label.
                             type Node = {
