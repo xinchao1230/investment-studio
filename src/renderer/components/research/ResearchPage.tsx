@@ -782,6 +782,40 @@ export const ResearchPage: React.FC = () => {
     [targetChats, allChats],
   );
 
+  // Right-pane (compact chat) dispatchers. Pick between target-bound and
+  // Stella chat surfaces based on the current sidebar selection so the
+  // "+ New chat" / history popover in ResearchChatPane stay context-aware.
+  const handleNewChatFromPane = useCallback(async () => {
+    const code = selectedCodeRef.current;
+    if (code) {
+      const target = targetsRef.current.find((t) => t.stock_code === code);
+      await targetChats.createChatForTarget(code, target);
+    } else {
+      await stella.createChat();
+    }
+    void allChats.refresh();
+  }, [targetChats, stella, allChats]);
+
+  const handleSelectChatFromPane = useCallback(
+    async (chatSessionId: string) => {
+      const code = selectedCodeRef.current;
+      if (code) {
+        const target = targetsRef.current.find((t) => t.stock_code === code);
+        await targetChats.selectChatForTarget(code, target, chatSessionId);
+      } else {
+        await stella.selectChat(chatSessionId);
+      }
+    },
+    [targetChats, stella],
+  );
+
+  const contextualChatList = useMemo(() => {
+    if (selectedCode) {
+      return targetChats.chatsByCode[selectedCode] ?? [];
+    }
+    return stella.chats ?? [];
+  }, [selectedCode, targetChats.chatsByCode, stella.chats]);
+
   const handleDeleteChat = useCallback(
     async (code: string, chatSessionId: string) => {
       const target = targetsRef.current.find((t) => t.stock_code === code);
@@ -1605,6 +1639,12 @@ export const ResearchPage: React.FC = () => {
           fill={activeMode === 'stella'}
           collapsed={activeMode === 'stella' ? false : rightCollapsed}
           onToggleCollapsed={activeMode === 'stella' ? undefined : toggleRightCollapsed}
+          chats={contextualChatList}
+          activeChatSessionId={liveChatSessionId}
+          onNewChat={handleNewChatFromPane}
+          onSelectChat={handleSelectChatFromPane}
+          onRenameChat={handleRenameAnyChat}
+          onDeleteChat={handleDeleteAnyChat}
         />
       </div>
       <Dialog open={!!pendingDelete} onOpenChange={(open) => { if (!open && !deleteBusy) setPendingDelete(null); }}>

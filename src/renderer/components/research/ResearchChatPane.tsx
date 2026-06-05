@@ -1,7 +1,9 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, useState, useEffect } from 'react';
 import {
   PanelRightClose,
   PanelRightOpen,
+  MessageSquarePlus,
+  MessagesSquare,
   Compass,
   ScanSearch,
   FileText,
@@ -15,6 +17,13 @@ import {
 } from 'lucide-react';
 import ChatView from '../chat/ChatView';
 import { useMessages } from '../../lib/chat/agentChatSessionCacheManager';
+import { ChatHistoryPopover } from './ChatHistoryPopover';
+
+export interface ChatHistoryPopoverChat {
+  chatSession_id: string;
+  title?: string | null;
+  updated_at?: number | string;
+}
 
 interface ResearchChatPaneProps {
   activeFileAbsPath: string | null;
@@ -39,6 +48,18 @@ interface ResearchChatPaneProps {
    *   CSS hooks and is never shown to the user.)
    */
   mode?: 'workspace' | 'stella';
+  /** Chat history list for popover (wired in a later task). */
+  chats: ChatHistoryPopoverChat[];
+  /** Currently active chat session id. */
+  activeChatSessionId: string | null;
+  /** Create a new chat session. */
+  onNewChat: () => void | Promise<void>;
+  /** Switch to an existing chat session. */
+  onSelectChat: (chatSessionId: string) => void | Promise<void>;
+  /** Rename a chat session. */
+  onRenameChat: (chatSessionId: string, targetCode: string | null, title: string) => void | Promise<void>;
+  /** Delete a chat session. */
+  onDeleteChat: (chatSessionId: string, targetCode: string | null) => void | Promise<void>;
 }
 
 type QuickStartKind = 'intro' | 'task';
@@ -277,6 +298,12 @@ export const ResearchChatPane: React.FC<ResearchChatPaneProps> = ({
   collapsed = false,
   onToggleCollapsed,
   mode = 'workspace',
+  chats,
+  activeChatSessionId,
+  onNewChat,
+  onSelectChat,
+  onRenameChat,
+  onDeleteChat,
 }) => {
   const messages = useMessages();
   /**
@@ -310,6 +337,9 @@ export const ResearchChatPane: React.FC<ResearchChatPaneProps> = ({
     );
   }, []);
 
+  const [historyOpen, setHistoryOpen] = useState(false);
+  useEffect(() => { setHistoryOpen(false); }, [targetCode]);
+
   const hasTarget = Boolean(targetName || targetCode);
 
   if (collapsed) {
@@ -333,7 +363,7 @@ export const ResearchChatPane: React.FC<ResearchChatPaneProps> = ({
 
   return (
     <aside
-      className="rw-pane-right flex flex-col h-full"
+      className="rw-pane-right relative flex flex-col h-full"
       style={fill
         ? { flex: '1 1 0', minWidth: 0, width: '100%' }
         : { width, flex: `0 0 ${width}px` }}
@@ -344,10 +374,29 @@ export const ResearchChatPane: React.FC<ResearchChatPaneProps> = ({
         className="relative flex items-center h-10 px-3 gap-2"
         style={{ background: 'var(--rw-bg-chat-header)' }}
       >
+        <button
+          type="button"
+          className="rw-side-icon-btn flex-shrink-0"
+          title="New chat"
+          aria-label="New chat"
+          onClick={() => { void onNewChat(); }}
+        >
+          <MessageSquarePlus size={14} />
+        </button>
+        <button
+          type="button"
+          className="rw-side-icon-btn flex-shrink-0"
+          title="Chat history"
+          aria-label="Chat history"
+          onClick={() => setHistoryOpen((v) => !v)}
+        >
+          <MessagesSquare size={14} />
+        </button>
+        <div className="flex-1" />
         {onToggleCollapsed && (
           <button
             type="button"
-            className="rw-side-icon-btn flex-shrink-0 ml-auto"
+            className="rw-side-icon-btn flex-shrink-0"
             title="Collapse assistant (Ctrl+/)"
             aria-label="Collapse assistant"
             onClick={onToggleCollapsed}
@@ -356,6 +405,17 @@ export const ResearchChatPane: React.FC<ResearchChatPaneProps> = ({
           </button>
         )}
       </header>
+      {historyOpen && (
+        <ChatHistoryPopover
+          chats={chats}
+          activeChatSessionId={activeChatSessionId}
+          targetCode={targetCode ?? null}
+          onSelectChat={onSelectChat}
+          onRenameChat={onRenameChat}
+          onDeleteChat={onDeleteChat}
+          onClose={() => setHistoryOpen(false)}
+        />
+      )}
       <div className="flex-1 min-h-0 overflow-hidden relative">
         {isEmpty && (
           <div className="absolute inset-x-0 top-0 z-10 pointer-events-none">
