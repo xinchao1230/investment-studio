@@ -472,7 +472,7 @@ class GhcModelsManager {
       // max_prompt_tokens is the actual API limit on prompt input
       maxContextLength: model.capabilities.limits?.max_prompt_tokens || model.capabilities.limits?.max_context_window_tokens || 0,
       maxOutputLength: model.capabilities.limits?.max_output_tokens || 0,
-      supportsTemperature: !model.capabilities.family.includes('o3') && !model.capabilities.family.includes('o4'),
+      supportsTemperature: supportsTemperatureForModel(model.id, model.capabilities.family),
       supportsAttachments: model.capabilities.supports.vision || false,
       tokenizer: (model.capabilities.tokenizer === 'cl100k_base' ? 'cl100k_base' : 'o200k_base') as 'cl100k_base' | 'o200k_base'
     };
@@ -559,6 +559,18 @@ export function validateModelId(modelId: string): boolean {
 
 export function isReasoningModel(modelId: string): boolean {
   return ghcModelsManager.isReasoningModel(modelId);
+}
+
+export function supportsTemperatureForModel(modelId: string, family?: string): boolean {
+  const id = modelId.toLowerCase();
+  const modelFamily = (family || modelId).toLowerCase();
+  const rejectsTemperature = /^gpt-5/.test(id)
+    || /^gpt-5/.test(modelFamily)
+    || /^o\d/.test(id)
+    || /^o\d/.test(modelFamily)
+    || id.includes('codex')
+    || modelFamily.includes('codex');
+  return !rejectsTemperature;
 }
 
 export function getDefaultModel(): string {

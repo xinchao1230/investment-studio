@@ -264,6 +264,16 @@ describe('ModelCacheManager', () => {
       const caps = manager.getModelCapabilities('gpt-5');
       expect(caps?.supportsReasoning).toBe(true);
       expect(caps?.reasoningEfforts).toEqual(['low', 'medium', 'high']);
+      expect(caps?.supportsTemperature).toBe(false);
+    });
+
+    it('disables temperature for GPT-5 Codex models', async () => {
+      const m = makeModel({ id: 'gpt-5.3-codex', capabilities: { ...makeModel().capabilities, family: 'gpt-5.3-codex' } });
+      (window as any).electronAPI.models.getAllModels.mockResolvedValue({ success: true, data: [m] });
+      await manager.syncFromBackend();
+
+      const caps = manager.getModelCapabilities('gpt-5.3-codex');
+      expect(caps?.supportsTemperature).toBe(false);
     });
 
     it('deduplicates reasoning_effort values', async () => {

@@ -1,5 +1,11 @@
 import { LlmApiSettings, Message, MessageHelper } from '@shared/types/chatTypes';
-import { getModelById, buildMaxTokensParam } from './ghcModelsManager';
+import {
+  getModelById,
+  buildMaxTokensParam,
+  buildReasoningParams,
+  getDefaultReasoningEffort,
+  getModelCapabilities,
+} from './ghcModelsManager';
 import { GHC_CONFIG } from '../auth/ghcConfig';
 import { MainAuthManager } from "../auth/authManager";
 import { providerManager } from './provider';
@@ -211,13 +217,13 @@ export class GhcModelApi {
       const endpoint = getEndpointForModel(modelId);
 
       // Build request body
-      const requestBody = {
-        model: modelId,
-        messages: formattedMessages,
-        ...buildMaxTokensParam(modelId, maxTokens),
-        temperature: temperature,
-        stream: false
-      };
+      const requestBody = this.buildCopilotRequestBody(
+        modelId,
+        formattedMessages,
+        endpoint,
+        maxTokens,
+        temperature,
+      );
 
       // Build API URL
       const url = `${this.config.endpoint}${endpoint}`;
@@ -244,23 +250,7 @@ export class GhcModelApi {
       // Parse response
       const result = await response.json();
 
-      // Extract response content
-      const message = result.choices?.[0]?.message;
-      if (!message || !message.content) {
-        throw new Error('API response format invalid or no content');
-      }
-
-      // Handle content format (string or array)
-      let responseContent: string;
-      if (Array.isArray(message.content)) {
-        // Extract text content from array format
-        const textParts = message.content.filter((part: any) => part && typeof part === 'object' && part.type === 'text');
-        responseContent = textParts.map((part: any) => part.text || '').join('');
-      } else {
-        responseContent = String(message.content || '');
-      }
-
-      return responseContent;
+      return this.extractResponseContent(result, endpoint);
 
     } catch (error) {
       throw error;
@@ -376,13 +366,13 @@ export class GhcModelApi {
 
     const endpoint = getEndpointForModel(modelId);
 
-    const requestBody = {
-      model: modelId,
-      messages: messages,
-      ...buildMaxTokensParam(modelId, maxTokens),
-      temperature: temperature,
-      stream: false
-    };
+    const requestBody = this.buildCopilotRequestBody(
+      modelId,
+      messages,
+      endpoint,
+      maxTokens,
+      temperature,
+    );
 
     const url = `${this.config.endpoint}${endpoint}`;
 
@@ -405,20 +395,7 @@ export class GhcModelApi {
 
     const result = await response.json();
 
-    const message = result.choices?.[0]?.message;
-    if (!message || !message.content) {
-      throw new Error('API response format invalid or no content');
-    }
-
-    let responseContent: string;
-    if (Array.isArray(message.content)) {
-      const textParts = message.content.filter((part: any) => part && typeof part === 'object' && part.type === 'text');
-      responseContent = textParts.map((part: any) => part.text || '').join('');
-    } else {
-      responseContent = String(message.content || '');
-    }
-
-    return responseContent;
+    return this.extractResponseContent(result, endpoint);
   }
 
   /**
@@ -467,6 +444,123 @@ export class GhcModelApi {
     }
 
     return formattedMessages;
+  }
+
+  private buildCopilotRequestBody(
+    modelId: string,
+    messages: Array<{ role: string; content: string; tool_call_id?: string }>,
+    endpoint: string,
+    maxTokens: number,
+    temperature: number,
+  ): Record<string, unknown> {
+    if (endpoint === '/responses') {
+      const body: Record<string, unknown> = {
+        model: modelId,
+        input: this.convertMessagesToResponsesInput(messages),
+        ...buildMaxTokensParam(modelId, maxTokens),
+        ...this.buildReasoningFragment(modelId, endpoint),
+        stream: false,
+        include: ['reasoning.encrypted_content'],
+      };
+      this.addTemperatureIfSupported(body, modelId, temperature);
+      return body;
+    }
+
+    const body: Record<string, unknown> = {
+      model: modelId,
+      messages,
+      ...buildMaxTokensParam(modelId, maxTokens),
+      ...this.buildReasoningFragment(modelId, endpoint),
+      stream: false,
+    };
+    this.addTemperatureIfSupported(body, modelId, temperature);
+    return body;
+  }
+
+  private addTemperatureIfSupported(
+    body: Record<string, unknown>,
+    modelId: string,
+    temperature: number,
+  ): void {
+    if (this.modelSupportsTemperature(modelId)) {
+      body.temperature = temperature;
+    }
+  }
+
+  private modelSupportsTemperature(modelId: string): boolean {
+    return getModelCapabilities(modelId)?.supportsTemperature ?? true;
+  }
+
+  private buildReasoningFragment(modelId: string, endpoint: string): Record<string, unknown> {
+    const supportedEfforts = getModelCapabilities(modelId)?.reasoningEfforts ?? [];
+    return buildReasoningParams({
+      endpoint,
+      supportedEfforts,
+      defaultEffort: getDefaultReasoningEffort(modelId, supportedEfforts),
+    });
+  }
+
+  private convertMessagesToResponsesInput(
+    messages: Array<{ role: string; content: string; tool_call_id?: string }>,
+  ): Array<Record<string, unknown>> {
+    return messages.map((message) => {
+      if (message.role === 'system' || message.role === 'user' || message.role === 'assistant') {
+        return {
+          type: 'message',
+          role: message.role,
+          content: message.content,
+        };
+      }
+
+      if (message.role === 'tool') {
+        return {
+          type: 'function_call_output',
+          call_id: message.tool_call_id || '',
+          output: message.content,
+        };
+      }
+
+      throw new Error(`Unsupported message role '${message.role}' for GitHub Copilot /responses format`);
+    });
+  }
+
+  private extractResponseContent(result: any, endpoint: string): string {
+    if (endpoint === '/responses') {
+      const responseText = this.extractResponsesContent(result);
+      if (!responseText) {
+        throw new Error('API response format invalid or no content');
+      }
+      return responseText;
+    }
+
+    const message = result.choices?.[0]?.message;
+    if (!message || !message.content) {
+      throw new Error('API response format invalid or no content');
+    }
+
+    return this.extractChatMessageContent(message.content);
+  }
+
+  private extractChatMessageContent(content: unknown): string {
+    if (Array.isArray(content)) {
+      const textParts = content.filter((part: any) => part && typeof part === 'object' && part.type === 'text');
+      return textParts.map((part: any) => part.text || '').join('');
+    }
+    return String(content || '');
+  }
+
+  private extractResponsesContent(result: any): string {
+    if (typeof result.output_text === 'string') {
+      return result.output_text;
+    }
+
+    const outputItems = Array.isArray(result.output) ? result.output : [];
+    return outputItems
+      .filter((item: any) => item?.type === 'message')
+      .flatMap((item: any) => Array.isArray(item.content) ? item.content : [])
+      .filter((part: any) => part?.type === 'output_text' || part?.type === 'text')
+      .map((part: any) => part.text || '')
+      .join('');
   }
 
   /**

@@ -11,12 +11,6 @@ interface SubAgentListItemProps {
   parentSkillsCount?: number
 }
 
-const contextAccessLabels: Record<string, string> = {
-  isolated: 'Isolated',
-  parent_summary: 'Summary',
-  full_history: 'Full History',
-}
-
 /**
  * SubAgentListItem - Sub-agent list card component
  *
@@ -58,11 +52,10 @@ const SubAgentListItem: React.FC<SubAgentListItemProps> = ({
 
   return (
     <div className="sub-agent-card-wrapper">
-      {/* Header Row: emoji + name + version + menu button */}
+      {/* Header Row: emoji + name + menu button */}
       <div className="sub-agent-card-header">
         <span className="sub-agent-card-emoji">{config.emoji}</span>
         <span className="sub-agent-card-name">{config.display_name}</span>
-        <span className="sub-agent-card-version">v{config.version}</span>
         <div className="sub-agent-menu-container">
           <button
             ref={menuButtonRef}
@@ -86,7 +79,7 @@ const SubAgentListItem: React.FC<SubAgentListItemProps> = ({
         <span className="sub-agent-card-meta-separator">·</span>
         <span>Skills: {skillsDisplay}</span>
         <span className="sub-agent-card-meta-separator">·</span>
-        <span>Context: {contextAccessLabels[config.context_access || 'isolated'] || config.context_access || 'isolated'}</span>
+        <span>Inherited context: {config.context_access || 'isolated'}</span>
       </div>
     </div>
   )

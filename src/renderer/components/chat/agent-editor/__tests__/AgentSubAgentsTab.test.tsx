@@ -176,22 +176,16 @@ describe('AgentSubAgentsTab', () => {
       expect(screen.getByText('🔎')).toBeInTheDocument();
     });
 
-    it('should render version with v prefix', () => {
-      renderTab();
-      expect(screen.getByText('v1.0.0')).toBeInTheDocument();
-      expect(screen.getByText('v2.0.0')).toBeInTheDocument();
-    });
-
     it('should render descriptions', () => {
       renderTab();
       expect(screen.getByText('Searches the web for information')).toBeInTheDocument();
       expect(screen.getByText('Reviews code and suggests improvements')).toBeInTheDocument();
     });
 
-    it('should render context_access text', () => {
+    it('should render inherited context_access text', () => {
       renderTab();
-      expect(screen.getByText('isolated')).toBeInTheDocument();
-      expect(screen.getByText('full')).toBeInTheDocument();
+      expect(screen.getByText('Inherited context: isolated')).toBeInTheDocument();
+      expect(screen.getByText('Inherited context: full')).toBeInTheDocument();
     });
 
     it('should show header with "0 selected" initially', () => {

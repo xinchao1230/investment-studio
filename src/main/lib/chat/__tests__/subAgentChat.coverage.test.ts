@@ -788,13 +788,13 @@ describe('SubAgentChat - buildSystemPrompt (private)', () => {
     expect(text).toContain('Operating Rules');
   });
 
-  it('parentContext option no longer included (removed during extraction)', () => {
+  it('includes parentContext when provided', () => {
     const options = makeOptions({ parentContext: 'Parent context data here' });
     const chat = new SubAgentChat(options);
     const messages = (chat as any).buildSystemPrompt();
     const text = messages[0].content[0].text;
-    // parentContext was removed during prompt builder extraction
-    expect(text).not.toContain('Parent context data here');
+    expect(text).toContain('## Parent Conversation Context');
+    expect(text).toContain('Parent context data here');
   });
 
   it('includes deliverables path when provided', () => {

@@ -8,6 +8,7 @@ import { browserControlHttpServer } from "../../lib/browserControl/browserContro
 import { schedulerManager } from "../../lib/scheduler/SchedulerManager";
 import { ghcAuthManager } from "../../lib/auth/ghcAuth";
 import { BuddyManager } from '../../lib/buddy/BuddyManager';
+import { runPostLoginSeeders } from '../../investmentStudio';
 
 export default function(ctx: Context) {
   // Get locally available sessions
@@ -142,9 +143,7 @@ export default function(ctx: Context) {
         });
 
       // Fire-and-forget: run investment-studio post-login seeders (research-mcp, portfolio dirs, venv)
-      import('../../investmentStudio').then(({ runPostLoginSeeders }) => {
-        runPostLoginSeeders(userLogin, 'auth:setCurrentSession').catch(() => {});
-      }).catch(() => {});
+      runPostLoginSeeders(userLogin, 'auth:setCurrentSession').catch(() => {});
 
       return { success: true };
     } catch (error) {
@@ -342,10 +341,8 @@ export default function(ctx: Context) {
             safeSend('auth:deviceFlowSuccess', { authInfo });
 
             // Fire-and-forget: run investment-studio post-login seeders
-            import('../../investmentStudio').then(({ runPostLoginSeeders }) => {
-              const login = authInfo?.ghcAuth?.user?.login;
-              if (login) runPostLoginSeeders(login, 'device-flow').catch(() => {});
-            }).catch(() => {});
+            const login = authInfo?.ghcAuth?.user?.login;
+            if (login) runPostLoginSeeders(login, 'device-flow').catch(() => {});
 
           } catch (sessionError: any) {
             safeSend('auth:deviceFlowError', { error: sessionError.message });

@@ -641,6 +641,17 @@ describe('GhcModelsManager', () => {
       expect(caps!.supportsReasoning).toBe(true);
       expect(caps!.supportsTemperature).toBe(false);
     });
+
+    it('getModelCapabilities disables temperature for GPT-5 and Codex models', async () => {
+      const manager = await getManager();
+      const gpt55 = makeModel('gpt-5.5', { capabilities: { ...makeModel('x').capabilities, family: 'gpt-5.5' } });
+      const codex = makeModel('gpt-5.3-codex', { capabilities: { ...makeModel('x').capabilities, family: 'gpt-5.3-codex' } });
+      mockReadFile.mockResolvedValue(JSON.stringify({ models: [gpt55, codex] }));
+      await manager.initialize('test-alias');
+
+      expect(manager.getModelCapabilities('gpt-5.5')!.supportsTemperature).toBe(false);
+      expect(manager.getModelCapabilities('gpt-5.3-codex')!.supportsTemperature).toBe(false);
+    });
   });
 
   describe('waitForInitialization()', () => {

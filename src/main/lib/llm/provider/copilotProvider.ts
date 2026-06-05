@@ -13,7 +13,12 @@
 import { createLogger } from '../../unifiedLogger';
 import { GHC_CONFIG } from '../../auth/ghcConfig';
 import { MainAuthManager } from '../../auth/authManager';
-import { ghcModelsManager, buildMaxTokensParam } from '../ghcModelsManager';
+import {
+  ghcModelsManager,
+  buildMaxTokensParam,
+  buildReasoningParams,
+  getDefaultReasoningEffort,
+} from '../ghcModelsManager';
 import { getEndpointForModel } from '../ghcModelApi';
 import {
   ILlmProvider,
@@ -24,9 +29,27 @@ import {
   ChatCompletionResult,
   ProviderStreamChunk,
   ConnectionTestResult,
+  ChatMessage,
+  ChatTool,
 } from './types';
 
 const logger = createLogger();
+
+type ResponseInputContent =
+  | string
+  | Array<
+    | { type: 'input_text'; text: string }
+    | { type: 'input_image'; image_url?: string; file_id?: string; detail?: string }
+  >;
+
+type ResponseInputItem =
+  | { type: 'message'; role: 'system' | 'user' | 'assistant'; content: ResponseInputContent }
+  | { type: 'function_call'; call_id: string; name: string; arguments: string }
+  | { type: 'function_call_output'; call_id: string; output: string };
+
+interface StreamParseState {
+  responseToolCallCount: number;
+}
 
 export class CopilotProvider implements ILlmProvider {
   readonly info: ProviderInfo = {
@@ -106,23 +129,7 @@ export class CopilotProvider implements ILlmProvider {
     const endpoint = getEndpointForModel(params.model);
     const url = `${GHC_CONFIG.API_ENDPOINT}${endpoint}`;
 
-    const body: Record<string, unknown> = {
-      model: params.model,
-      messages: params.messages,
-      ...buildMaxTokensParam(params.model, params.maxTokens || 4000),
-      stream: false,
-    };
-
-    if (params.temperature !== undefined) {
-      body.temperature = params.temperature;
-    }
-
-    if (params.tools && params.tools.length > 0) {
-      body.tools = params.tools;
-      if (params.tool_choice) {
-        body.tool_choice = params.tool_choice;
-      }
-    }
+    const body = this.buildRequestBody(params, false, endpoint);
 
     const response = await fetch(url, {
       method: 'POST',
@@ -137,6 +144,10 @@ export class CopilotProvider implements ILlmProvider {
     }
 
     const result = await response.json();
+    if (endpoint === '/responses') {
+      return this.parseResponsesResult(result);
+    }
+
     const choice = result.choices?.[0];
 
     if (!choice?.message) {
@@ -167,24 +178,7 @@ export class CopilotProvider implements ILlmProvider {
     const endpoint = getEndpointForModel(params.model);
     const url = `${GHC_CONFIG.API_ENDPOINT}${endpoint}`;
 
-    const body: Record<string, unknown> = {
-      model: params.model,
-      messages: params.messages,
-      ...buildMaxTokensParam(params.model, params.maxTokens || 4000),
-      stream: true,
-      stream_options: { include_usage: true },
-    };
-
-    if (params.temperature !== undefined) {
-      body.temperature = params.temperature;
-    }
-
-    if (params.tools && params.tools.length > 0) {
-      body.tools = params.tools;
-      if (params.tool_choice) {
-        body.tool_choice = params.tool_choice;
-      }
-    }
+    const body = this.buildRequestBody(params, true, endpoint);
 
     const response = await fetch(url, {
       method: 'POST',
@@ -202,15 +196,21 @@ export class CopilotProvider implements ILlmProvider {
       throw new Error('GitHub Copilot: No response body for streaming');
     }
 
-    // Parse SSE stream — same logic as agentChatStreamingService
+    // Parse SSE stream into the provider-neutral chunk format.
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
     let buffer = '';
+    const parseState: StreamParseState = { responseToolCallCount: 0 };
 
     try {
       while (true) {
         const { done, value } = await reader.read();
-        if (done) break;
+        if (done) {
+          if (buffer.trim()) {
+            yield* this.parseSseBuffer(buffer, endpoint, parseState);
+          }
+          break;
+        }
 
         buffer += decoder.decode(value, { stream: true });
         const lines = buffer.split('\n');
@@ -223,7 +223,7 @@ export class CopilotProvider implements ILlmProvider {
 
           try {
             const json = JSON.parse(trimmed.slice(6));
-            for (const c of this.parseStreamChunks(json)) yield c;
+            for (const c of this.parseStreamChunks(json, endpoint, parseState)) yield c;
           } catch {
             // Skip malformed JSON
           }
@@ -285,12 +285,278 @@ export class CopilotProvider implements ILlmProvider {
 
   // ── Helpers ───────────────────────────────────────────────────────────
 
+  private buildRequestBody(
+    params: ChatCompletionParams,
+    stream: boolean,
+    endpoint: string,
+  ): Record<string, unknown> {
+    if (endpoint === '/responses') {
+      return this.buildResponsesRequestBody(params, stream, endpoint);
+    }
+    return this.buildChatCompletionsRequestBody(params, stream, endpoint);
+  }
+
+  private buildChatCompletionsRequestBody(
+    params: ChatCompletionParams,
+    stream: boolean,
+    endpoint: string,
+  ): Record<string, unknown> {
+    const body: Record<string, unknown> = {
+      model: params.model,
+      messages: params.messages,
+      ...buildMaxTokensParam(params.model, params.maxTokens || 4000),
+      ...this.buildReasoningFragment(params, endpoint),
+      stream,
+    };
+
+    if (params.temperature !== undefined && this.modelSupportsTemperature(params.model)) {
+      body.temperature = params.temperature;
+    }
+
+    if (params.tools && params.tools.length > 0) {
+      body.tools = params.tools;
+      if (params.tool_choice) {
+        body.tool_choice = params.tool_choice;
+      }
+    }
+
+    if (stream) {
+      body.stream_options = { include_usage: true };
+    }
+
+    return body;
+  }
+
+  private buildResponsesRequestBody(
+    params: ChatCompletionParams,
+    stream: boolean,
+    endpoint: string,
+  ): Record<string, unknown> {
+    const body: Record<string, unknown> = {
+      model: params.model,
+      input: this.convertMessagesToResponsesInput(params.messages),
+      ...buildMaxTokensParam(params.model, params.maxTokens || 4000),
+      ...this.buildReasoningFragment(params, endpoint),
+      stream,
+      include: ['reasoning.encrypted_content'],
+    };
+
+    if (params.tools && params.tools.length > 0) {
+      body.tools = params.tools.map(tool => this.convertToolToResponsesFormat(tool));
+      if (params.tool_choice) {
+        body.tool_choice = this.convertToolChoiceToResponsesFormat(params.tool_choice);
+      }
+    }
+
+    return body;
+  }
+
+  private buildReasoningFragment(params: ChatCompletionParams, endpoint: string): Record<string, unknown> {
+    const capabilities = ghcModelsManager.getModelCapabilities(params.model);
+    const supportedEfforts = capabilities?.reasoningEfforts ?? [];
+    return buildReasoningParams({
+      endpoint,
+      supportedEfforts,
+      reasoningEffort: params.reasoningEffort,
+      defaultEffort: getDefaultReasoningEffort(params.model, supportedEfforts),
+    });
+  }
+
+  private modelSupportsTemperature(modelId: string): boolean {
+    return ghcModelsManager.getModelCapabilities(modelId)?.supportsTemperature ?? true;
+  }
+
+  private convertMessagesToResponsesInput(messages: ChatMessage[]): ResponseInputItem[] {
+    const inputItems: ResponseInputItem[] = [];
+
+    for (const message of messages) {
+      if (message.role === 'system' || message.role === 'user') {
+        const content = this.convertResponseMessageContent(message.content);
+        if (this.hasResponseMessageContent(content)) {
+          inputItems.push({
+            type: 'message',
+            role: message.role,
+            content,
+          });
+        }
+        continue;
+      }
+
+      if (message.role === 'assistant') {
+        const content = this.convertResponseMessageContent(message.content);
+        const assistantMessage: ResponseInputItem = {
+          type: 'message',
+          role: 'assistant',
+          content,
+        };
+
+        if (message.tool_calls && message.tool_calls.length > 0) {
+          if (this.hasResponseMessageContent(content)) {
+            inputItems.push(assistantMessage);
+          }
+
+          for (const toolCall of message.tool_calls) {
+            inputItems.push({
+              type: 'function_call',
+              call_id: toolCall.id,
+              name: toolCall.function.name,
+              arguments: toolCall.function.arguments,
+            });
+          }
+        } else {
+          if (this.hasResponseMessageContent(content)) {
+            inputItems.push(assistantMessage);
+          }
+        }
+        continue;
+      }
+
+      if (message.role === 'tool') {
+        inputItems.push({
+          type: 'function_call_output',
+          call_id: message.tool_call_id || '',
+          output: this.contentToString(message.content),
+        });
+      }
+    }
+
+    return inputItems;
+  }
+
+  private convertResponseMessageContent(content: ChatMessage['content']): ResponseInputContent {
+    if (!Array.isArray(content)) {
+      return content;
+    }
+
+    const converted: Exclude<ResponseInputContent, string> = [];
+    for (const part of content) {
+      if (part.type === 'text' && typeof part.text === 'string') {
+        converted.push({ type: 'input_text', text: part.text });
+      } else if (part.type === 'input_text' && typeof part.text === 'string') {
+        converted.push({ type: 'input_text', text: part.text });
+      } else if (part.type === 'image_url') {
+        const imageUrl = this.getStringAtPath(part, ['image_url', 'url']);
+        if (imageUrl) {
+          const detail = this.getStringAtPath(part, ['image_url', 'detail']);
+          converted.push({
+            type: 'input_image',
+            image_url: imageUrl,
+            detail: this.normalizeImageDetail(detail),
+          });
+        }
+      } else if (part.type === 'input_image') {
+        const imageUrl = typeof part.image_url === 'string' ? part.image_url : undefined;
+        const fileId = typeof part.file_id === 'string' ? part.file_id : undefined;
+        if (imageUrl || fileId) {
+          converted.push({
+            type: 'input_image',
+            image_url: imageUrl,
+            file_id: fileId,
+            detail: this.normalizeImageDetail(typeof part.detail === 'string' ? part.detail : undefined),
+          });
+        }
+      }
+    }
+
+    return converted;
+  }
+
+  private hasResponseMessageContent(content: ResponseInputContent): boolean {
+    if (typeof content === 'string') {
+      return content.length > 0;
+    }
+    return content.length > 0;
+  }
+
+  private contentToString(content: ChatMessage['content']): string {
+    if (typeof content === 'string') {
+      return content;
+    }
+    return content
+      .map((part) => {
+        if (part.type === 'text' && typeof part.text === 'string') return part.text;
+        if (part.type === 'input_text' && typeof part.text === 'string') return part.text;
+        return '';
+      })
+      .filter(Boolean)
+      .join('\n');
+  }
+
+  private getStringAtPath(value: Record<string, unknown>, path: string[]): string | undefined {
+    let current: unknown = value;
+    for (const key of path) {
+      if (!current || typeof current !== 'object' || !(key in current)) {
+        return undefined;
+      }
+      current = (current as Record<string, unknown>)[key];
+    }
+    return typeof current === 'string' ? current : undefined;
+  }
+
+  private normalizeImageDetail(detail: string | undefined): 'low' | 'high' | 'auto' | 'original' | undefined {
+    if (detail === 'low' || detail === 'high' || detail === 'auto' || detail === 'original') {
+      return detail;
+    }
+    return undefined;
+  }
+
+  private convertToolToResponsesFormat(tool: ChatTool): Record<string, unknown> {
+    return {
+      type: 'function',
+      name: tool.function.name,
+      description: tool.function.description || '',
+      parameters: tool.function.parameters,
+      strict: false,
+    };
+  }
+
+  private convertToolChoiceToResponsesFormat(toolChoice: ChatCompletionParams['tool_choice']): unknown {
+    if (toolChoice && typeof toolChoice === 'object') {
+      const name = toolChoice.function?.name;
+      if (!name) {
+        return undefined;
+      }
+      return {
+        type: 'function',
+        name,
+      };
+    }
+    return toolChoice;
+  }
+
+  private *parseSseBuffer(
+    buffer: string,
+    endpoint: string,
+    state: StreamParseState,
+  ): IterableIterator<ProviderStreamChunk> {
+    const trimmed = buffer.trim();
+    if (!trimmed || trimmed === 'data: [DONE]' || !trimmed.startsWith('data: ')) {
+      return;
+    }
+
+    try {
+      const json = JSON.parse(trimmed.slice(6));
+      yield* this.parseStreamChunks(json, endpoint, state);
+    } catch {
+      // Skip malformed JSON
+    }
+  }
+
   /**
    * Yield one or more ProviderStreamChunks from a single SSE JSON event.
    * Splits multi-tool-call deltas (parallel function calls) into one chunk per
    * tool_call entry.
    */
-  private *parseStreamChunks(json: any): IterableIterator<ProviderStreamChunk> {
+  private *parseStreamChunks(
+    json: any,
+    endpoint = '/chat/completions',
+    state: StreamParseState = { responseToolCallCount: 0 },
+  ): IterableIterator<ProviderStreamChunk> {
+    if (endpoint === '/responses') {
+      yield* this.parseResponsesStreamChunks(json, state);
+      return;
+    }
+
     const choice = json.choices?.[0];
 
     if (choice?.delta?.content) {
@@ -324,6 +590,113 @@ export class CopilotProvider implements ILlmProvider {
     if (trailer.finishReason || trailer.usage || trailer.model) {
       yield trailer;
     }
+  }
+
+  private *parseResponsesStreamChunks(
+    json: any,
+    state: StreamParseState,
+  ): IterableIterator<ProviderStreamChunk> {
+    if (json.type === 'response.output_text.delta' && typeof json.delta === 'string') {
+      yield { contentDelta: json.delta };
+      return;
+    }
+
+    if (json.type === 'response.output_item.done' && json.item?.type === 'function_call') {
+      const item = json.item;
+      const index = typeof json.output_index === 'number'
+        ? json.output_index
+        : state.responseToolCallCount;
+      state.responseToolCallCount = Math.max(state.responseToolCallCount, index + 1);
+
+      yield {
+        toolCallDelta: {
+          index,
+          id: item.call_id || item.id,
+          type: 'function',
+          function: {
+            name: item.name,
+            arguments: item.arguments || '',
+          },
+        },
+      };
+      return;
+    }
+
+    if (json.type === 'response.completed') {
+      const response = json.response || {};
+      const hasFunctionCall = (
+        Array.isArray(response.output)
+        && response.output.some((item: any) => item?.type === 'function_call')
+      ) || state.responseToolCallCount > 0;
+      const trailer: ProviderStreamChunk = {
+        finishReason: hasFunctionCall ? 'tool_calls' : 'stop',
+      };
+
+      const usage = this.normalizeUsage(response.usage ?? json.usage);
+      if (usage) trailer.usage = usage;
+      if (typeof response.model === 'string') {
+        trailer.model = response.model;
+      } else if (typeof json.model === 'string') {
+        trailer.model = json.model;
+      }
+      yield trailer;
+    }
+  }
+
+  private parseResponsesResult(result: any): ChatCompletionResult {
+    const outputItems = Array.isArray(result.output) ? result.output : [];
+    const toolCalls = outputItems
+      .filter((item: any) => item?.type === 'function_call')
+      .map((item: any) => ({
+        id: item.call_id || item.id || '',
+        type: 'function' as const,
+        function: {
+          name: item.name || '',
+          arguments: item.arguments || '',
+        },
+      }))
+      .filter((toolCall: any) => toolCall.id && toolCall.function.name);
+
+    return {
+      content: this.extractResponsesContent(result, outputItems),
+      toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
+      finishReason: toolCalls.length > 0 ? 'tool_calls' : 'stop',
+      usage: this.normalizeUsage(result.usage),
+      model: result.model,
+    };
+  }
+
+  private extractResponsesContent(result: any, outputItems: any[]): string {
+    if (typeof result.output_text === 'string') {
+      return result.output_text;
+    }
+
+    const messageText = outputItems
+      .filter((item: any) => item?.type === 'message')
+      .flatMap((item: any) => Array.isArray(item.content) ? item.content : [])
+      .filter((part: any) => part?.type === 'output_text' || part?.type === 'text')
+      .map((part: any) => part.text || '')
+      .join('');
+
+    if (messageText) {
+      return messageText;
+    }
+
+    return outputItems
+      .filter((item: any) => item?.type === 'output_text' && typeof item.text === 'string')
+      .map((item: any) => item.text)
+      .join('');
+  }
+
+  private normalizeUsage(usage: any): ProviderStreamChunk['usage'] {
+    if (!usage) return undefined;
+    const promptTokens = usage.prompt_tokens ?? usage.promptTokens ?? usage.input_tokens ?? usage.inputTokens ?? 0;
+    const completionTokens = usage.completion_tokens ?? usage.completionTokens ?? usage.output_tokens ?? usage.outputTokens ?? 0;
+    return {
+      promptTokens,
+      completionTokens,
+      totalTokens: usage.total_tokens ?? usage.totalTokens ?? promptTokens + completionTokens,
+    };
   }
 
   private extractContent(content: unknown): string {

@@ -6,8 +6,8 @@
  * SubAgentListItem component rendering tests
  *
  * Tests that the component correctly renders SubAgentConfig data:
- * - emoji, display_name, version, description
- * - meta row (MCP count, Skills count, Context access)
+ * - emoji, display_name, description
+ * - meta row (MCP count, Skills count, inherited context access)
  * - source badge (Library vs Custom)
  * - menu button click
  */
@@ -61,11 +61,6 @@ describe('SubAgentListItem', () => {
     it('should render display_name', () => {
       render(<SubAgentListItem {...defaultProps} />);
       expect(screen.getByText('Web Researcher')).toBeInTheDocument();
-    });
-
-    it('should render version with v prefix', () => {
-      render(<SubAgentListItem {...defaultProps} />);
-      expect(screen.getByText('v1.0.0')).toBeInTheDocument();
     });
 
     it('should render description', () => {
@@ -135,21 +130,21 @@ describe('SubAgentListItem', () => {
       expect(screen.getByText('Skills: 4 (2 inherited)')).toBeInTheDocument();
     });
 
-    it('should show Context access label for isolated', () => {
+    it('should show inherited context access for isolated', () => {
       render(<SubAgentListItem {...defaultProps} />);
-      expect(screen.getByText('Context: Isolated')).toBeInTheDocument();
+      expect(screen.getByText('Inherited context: isolated')).toBeInTheDocument();
     });
 
-    it('should show Context access label for parent_summary', () => {
+    it('should show inherited context access for parent_summary', () => {
       const config = createTestConfig({ context_access: 'parent_summary' });
       render(<SubAgentListItem {...defaultProps} config={config} />);
-      expect(screen.getByText('Context: Summary')).toBeInTheDocument();
+      expect(screen.getByText('Inherited context: parent_summary')).toBeInTheDocument();
     });
 
-    it('should show Context access label for full_history', () => {
+    it('should show inherited context access for full_history', () => {
       const config = createTestConfig({ context_access: 'full_history' });
       render(<SubAgentListItem {...defaultProps} config={config} />);
-      expect(screen.getByText('Context: Full History')).toBeInTheDocument();
+      expect(screen.getByText('Inherited context: full_history')).toBeInTheDocument();
     });
   });
 

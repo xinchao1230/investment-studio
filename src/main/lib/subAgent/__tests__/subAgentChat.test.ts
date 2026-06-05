@@ -221,7 +221,7 @@ describe('SubAgentChat', () => {
       const messages = (chat as any).buildSystemPrompt();
 
       const text = messages[0].content[0].text;
-      expect(text).not.toContain('## Parent Agent Context');
+      expect(text).not.toContain('## Parent Conversation Context');
     });
 
     it('should NOT include parent context section when not provided', () => {
@@ -230,7 +230,21 @@ describe('SubAgentChat', () => {
       const messages = (chat as any).buildSystemPrompt();
 
       const text = messages[0].content[0].text;
-      expect(text).not.toContain('## Parent Agent Context');
+      expect(text).not.toContain('## Parent Conversation Context');
+    });
+
+    it('should include parent context when provided', () => {
+      const options = createMockOptions({
+        parentContext: '<parent_context>\nParent summary\n</parent_context>',
+      });
+      const chat = new SubAgentChat(options);
+      const messages = (chat as any).buildSystemPrompt();
+
+      const text = messages[0].content[0].text;
+      expect(text).toContain('## Parent Conversation Context');
+      expect(text).toContain('<parent_context>');
+      expect(text).toContain('Parent summary');
+      expect(text.indexOf('## Parent Conversation Context')).toBeLessThan(text.indexOf('## Operating Rules'));
     });
 
     it('should include operating rules in Layer 4', () => {

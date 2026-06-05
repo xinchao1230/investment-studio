@@ -237,12 +237,17 @@ export class SubAgentManager extends EventEmitter {
 
       // ── 4.5 Derive deliverables path (isolated per sub-agent) ──
       const deliverablesPath = deriveDeliverablesPath(params.parentSessionId, params.parentChatId, params.userAlias, params.subAgentName, taskId);
+      const parentContext = await this.buildParentContext(
+        params.parentSessionId,
+        subAgentConfig.context_access || 'isolated',
+      );
 
       // ── 5. Create SubAgentChat instance ──
       const chat = new SubAgentChat({
         subAgent,
         task: params.task,
         deliverablesPath,
+        parentContext,
         cancellationToken: params.cancellationToken,
         currentUserAlias: params.userAlias,
         taskId,
@@ -878,16 +883,25 @@ ${truncated}
   protected async buildParentContext(
     parentSessionId: string,
     contextAccess: string,
-    includeHistory: boolean,
   ): Promise<string | undefined> {
     try {
+      if (contextAccess !== 'parent_summary' && contextAccess !== 'full_history') {
+        return undefined;
+      }
+
       const chatInstance = AgentChatManager.getInstance().getInstanceByChatSessionId(parentSessionId) as any;
       if (!chatInstance) return undefined;
 
-      if (contextAccess === 'full_history' && includeHistory) {
+      if (contextAccess === 'parent_summary') {
+        const summary = await chatInstance.getContextSummary?.();
+        return summary ? this.sanitizeContextForSubAgent(summary) : undefined;
+      }
+
+      if (contextAccess === 'full_history') {
         try {
           const history = chatInstance.getContextHistory?.() || [];
           const historyText = history.map((m: any) => `${m.role}: ${typeof m.content === 'string' ? m.content : JSON.stringify(m.content)}`).join('\n');
+          if (!historyText) return undefined;
 
           const tc = new TokenCounter();
           const tokenCount = tc.countTextTokens(historyText);
@@ -896,16 +910,16 @@ ${truncated}
           if (tokenCount > TOKEN_LIMIT) {
             // Fall back to summary
             const summary = await chatInstance.getContextSummary?.();
-            if (summary) return `<parent_context>\n${summary}\n</parent_context>`;
+            if (summary) return this.sanitizeContextForSubAgent(summary);
             return undefined;
           }
 
-          return `<parent_context>\n${historyText}\n</parent_context>`;
+          return this.sanitizeContextForSubAgent(historyText);
         } catch {
           // On token error, continue with raw history
           const history = chatInstance.getContextHistory?.() || [];
           const historyText = history.map((m: any) => `${m.role}: ${typeof m.content === 'string' ? m.content : JSON.stringify(m.content)}`).join('\n');
-          return historyText ? `<parent_context>\n${historyText}\n</parent_context>` : undefined;
+          return historyText ? this.sanitizeContextForSubAgent(historyText) : undefined;
         }
       }
 

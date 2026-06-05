@@ -40,10 +40,20 @@ vi.mock('../../utilities/errors', async () => ({
   },
 }));
 
-const { mockGetModelById, mockGetModelCapabilities, mockGetDefaultModel } = vi.hoisted(() => ({
+const { mockGetModelById, mockGetModelCapabilities, mockGetDefaultModel, mockSupportsTemperatureForModel } = vi.hoisted(() => ({
   mockGetModelById: vi.fn(),
   mockGetModelCapabilities: vi.fn(() => ({ supportsTools: true, supportsImages: false, tokenizer: 'o200k_base', limits: { max_output_tokens: 4000 }, family: '', supports: { tool_calls: true, vision: false } })),
   mockGetDefaultModel: vi.fn(() => 'gpt-5'),
+  mockSupportsTemperatureForModel: vi.fn((modelId: string, family?: string) => {
+    const id = (modelId || '').toLowerCase();
+    const modelFamily = (family || modelId || '').toLowerCase();
+    return !(/^gpt-5/.test(id)
+      || /^gpt-5/.test(modelFamily)
+      || /^o\d/.test(id)
+      || /^o\d/.test(modelFamily)
+      || id.includes('codex')
+      || modelFamily.includes('codex'));
+  }),
 }));
 
 vi.mock('../../llm/ghcModelsManager', async () => ({
@@ -52,6 +62,7 @@ vi.mock('../../llm/ghcModelsManager', async () => ({
   getDefaultModel: mockGetDefaultModel,
   validateModelId: vi.fn(),
   getAllOpenKosmosUsedModels: vi.fn(),
+  supportsTemperatureForModel: mockSupportsTemperatureForModel,
 }));
 
 vi.mock('../../llm/ghcModelApi', async () => ({ getEndpointForModel: vi.fn() }));
@@ -304,6 +315,20 @@ describe('AgentChat - getCurrentModelConfig', () => {
     const config = (agent as any).getCurrentModelConfig('o4-preview');
     expect(config.supportsTemperature).toBe(false);
     expect(config.supportsImages).toBe(true);
+  });
+
+  it('returns supportsTemperature=false for GPT-5 family model', () => {
+    mockGetModelById.mockReturnValue({
+      id: 'gpt-5.5',
+      capabilities: {
+        limits: { max_output_tokens: 16000 },
+        family: 'gpt-5.5',
+        supports: { tool_calls: true, vision: false },
+      },
+    });
+    const agent = createAgent();
+    const config = (agent as any).getCurrentModelConfig('gpt-5.5');
+    expect(config.supportsTemperature).toBe(false);
   });
 
   it('includes reasoningEffort from agent config', () => {
