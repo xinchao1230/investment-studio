@@ -363,7 +363,7 @@ export const ResearchChatPane: React.FC<ResearchChatPaneProps> = ({
 
   return (
     <aside
-      className="rw-pane-right flex flex-col h-full"
+      className="rw-pane-right relative flex flex-col h-full"
       style={fill
         ? { flex: '1 1 0', minWidth: 0, width: '100%' }
         : { width, flex: `0 0 ${width}px` }}
