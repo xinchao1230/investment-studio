@@ -12,8 +12,12 @@ import { PortfolioTools } from '../lib/mcpRuntime/builtinTools/portfolioTools';
 import { ExcelService } from './excelService';
 import { agentChatManager } from '../lib/chat/agentChatManager';
 import {
+  ensureResearchApiTokenFile,
+  getResearchApiStatus,
   getResearchApiToken,
+  getVerifiedResearchApiToken,
   isResearchApiProvider,
+  recordResearchApiTestResult,
   setResearchApiToken,
 } from '../lib/researchApi/tokenStorage';
 
@@ -177,8 +181,43 @@ function registerResearchApiIpc(_deps: InvestmentStudioDeps): void {
     try {
       if (!isResearchApiProvider(provider)) return undefined;
       return getResearchApiToken(provider);
-    } catch {
+    } catch (err: any) {
+      console.warn('[researchApi] getToken failed:', err?.message ?? String(err));
       return undefined;
+    }
+  });
+
+  ipcMain.handle('researchApi:getVerifiedToken', async (_event, provider: string) => {
+    try {
+      if (!isResearchApiProvider(provider)) return undefined;
+      return getVerifiedResearchApiToken(provider);
+    } catch (err: any) {
+      console.warn('[researchApi] getVerifiedToken failed:', err?.message ?? String(err));
+      return undefined;
+    }
+  });
+
+  ipcMain.handle('researchApi:getStatus', async (_event, provider: string) => {
+    try {
+      if (!isResearchApiProvider(provider)) {
+        return { provider, hasApiKey: false, verified: false, verifiedAt: null, lastTestError: 'unknown provider' };
+      }
+      return getResearchApiStatus(provider);
+    } catch (err: any) {
+      return { provider, hasApiKey: false, verified: false, verifiedAt: null, lastTestError: err?.message ?? String(err) };
+    }
+  });
+
+  ipcMain.handle('researchApi:openTokenFile', async () => {
+    try {
+      const filePath = ensureResearchApiTokenFile();
+      const error = await shell.openPath(filePath);
+      if (error) {
+        return { ok: false, filePath, error };
+      }
+      return { ok: true, filePath };
+    } catch (err: any) {
+      return { ok: false, error: err?.message ?? String(err) };
     }
   });
 
@@ -187,18 +226,13 @@ function registerResearchApiIpc(_deps: InvestmentStudioDeps): void {
       if (!isResearchApiProvider(provider)) {
         return { ok: false, error: 'unknown provider' };
       }
-      setResearchApiToken(provider, token);
+      const status = setResearchApiToken(provider, token);
 
       // Restart research-mcp so new tushare token is picked up
       if (provider === 'tushare') {
-        try {
-          const { mcpClientManager } = await import('../lib/mcpRuntime/mcpClientManager');
-          await mcpClientManager.reconnect('research-mcp');
-        } catch (e: any) {
-          console.warn('[research-mcp] restart on token change failed:', e?.message ?? String(e));
-        }
+        await reconnectResearchMcpAfterTokenChange();
       }
-      return { ok: true };
+      return { ok: true, status };
     } catch (err: any) {
       return { ok: false, error: err?.message ?? String(err) };
     }
@@ -210,19 +244,32 @@ function registerResearchApiIpc(_deps: InvestmentStudioDeps): void {
         return { ok: false, error: 'unknown provider' };
       }
       const token = getResearchApiToken(provider);
-      if (!token) return { ok: false, error: 'token not configured' };
+      if (!token) return { ok: false, error: 'token not configured', status: getResearchApiStatus(provider) };
       const { testTushareToken, testEastmoneyToken, testWebIQToken } =
         await import('../lib/researchApi/testConnection');
-      switch (provider) {
-        case 'tushare':   return await testTushareToken(token);
-        case 'eastmoney': return await testEastmoneyToken(token);
-        case 'webiq':     return await testWebIQToken(token);
-        default:          return { ok: false, error: 'unknown provider' };
+      const result = provider === 'tushare'
+        ? await testTushareToken(token)
+        : provider === 'eastmoney'
+          ? await testEastmoneyToken(token)
+          : await testWebIQToken(token);
+      const status = recordResearchApiTestResult(provider, result);
+      if (provider === 'tushare') {
+        await reconnectResearchMcpAfterTokenChange();
       }
+      return { ...result, status };
     } catch (err: any) {
       return { ok: false, error: err?.message ?? String(err) };
     }
   });
+}
+
+async function reconnectResearchMcpAfterTokenChange(): Promise<void> {
+  try {
+    const { mcpClientManager } = await import('../lib/mcpRuntime/mcpClientManager');
+    await mcpClientManager.reconnect('research-mcp');
+  } catch (e: any) {
+    console.warn('[research-mcp] restart on token change failed:', e?.message ?? String(e));
+  }
 }
 
 function registerBuiltinSkillsIpc(deps: InvestmentStudioDeps): void {

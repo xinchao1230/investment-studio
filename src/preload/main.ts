@@ -1,6 +1,13 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron';
 import type { InvokeFn, OnOff } from '@shared/ipc/base';
 import type { McpAuthClientIdRequestPayload, McpAuthClientIdResponse } from '@shared/types/mcpAuth';
+import type {
+  ResearchApiConnectionResult,
+  ResearchApiOpenTokenFileResult,
+  ResearchApiProvider,
+  ResearchApiProviderStatus,
+  ResearchApiSaveResult,
+} from '@shared/types/researchApiTypes';
 import invokeScreenshot from './screenshot/invoke';
 import invokeScheduler from './scheduler/invoke';
 import invokeBrowserControl from './browserControl/invoke';
@@ -1293,9 +1300,12 @@ export interface ElectronAPI {
 
   // Research API token management (investment-studio brand)
   researchApi: {
-    getToken: (provider: 'tushare' | 'eastmoney' | 'webiq') => Promise<string | undefined>;
-    setToken: (provider: 'tushare' | 'eastmoney' | 'webiq', token: string | null) => Promise<{ ok: boolean; error?: string }>;
-    testConnection: (provider: 'tushare' | 'eastmoney' | 'webiq') => Promise<{ ok: boolean; error?: string }>;
+    getToken: (provider: ResearchApiProvider) => Promise<string | undefined>;
+    getVerifiedToken: (provider: ResearchApiProvider) => Promise<string | undefined>;
+    getStatus: (provider: ResearchApiProvider) => Promise<ResearchApiProviderStatus>;
+    openTokenFile: () => Promise<ResearchApiOpenTokenFileResult>;
+    setToken: (provider: ResearchApiProvider, token: string | null) => Promise<ResearchApiSaveResult>;
+    testConnection: (provider: ResearchApiProvider) => Promise<ResearchApiConnectionResult>;
   };
 
   // Excel / xlsx reading (investment-studio brand). Reads files into
@@ -2531,12 +2541,18 @@ export const electronAPI: ElectronAPI = {
     getPathForFile: (file: File) => webUtils.getPathForFile(file),
   },
   researchApi: {
-    getToken: (provider: 'tushare' | 'eastmoney' | 'webiq') =>
+    getToken: (provider: ResearchApiProvider) =>
       ipcRenderer.invoke('researchApi:getToken', provider) as Promise<string | undefined>,
-    setToken: (provider: 'tushare' | 'eastmoney' | 'webiq', token: string | null) =>
-      ipcRenderer.invoke('researchApi:setToken', provider, token) as Promise<{ ok: boolean; error?: string }>,
-    testConnection: (provider: 'tushare' | 'eastmoney' | 'webiq') =>
-      ipcRenderer.invoke('researchApi:testConnection', provider) as Promise<{ ok: boolean; error?: string }>,
+    getVerifiedToken: (provider: ResearchApiProvider) =>
+      ipcRenderer.invoke('researchApi:getVerifiedToken', provider) as Promise<string | undefined>,
+    getStatus: (provider: ResearchApiProvider) =>
+      ipcRenderer.invoke('researchApi:getStatus', provider) as Promise<ResearchApiProviderStatus>,
+    openTokenFile: () =>
+      ipcRenderer.invoke('researchApi:openTokenFile') as Promise<ResearchApiOpenTokenFileResult>,
+    setToken: (provider: ResearchApiProvider, token: string | null) =>
+      ipcRenderer.invoke('researchApi:setToken', provider, token) as Promise<ResearchApiSaveResult>,
+    testConnection: (provider: ResearchApiProvider) =>
+      ipcRenderer.invoke('researchApi:testConnection', provider) as Promise<ResearchApiConnectionResult>,
   },
   excel: {
     readFile: (filePath: string) =>

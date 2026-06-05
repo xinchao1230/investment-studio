@@ -1,4 +1,4 @@
-<!-- Last verified: 2026-05-30 -->
+<!-- Last verified: 2026-06-05 -->
 
 # userDataADO — Layer 2 Module Documentation
 
@@ -87,6 +87,10 @@ Supported placeholders:
 | Placeholder | Type | Resolves To |
 |-------------|------|-------------|
 | `@OPENKOSMOS_PROFILE_WORKSPACES_FOLDER` | PATH | `{userData}/profiles/{alias}/chat_workspaces` |
+| `@OPENKOSMOS_RESEARCH_RESOURCES_DIR` | PATH | Bundled research MCP resources directory |
+| `@OPENKOSMOS_RESEARCH_TUSHARE_TOKEN` | STRING | Verified Tushare token from `{userData}/research-api-tokens.json`; empty until Test connection succeeds |
+| `@OPENKOSMOS_RESEARCH_RUNTIME_DIR` | PATH | `{userData}/runtimes/research-mcp` |
+| `@OPENKOSMOS_RESEARCH_USER_DATA_DIR` | PATH | `{userData}` |
 
 PATH-type placeholders are normalized to the current OS path separator after expansion.
 

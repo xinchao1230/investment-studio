@@ -14,7 +14,7 @@
  *       (other queries' results survive, the rejected one lands in errors[]).
  *
  * Entry point is the public BingWebSearchTool.execute() so we exercise
- * the token-presence branch that routes to executeViaWebIQ.
+ * the verified-token branch that routes to executeViaWebIQ.
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -30,9 +30,9 @@ vi.mock('../webIQSearchClient', async () => {
   return { ...actual, searchWebIQ: searchWebIQMock };
 });
 
-const getResearchApiTokenMock = vi.hoisted(() => vi.fn());
+const getVerifiedResearchApiTokenMock = vi.hoisted(() => vi.fn());
 vi.mock('../../../researchApi/tokenStorage', () => ({
-  getResearchApiToken: getResearchApiTokenMock,
+  getVerifiedResearchApiToken: getVerifiedResearchApiTokenMock,
 }));
 
 // Defensive: ensure that even if a code path slips through, the
@@ -58,8 +58,8 @@ const baseArgs: BingWebSearchToolArgs = {
 describe('BingWebSearchTool.executeViaWebIQ — fan-out semantics', () => {
   beforeEach(() => {
     searchWebIQMock.mockReset();
-    getResearchApiTokenMock.mockReset();
-    getResearchApiTokenMock.mockReturnValue('test-webiq-key');
+    getVerifiedResearchApiTokenMock.mockReset();
+    getVerifiedResearchApiTokenMock.mockReturnValue('test-webiq-key');
   });
 
   it('(a) all-success: aggregates per-query results, omits errors[]', async () => {

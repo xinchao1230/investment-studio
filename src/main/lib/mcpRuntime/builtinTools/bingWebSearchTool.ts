@@ -1,7 +1,7 @@
 /**
  * BingWebSearchTool built-in tool — web search built on Microsoft Web IQ
- * (preferred) with a Playwright + Bing scraping fallback when no Web IQ
- * API key has been configured by the user.
+ * (preferred) with a Playwright + Bing scraping fallback when no verified
+ * Web IQ API key has been configured by the user.
  *
  * The tool name is kept as `bing_web_search` for backward compatibility
  * with existing agent profiles, system prompts, persisted chat sessions
@@ -18,7 +18,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import { WebSearchResultItem, WebSearchToolArgs, WebSearchToolResult } from '@shared/types/toolCallArgs';
-import { getResearchApiToken } from '../../researchApi/tokenStorage';
+import { getVerifiedResearchApiToken } from '../../researchApi/tokenStorage';
 import { mapLocaleToWebIQ, searchWebIQ } from './webIQSearchClient';
 
 export type BingSearchResult = WebSearchResultItem;
@@ -263,9 +263,14 @@ export class BingWebSearchTool {
    * Static method, supports direct LLM invocation
    */
   static async execute(args: BingWebSearchToolArgs, options?: { signal?: AbortSignal }): Promise<BingWebSearchToolResult> {
-    // Prefer Microsoft Web IQ when the user has configured an API key.
+    // Prefer Microsoft Web IQ when the user has verified an API key.
     // Otherwise fall back to the legacy Playwright + Bing scraping path.
-    const webIQKey = getResearchApiToken('webiq');
+    let webIQKey: string | undefined;
+    try {
+      webIQKey = getVerifiedResearchApiToken('webiq');
+    } catch (error) {
+      logger.warn(`[BingWebSearchTool] Unable to read verified Web IQ key: ${error instanceof Error ? error.message : String(error)}`);
+    }
     if (webIQKey) {
       return BingWebSearchTool.executeViaWebIQ(args, webIQKey, options);
     }

@@ -16,6 +16,7 @@ import * as path from 'path';
 import * as os from 'os';
 import { getUserDataPath, PROFILE_DIR_NAME } from './pathUtils';
 import { createLogger } from '../unifiedLogger';
+import { getVerifiedResearchApiToken } from '../researchApi/tokenStorage';
 const logger = createLogger();
 
 // In webpack dev, app.getAppPath() === <repo-root>. In electron-vite dev it
@@ -138,13 +139,10 @@ export class OpenKosmosPlaceholderManager {
         break;
       }
       case OpenKosmosPlaceholder.RESEARCH_TUSHARE_TOKEN: {
-        const { app } = require('electron');
-        const tokenFile = path.join(app.getPath('userData'), 'research-api-tokens.json');
         try {
-          const fs = require('fs');
-          const tokens = JSON.parse(fs.readFileSync(tokenFile, 'utf-8'));
-          value = tokens['tushare'] || '';
-        } catch {
+          value = getVerifiedResearchApiToken('tushare') || '';
+        } catch (err) {
+          logger.warn(`[OpenKosmosPlaceholderManager] Failed to read verified Tushare token: ${err instanceof Error ? err.message : String(err)}`);
           value = '';
         }
         break;
