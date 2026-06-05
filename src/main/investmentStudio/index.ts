@@ -253,7 +253,7 @@ function registerResearchApiIpc(_deps: InvestmentStudioDeps): void {
           ? await testEastmoneyToken(token)
           : await testWebIQToken(token);
       const status = recordResearchApiTestResult(provider, result);
-      if (provider === 'tushare') {
+      if (provider === 'tushare' && result.ok) {
         await reconnectResearchMcpAfterTokenChange();
       }
       return { ...result, status };
