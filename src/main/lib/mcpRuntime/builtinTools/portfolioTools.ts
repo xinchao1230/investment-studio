@@ -98,7 +98,18 @@ export class PortfolioTools {
   static getInitTargetDefinition(): BuiltinToolDefinition {
     return {
       name: 'portfolio_init_target',
-      description: 'Create a new research target folder with standard template files (profile.yaml, key-drivers.md, notes.md, tracking.md, inputs/, earnings/, research/, models/). For unlisted/private companies, pass an empty string (or omit) for stock_code.',
+      description: [
+        'Create a new research target folder. Pre-creates four root template files (profile.yaml, key-drivers.md, notes.md, tracking.md) and the inputs/ subdirectory.',
+        'Business subdirectories are NOT pre-created — create them on demand as you produce content, following the canonical schema:',
+        '  inputs/   — user-attached files (pre-created; chat attachments land here)',
+        '  earnings/ — financial CSVs and earnings reviews',
+        '  research/ — industry, comparable, and stock-analyze reports',
+        '  models/   — valuation scripts and spreadsheets',
+        '  meetings/ — meeting notes, expert calls, management interactions',
+        '  filings/  — prospectuses, annual reports, regulatory filings',
+        'Do NOT pre-create empty business directories. Loose/uncategorized files belong at the target root.',
+        'For unlisted/private companies, pass an empty string (or omit) for stock_code.',
+      ].join('\n'),
       inputSchema: {
         type: 'object',
         properties: {
