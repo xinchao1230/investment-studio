@@ -25,6 +25,7 @@ import { OverlayFileViewer } from '../ui/OverlayFileViewer';
 import { OverlayImageViewer } from '../ui/OverlayImageViewer';
 import { AttachMenuDropdown } from '../menu';
 import { agentChatSessionCacheManager, useCurrentChatSessionId } from '../../lib/chat/agentChatSessionCacheManager';
+import { ensureCompactChatSession } from '../../lib/chat/ensureCompactChatSession';
 import { profileDataManager } from '@renderer/lib/userData';
 import { useFsChanged } from '../../hooks/useFsChanged';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../ui/dialog';
@@ -47,6 +48,12 @@ const BINARY_TAB_EXTENSIONS = new Set([
   'ppt', 'pptx', 'odp',
   'zip', 'tar', 'gz', '7z', 'rar',
 ]);
+
+// Sentinel bucket for tabs that have no owning target (e.g. chat-generated
+// files when the portfolio is empty). Kept distinct from any real
+// stock_code so it can't collide; surfaces in the middle pane when
+// `selectedCode` is null, and is preserved through orphan cleanup.
+const NO_TARGET_BUCKET = '__noTarget__';
 
 // Local resizable divider for the research workspace. The upstream
 // ResizableDivider now only accepts `className?` and uses atoms internally,
@@ -155,7 +162,9 @@ export const ResearchPage: React.FC = () => {
   // active selection.
   const profileAlias = profileDataManager.getCurrentUserAlias() ?? '';
   const knownCodes = useMemo(
-    () => new Set(targets.map((t) => t.stock_code)),
+    // Include the no-target sentinel so its tabs survive orphan cleanup
+    // when the portfolio is empty / fully recreated.
+    () => new Set([...targets.map((t) => t.stock_code), NO_TARGET_BUCKET]),
     [targets],
   );
   // Pass `null` until the portfolio finishes loading (so orphan cleanup
@@ -742,6 +751,7 @@ export const ResearchPage: React.FC = () => {
       }
       if (wasLive) {
         agentChatSessionCacheManager.setCurrentChatSessionId(null, null);
+        void ensureCompactChatSession();
       }
       // Refresh the unified Ask list so the deleted row disappears even
       // when no chatSession:updated event fires for the structural change.
@@ -935,15 +945,17 @@ export const ResearchPage: React.FC = () => {
       // path is under the target directory); for chat-generated artifacts
       // (e.g. an LLM-produced xlsx in the chat-session attachments dir)
       // the caller supplies `bucketCode` so we still surface the file as
-      // a tab — bucketed under whichever target the user currently sees.
+      // a tab — bucketed under whichever target the user currently sees,
+      // or under NO_TARGET_BUCKET when no target context exists at all.
       const owningCode = opts?.bucketCode ?? findOwningCode(file.absPath);
       if (!owningCode) {
         console.warn('[ResearchPage] handleOpenFile: no owning target for', file.absPath);
         return;
       }
       // If the file belongs to a different target than the currently-selected
-      // one, auto-switch so the user sees the tab they just opened.
-      if (selectedCodeRef.current !== owningCode) {
+      // one, auto-switch so the user sees the tab they just opened. Skip the
+      // switch for the sentinel bucket (it isn't a real target).
+      if (owningCode !== NO_TARGET_BUCKET && selectedCodeRef.current !== owningCode) {
         void handleSelectTarget(owningCode);
       }
       setTabsByCode((prev) => ({
@@ -1125,10 +1137,14 @@ export const ResearchPage: React.FC = () => {
       // deleted (see researchChatIpc.unbindTarget inside deleteTarget) —
       // they survive as ordinary "Ask Stella" history. So no cascade-
       // delete loop here. Instead, if the agent engine was actively
-      // talking to one of those chats, clear its cache so the right pane
-      // resets instead of continuing to render the now-orphaned session.
+      // talking to one of those chats, clear its cache and bootstrap a
+      // fresh primary-agent session so the right pane immediately has a
+      // valid chatSessionId (otherwise the user is stuck with a null
+      // pointer; selecting a model in the dropdown won't create one and
+      // sendUserMessage rejects with "chat status is ready").
       if (liveBelongedToTarget) {
         agentChatSessionCacheManager.setCurrentChatSessionId(null, null);
+        void ensureCompactChatSession();
       }
       // Cleanup: clear this target's tab state entirely (Layer 1 of the
       // anti-bug defense against recreated same-stockCode targets) and flush
@@ -1230,13 +1246,7 @@ export const ResearchPage: React.FC = () => {
   // Reads from fileContentCacheRef; `contentCacheVersion` is in the deps so
   // we re-derive whenever an async content read completes.
   const visibleTabs: Tab[] = useMemo(() => {
-    if (!selectedCode) return [];
-    const target = targets.find((t) => t.stock_code === selectedCode);
-    if (!target) return [];
-    const state = tabsByCode[selectedCode];
-    if (!state) return [];
-    const pathPrefix = `${target.name}.${target.stock_code.split('.').pop() ?? target.stock_code}`;
-    return sortedTabs(state).map((rec) => {
+    const buildTab = (rec: { absPath: string }, pathPrefix: string): Tab => {
       const cached = fileContentCacheRef.current.get(rec.absPath);
       const sheetCached = sheetDataCacheRef.current.get(rec.absPath);
       const lower = rec.absPath.toLowerCase();
@@ -1244,13 +1254,8 @@ export const ResearchPage: React.FC = () => {
       let type: Tab['type'];
       let language: string | undefined;
       if (SPREADSHEET_TAB_EXTENSIONS.has(ext)) {
-        // xlsx / xls / ods — rendered by <UniverSheet> in ContentTabs.
-        // sheetData (Univer IWorkbookData) is loaded async via
-        // electronAPI.excel.readFile and cached in sheetDataCacheRef.
         type = 'spreadsheet';
       } else if (BINARY_TAB_EXTENSIONS.has(ext)) {
-        // xlsx / docx / pptx / archives — surface as tabs but render an
-        // open-externally placeholder. Never attempt a utf-8 read.
         type = 'binary';
       } else if (ext === 'csv' || ext === 'tsv') {
         type = 'csv';
@@ -1263,8 +1268,6 @@ export const ResearchPage: React.FC = () => {
       } else if (ext === 'json') {
         type = 'json';
       } else if (
-        // Common code/config extensions — render with Monaco syntax highlighting.
-        // The actual Monaco language id is resolved by ContentTabs via tab.language.
         [
           'js', 'jsx', 'mjs', 'cjs', 'ts', 'tsx', 'css', 'scss', 'less', 'sass',
           'py', 'rb', 'java', 'kt', 'kts', 'scala', 'go', 'rs', 'swift', 'c',
@@ -1297,8 +1300,6 @@ export const ResearchPage: React.FC = () => {
         type = 'text';
         language = 'plaintext';
       } else {
-        // Unknown extension — default to markdown rendering, which is
-        // forgiving for plain text and what we did before.
         type = 'markdown';
       }
       return {
@@ -1312,12 +1313,29 @@ export const ResearchPage: React.FC = () => {
         pathPrefix,
         sheetData: sheetCached && !sheetCached.__error ? sheetCached : undefined,
       };
-    });
+    };
+    // When no target is selected (e.g. portfolio is empty), surface the
+    // NO_TARGET_BUCKET tabs so chat-generated files still preview in the
+    // middle pane instead of opening externally.
+    if (!selectedCode) {
+      const state = tabsByCode[NO_TARGET_BUCKET];
+      if (!state) return [];
+      return sortedTabs(state).map((rec) => buildTab(rec, ''));
+    }
+    const target = targets.find((t) => t.stock_code === selectedCode);
+    if (!target) return [];
+    const state = tabsByCode[selectedCode];
+    if (!state) return [];
+    const pathPrefix = `${target.name}.${target.stock_code.split('.').pop() ?? target.stock_code}`;
+    return sortedTabs(state).map((rec) => buildTab(rec, pathPrefix));
     // contentCacheVersion intentionally tracked to refresh content cells.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedCode, tabsByCode, targets, contentCacheVersion]);
 
-  const activeTabId = (selectedCode && tabsByCode[selectedCode]?.activeAbsPath) || '';
+  const activeTabId =
+    (selectedCode
+      ? tabsByCode[selectedCode]?.activeAbsPath
+      : tabsByCode[NO_TARGET_BUCKET]?.activeAbsPath) || '';
   const activeFileAbsPath: string | null = activeTabId || null;
 
   // Lazily load file content for any visible tab that hasn't been read yet.
@@ -1376,20 +1394,15 @@ export const ResearchPage: React.FC = () => {
       ce.preventDefault?.();
       ce.stopImmediatePropagation?.();
       const owningCode = findOwningCode(absPath);
-      const bucketCode = owningCode ?? selectedCodeRef.current;
-      if (bucketCode) {
-        handleOpenFile(
-          { relPath: absPath, absPath, mtime: 0 },
-          { bucketCode },
-        );
-        return;
-      }
-      // No target context — open with system default app as fallback.
-      try {
-        void window.electronAPI.workspace?.openPath?.(absPath);
-      } catch {
-        // best-effort
-      }
+      // Fall back to the currently-selected target, then to the no-target
+      // sentinel bucket. The sentinel ensures chat-generated files preview
+      // in the middle pane even when the portfolio is empty (previously we
+      // dropped into the openPath external-app fallback in that case).
+      const bucketCode = owningCode ?? selectedCodeRef.current ?? NO_TARGET_BUCKET;
+      handleOpenFile(
+        { relPath: absPath, absPath, mtime: 0 },
+        { bucketCode },
+      );
     };
     window.addEventListener('fileViewer:open', handle, true);
     return () => {
