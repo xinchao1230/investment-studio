@@ -3,6 +3,7 @@
  */
 
 import { OpenKosmosPlaceholder } from '../userDataADO/openkosmosPlaceholders';
+import { ProfileCacheManager } from '../userDataADO/profileCacheManager';
 import type { McpServerConfig } from '../userDataADO/types/profile';
 
 export const RESEARCH_MCP_SERVER_NAME = 'research-mcp';
@@ -35,7 +36,6 @@ export async function seedResearchMcpIfMissing(opts: {
   if (opts.brandName !== 'investment-studio') {
     return { seeded: false, reason: 'brand-mismatch' };
   }
-  const { ProfileCacheManager } = await import('../userDataADO/profileCacheManager');
   const pc = ProfileCacheManager.getInstance();
   const profile = pc.getCachedProfile(opts.alias);
   const exists = profile?.mcp_servers?.some((s: any) => s.name === RESEARCH_MCP_SERVER_NAME);

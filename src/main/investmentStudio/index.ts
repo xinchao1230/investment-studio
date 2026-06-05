@@ -11,6 +11,12 @@ import * as path from 'path';
 import { PortfolioTools } from '../lib/mcpRuntime/builtinTools/portfolioTools';
 import { ExcelService } from './excelService';
 import { agentChatManager } from '../lib/chat/agentChatManager';
+import { chatSessionStore } from '../lib/chat/chatSessionStore';
+import { mcpClientManager } from '../lib/mcpRuntime/mcpClientManager';
+import { seedResearchMcpIfMissing } from '../lib/mcpRuntime/seedResearchMcp';
+import { RuntimeManager } from '../lib/runtime/RuntimeManager';
+import { updateChatSessionFile } from '../lib/userDataADO/chatSessionFileOps';
+import { generateChatSessionId } from '../lib/userDataADO/pathUtils';
 import {
   ensureResearchApiTokenFile,
   getResearchApiStatus,
@@ -45,8 +51,6 @@ export async function runPostLoginSeeders(
 
   // 1) Seed research-mcp server config
   try {
-    const { seedResearchMcpIfMissing } = await import('../lib/mcpRuntime/seedResearchMcp');
-    const { RuntimeManager } = await import('../lib/runtime/RuntimeManager');
     let uvPath = '';
     try {
       uvPath = RuntimeManager.getInstance().getBinaryPath('uv');
@@ -111,7 +115,6 @@ async function autoInstallResearchMcpVenv(): Promise<void> {
     }
 
     try {
-      const { mcpClientManager } = await import('../lib/mcpRuntime/mcpClientManager');
       await mcpClientManager.disconnect('research-mcp');
       seedLog('[research-mcp] pre-install disconnect ok');
     } catch (e) {
@@ -123,7 +126,6 @@ async function autoInstallResearchMcpVenv(): Promise<void> {
     seedLog(`[research-mcp] auto-install result: ok=${r.ok}${r.error ? ' error=' + r.error : ''}`);
     if (!r.ok) return;
 
-    const { mcpClientManager } = await import('../lib/mcpRuntime/mcpClientManager');
     for (let i = 0; i < 10; i++) {
       try {
         await mcpClientManager.reconnect('research-mcp');
@@ -265,7 +267,6 @@ function registerResearchApiIpc(_deps: InvestmentStudioDeps): void {
 
 async function reconnectResearchMcpAfterTokenChange(): Promise<void> {
   try {
-    const { mcpClientManager } = await import('../lib/mcpRuntime/mcpClientManager');
     await mcpClientManager.reconnect('research-mcp');
   } catch (e: any) {
     console.warn('[research-mcp] restart on token change failed:', e?.message ?? String(e));
@@ -456,8 +457,6 @@ function registerResearchChatIpc(deps: InvestmentStudioDeps): void {
       const chatId = await resolveResearchChatId();
       if (!chatId) return { success: false, error: 'No chat config found' };
 
-      const { chatSessionStore } = await import('../lib/chat/chatSessionStore');
-      const { generateChatSessionId } = await import('../lib/userDataADO/pathUtils');
       const sessionId = generateChatSessionId();
       const nowIso = new Date().toISOString();
       const title = (opts?.title?.trim()) || 'New Chat';
@@ -515,7 +514,6 @@ function registerResearchChatIpc(deps: InvestmentStudioDeps): void {
       if (!file) return { success: false, error: 'Session not found' };
 
       // Use chatSessionFileOps to update
-      const { updateChatSessionFile } = await import('../lib/userDataADO/chatSessionFileOps');
       const ok = await updateChatSessionFile(alias, chatSessionId, { title: trimmed });
       return ok ? { success: true } : { success: false, error: 'Failed to rename' };
     } catch (error) {
@@ -536,7 +534,6 @@ function registerResearchChatIpc(deps: InvestmentStudioDeps): void {
       const matching = all.filter((s: any) => s.targetCode === targetCode);
 
       let unboundCount = 0;
-      const { updateChatSessionFile } = await import('../lib/userDataADO/chatSessionFileOps');
       for (const meta of matching) {
         const sessionId = (meta as any).chatSession_id as string;
         try {

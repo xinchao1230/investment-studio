@@ -127,6 +127,11 @@ export function buildSubAgentSystemPrompt(options: SubAgentChatOptions): Message
   // Layer 2.5: Sub-agent's own Workspace & Skills info
   prompt += buildWorkspaceAndSkillsInfo(options, config);
 
+  if (options.parentContext) {
+    prompt += `---\n## Parent Conversation Context\n\n`;
+    prompt += `${options.parentContext}\n\n`;
+  }
+
   // Layer 4: Behavioral constraints
   prompt += `---\n## Operating Rules\n\n`;
   prompt += `1. Focus exclusively on the assigned task\n`;

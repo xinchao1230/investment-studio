@@ -215,13 +215,8 @@ const AgentSubAgentsTab: React.FC<TabComponentProps> = ({
                               alignItems: 'center',
                             }}
                           >
-                            {subAgent.version && (
-                              <span className="skill-card-version">
-                                v{subAgent.version}
-                              </span>
-                            )}
                             <span className="skill-card-version">
-                              {subAgent.context_access}
+                              Inherited context: {subAgent.context_access || 'isolated'}
                             </span>
                           </div>
                         </div>

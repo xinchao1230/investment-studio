@@ -27,11 +27,8 @@ import { BRAND_NAME } from '@shared/constants/branding';
 import { ChatSessionFile } from './chatSessionFileOps';
 import { chatSessionManager } from './chatSessionManager';
 import { getDefaultWorkspacePath, isDefaultWorkspacePath, PROFILE_DIR_NAME } from './pathUtils';
-// NOTE: getExternalAgentService is imported dynamically inside the IIFE
-// below to break a static cycle with src/main/startup/lazy.ts (lazy.ts
-// statically imports this module too). Under Rolldown chunking the cycle
-// caused unifiedLogger's init to run after a sibling chunk tried to call
-// it, surfacing as "init_unifiedLogger is not a function" at boot.
+// External agent startup is dynamically imported from its module below. Do not
+// import startup/lazy here; lazy.ts statically imports this module.
 import { chatSessionStore } from '../chat/chatSessionStore';
 import { BUILTIN_DEFAULTS_VERSION } from '../../../shared/constants/builtinSkills';
 import {
@@ -856,8 +853,8 @@ export class ProfileCacheManager {
             return;
           }
 
-          const { getExternalAgentService } = await import('../../startup/lazy');
-          await getExternalAgentService(alias);
+          const { initExternalAgentModule } = await import('../externalAgent');
+          await initExternalAgentModule(alias);
           console.timeEnd('[ProfileCacheManager] externalAgent?.initialize');
         } catch (error) {
           console.timeEnd('[ProfileCacheManager] externalAgent?.initialize');

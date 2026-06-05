@@ -29,11 +29,13 @@ vi.mock('../../auth/ghcConfig', () => ({
 
 // Mock getModelById from ghcModelsManager
 const mockGetModelById = vi.fn();
+const mockGetModelCapabilities = vi.fn();
 vi.mock('../ghcModelsManager', async (importOriginal) => {
   const real = await importOriginal<typeof import('../ghcModelsManager')>();
   return {
     ...real,
     getModelById: (...args: any[]) => mockGetModelById(...args),
+    getModelCapabilities: (...args: any[]) => mockGetModelCapabilities(...args),
   };
 });
 
@@ -114,6 +116,7 @@ describe('GhcModelApi', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockGetModelById.mockReturnValue(undefined); // default: no model found → /chat/completions
+    mockGetModelCapabilities.mockReturnValue(null);
     api = new GhcModelApi();
   });
 
@@ -262,6 +265,39 @@ describe('GhcModelApi', () => {
       const body = JSON.parse(mockFetch.mock.calls[0][1].body);
       expect(body.messages.some((m: any) => m.role === 'system')).toBe(true);
     });
+
+    it('uses /responses input format for models without chat-completions support', async () => {
+      mockGetCurrentAuth.mockResolvedValue(makeSession());
+      mockGetModelById.mockReturnValue({
+        id: 'gpt-5.5',
+        supported_endpoints: ['/responses'],
+      });
+      mockGetModelCapabilities.mockReturnValue({
+        reasoningEfforts: ['low', 'medium', 'high'],
+        supportsTemperature: false,
+      });
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: vi.fn().mockResolvedValue({ output_text: 'utility response', model: 'gpt-5.5' }),
+        text: vi.fn().mockResolvedValue(''),
+      });
+
+      const result = await api.callModel('gpt-5.5', 'user prompt', 'system prompt', 1234, 0.3);
+
+      expect(result).toBe('utility response');
+      expect(mockFetch.mock.calls[0][0]).toBe('https://api.test.com/responses');
+      const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+      expect(body.messages).toBeUndefined();
+      expect(body.input).toEqual([
+        { type: 'message', role: 'system', content: 'system prompt' },
+        { type: 'message', role: 'user', content: 'user prompt' },
+      ]);
+      expect(body.max_completion_tokens).toBe(1234);
+      expect(body.reasoning).toEqual({ effort: 'medium' });
+      expect(body.include).toEqual(['reasoning.encrypted_content']);
+      expect(body.stream).toBe(false);
+      expect(body.temperature).toBeUndefined();
+    });
   });
 
   // ---------- callWithMessages ----------
@@ -316,6 +352,37 @@ describe('GhcModelApi', () => {
       });
       await expect(api.callWithMessages('model', [{ role: 'user', content: 'hi' }]))
         .rejects.toThrow('API response format invalid');
+    });
+
+    it('uses /responses input format in callWithMessages', async () => {
+      mockGetCurrentAuth.mockResolvedValue(makeSession());
+      mockGetModelById.mockReturnValue({
+        id: 'gpt-5.5',
+        supported_endpoints: ['/responses'],
+      });
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: vi.fn().mockResolvedValue({
+          output: [
+            { type: 'message', content: [{ type: 'output_text', text: 'message result' }] },
+          ],
+        }),
+        text: vi.fn().mockResolvedValue(''),
+      });
+
+      const messages = [
+        { role: 'system', content: 'judge' },
+        { role: 'user', content: 'score this' },
+      ];
+      const result = await api.callWithMessages('gpt-5.5', messages);
+
+      expect(result).toBe('message result');
+      const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+      expect(body.messages).toBeUndefined();
+      expect(body.input).toEqual([
+        { type: 'message', role: 'system', content: 'judge' },
+        { type: 'message', role: 'user', content: 'score this' },
+      ]);
     });
   });
 

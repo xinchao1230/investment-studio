@@ -1,6 +1,6 @@
 // src/renderer/lib/models/ghcModels.ts
 import { GhcCopilotModel } from '@shared/types/ghcChatTypes';
-import { modelCacheManager } from './modelCacheManager';
+import { modelCacheManager, supportsTemperatureForModel } from './modelCacheManager';
 
 /**
  * Frontend model access layer
@@ -103,7 +103,7 @@ function convertToLegacyModel(copilotModel: GhcCopilotModel): any {
     name: copilotModel.name,
     attachment: copilotModel.capabilities.supports.vision || false,
     reasoning: copilotModel.capabilities.family.includes('o3') || copilotModel.capabilities.family.includes('o4'),
-    temperature: !copilotModel.capabilities.family.includes('o3') && !copilotModel.capabilities.family.includes('o4'),
+    temperature: supportsTemperatureForModel(copilotModel.id, copilotModel.capabilities.family),
     tool_call: copilotModel.capabilities.supports.tool_calls || false,
     knowledge: '2024-04',
     release_date: '2025-01-01',

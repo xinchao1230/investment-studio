@@ -291,6 +291,26 @@ describe('AnthropicProvider', () => {
       });
       expect(model.maxContextTokens).toBe(200000);
     });
+
+    it('honors gateway context_window when max_input_tokens is absent', () => {
+      // bigmodel/GLM-style gateways advertise context_window instead of max_input_tokens.
+      const model = toModel({
+        id: 'glm-4.6',
+        display_name: 'GLM 4.6',
+        context_window: 204800,
+        max_tokens: 131072,
+      });
+      expect(model.maxContextTokens).toBe(204800);
+      expect(model.maxOutputTokens).toBe(131072);
+    });
+
+    it('accepts numeric-string limits from gateways', () => {
+      const model = toModel({
+        id: 'claude-via-gateway',
+        max_input_tokens: '200000',
+      });
+      expect(model.maxContextTokens).toBe(200000);
+    });
   });
 
   describe('listModels — raw GET /v1/models is the primary path', () => {

@@ -12,6 +12,18 @@ import { GhcCopilotModel } from '@shared/types/ghcChatTypes';
 import { createLogger } from '../utilities/logger';
 const logger = createLogger('[ModelCacheManager]');
 
+export function supportsTemperatureForModel(modelId: string, family?: string): boolean {
+  const id = modelId.toLowerCase();
+  const modelFamily = (family || modelId).toLowerCase();
+  const rejectsTemperature = /^gpt-5/.test(id)
+    || /^gpt-5/.test(modelFamily)
+    || /^o\d/.test(id)
+    || /^o\d/.test(modelFamily)
+    || id.includes('codex')
+    || modelFamily.includes('codex');
+  return !rejectsTemperature;
+}
+
 export class ModelCacheManager {
   private static instance: ModelCacheManager;
   private allModels: GhcCopilotModel[] = [];
@@ -176,7 +188,7 @@ export class ModelCacheManager {
       reasoningEfforts: reasoningEfforts.length > 0 ? reasoningEfforts : undefined,
       maxContextLength: model.capabilities.limits?.max_context_window_tokens || 0,
       maxOutputLength: model.capabilities.limits?.max_output_tokens || 0,
-      supportsTemperature: !model.capabilities.family.includes('o3') && !model.capabilities.family.includes('o4'),
+      supportsTemperature: supportsTemperatureForModel(model.id, model.capabilities.family),
       supportsAttachments: model.capabilities.supports.vision || false
     };
   }

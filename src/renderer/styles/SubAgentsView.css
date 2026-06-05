@@ -63,7 +63,7 @@
   border: 1px solid rgba(0, 0, 0, 0.12);
 }
 
-/* Card header row: emoji + name + version + menu */
+/* Card header row: emoji + name + menu */
 .sub-agent-card-header {
   display: flex;
   align-items: center;
@@ -84,23 +84,6 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   font-variation-settings: 'opsz' 10.5;
-}
-
-.sub-agent-card-version {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 4px 8px;
-  gap: 4px;
-  background: var(--si-pill-bg);
-  border-radius: 8px;
-  font-weight: 600;
-  font-size: 12px;
-  line-height: 16px;
-  color: var(--si-pill-fg);
-  font-variation-settings: 'opsz' 10.5;
-  flex-shrink: 0;
-  white-space: nowrap;
 }
 
 /* Menu button - Consistent with skill-menu-container */

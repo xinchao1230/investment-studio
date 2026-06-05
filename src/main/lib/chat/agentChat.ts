@@ -56,7 +56,8 @@ import {
   getModelCapabilities,
   getDefaultModel,
   validateModelId,
-  getAllOpenKosmosUsedModels
+  getAllOpenKosmosUsedModels,
+  supportsTemperatureForModel
 } from '../llm/ghcModelsManager';
 import { getEndpointForModel } from '../llm/ghcModelApi';
 import { providerManager, PROVIDER_TOKENIZER } from '../llm/provider';
@@ -1593,7 +1594,7 @@ export class AgentChat {
 
     return {
       maxTokens: model.capabilities.limits?.max_output_tokens || 4000,
-      supportsTemperature: !model.capabilities.family.includes('o3') && !model.capabilities.family.includes('o4'),
+      supportsTemperature: supportsTemperatureForModel(model.id || modelId, model.capabilities.family),
       supportsTools: model.capabilities.supports.tool_calls || false,
       supportsImages: model.capabilities.supports.vision || false,
       reasoningEffort

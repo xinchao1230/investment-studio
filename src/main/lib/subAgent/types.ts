@@ -103,6 +103,8 @@ export interface SubAgentChatOptions {
   onStepUpdate?: (update: SubAgentStepUpdate) => void;
   /** Deliverables path (derived from parent session by SubAgentManager, used for file write guidance) */
   deliverablesPath?: string;
+  /** Sanitized parent conversation context, included only when config.context_access requests it */
+  parentContext?: string;
   /** Parent userAlias (used for sub-agent access to profile-scoped resources like SkillManager) */
   currentUserAlias: string;
   /** Optional tool name whitelist for ad-hoc agents — only these tools will be available (subset of parent's tools) */
