@@ -109,3 +109,87 @@ describe('ChatHistoryPopover — interactions', () => {
     expect(onClose).not.toHaveBeenCalled();
   });
 });
+
+describe('ChatHistoryPopover — row actions', () => {
+  it('renders rename and delete buttons per row', () => {
+    render(<ChatHistoryPopover {...baseProps} />);
+    expect(screen.getAllByRole('button', { name: /rename chat/i })).toHaveLength(2);
+    expect(screen.getAllByRole('button', { name: /delete chat/i })).toHaveLength(2);
+  });
+
+  it('clicking rename swaps the row into an input pre-filled with the title', () => {
+    render(<ChatHistoryPopover {...baseProps} />);
+    fireEvent.click(screen.getAllByRole('button', { name: /rename chat/i })[0]);
+    const input = screen.getByDisplayValue('First chat') as HTMLInputElement;
+    expect(input.tagName.toLowerCase()).toBe('input');
+  });
+
+  it('rename Enter calls onRenameChat with trimmed value then exits edit mode', () => {
+    const onRenameChat = vi.fn();
+    render(<ChatHistoryPopover {...baseProps} onRenameChat={onRenameChat} />);
+    fireEvent.click(screen.getAllByRole('button', { name: /rename chat/i })[0]);
+    const input = screen.getByDisplayValue('First chat') as HTMLInputElement;
+    fireEvent.change(input, { target: { value: '  Renamed  ' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    expect(onRenameChat).toHaveBeenCalledWith('s1', null, 'Renamed');
+    // Edit exited: input is gone, title text returns
+    expect(screen.queryByDisplayValue('Renamed')).toBeNull();
+  });
+
+  it('rename Enter does NOT call onRenameChat when trimmed value is empty', () => {
+    const onRenameChat = vi.fn();
+    render(<ChatHistoryPopover {...baseProps} onRenameChat={onRenameChat} />);
+    fireEvent.click(screen.getAllByRole('button', { name: /rename chat/i })[0]);
+    const input = screen.getByDisplayValue('First chat') as HTMLInputElement;
+    fireEvent.change(input, { target: { value: '   ' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    expect(onRenameChat).not.toHaveBeenCalled();
+  });
+
+  it('rename Escape cancels without calling onRenameChat', () => {
+    const onRenameChat = vi.fn();
+    render(<ChatHistoryPopover {...baseProps} onRenameChat={onRenameChat} />);
+    fireEvent.click(screen.getAllByRole('button', { name: /rename chat/i })[0]);
+    const input = screen.getByDisplayValue('First chat') as HTMLInputElement;
+    fireEvent.change(input, { target: { value: 'should not commit' } });
+    fireEvent.keyDown(input, { key: 'Escape' });
+    expect(onRenameChat).not.toHaveBeenCalled();
+    expect(screen.queryByDisplayValue('should not commit')).toBeNull();
+  });
+
+  it('delete invokes onDeleteChat with no confirm dialog', () => {
+    const onDeleteChat = vi.fn();
+    render(<ChatHistoryPopover {...baseProps} onDeleteChat={onDeleteChat} />);
+    fireEvent.click(screen.getAllByRole('button', { name: /delete chat/i })[0]);
+    expect(onDeleteChat).toHaveBeenCalledWith('s1', null);
+  });
+
+  it('rename button click does NOT trigger row select+close', () => {
+    const onSelectChat = vi.fn();
+    const onClose = vi.fn();
+    render(<ChatHistoryPopover {...baseProps} onSelectChat={onSelectChat} onClose={onClose} />);
+    fireEvent.click(screen.getAllByRole('button', { name: /rename chat/i })[0]);
+    expect(onSelectChat).not.toHaveBeenCalled();
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('delete button click does NOT trigger row select+close', () => {
+    const onSelectChat = vi.fn();
+    const onClose = vi.fn();
+    render(<ChatHistoryPopover {...baseProps} onSelectChat={onSelectChat} onClose={onClose} />);
+    fireEvent.click(screen.getAllByRole('button', { name: /delete chat/i })[0]);
+    expect(onSelectChat).not.toHaveBeenCalled();
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('clicks inside the inline input do NOT trigger row select+close', () => {
+    const onSelectChat = vi.fn();
+    const onClose = vi.fn();
+    render(<ChatHistoryPopover {...baseProps} onSelectChat={onSelectChat} onClose={onClose} />);
+    fireEvent.click(screen.getAllByRole('button', { name: /rename chat/i })[0]);
+    const input = screen.getByDisplayValue('First chat') as HTMLInputElement;
+    fireEvent.click(input);
+    expect(onSelectChat).not.toHaveBeenCalled();
+    expect(onClose).not.toHaveBeenCalled();
+  });
+});
