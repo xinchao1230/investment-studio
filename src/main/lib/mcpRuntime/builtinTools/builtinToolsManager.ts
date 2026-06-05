@@ -9,7 +9,7 @@
  * Only dynamically imported when a tool is actually executed, reducing startup time
  */
 
-import { BuiltinToolDefinition, ToolExecutionResult, FsMutation } from './types';
+import { BuiltinToolDefinition, ToolExecutionResult, FsMutation, FILE_OUTPUT_TOOL_NAMES } from './types';
 import { isFeatureEnabled } from '../../featureFlags';
 import type { ToolExecutionContext } from '../../subAgent/types';
 import { BrowserWindow } from 'electron';
@@ -660,6 +660,20 @@ export class BuiltinToolsManager {
         const { mutations: pulled, ...rest } = result as any;
         mutations = pulled as FsMutation[];
         result = rest;
+      }
+      // Fallback: file-output tools (write_file/create_file/append_to_file/
+      // download_file) historically don't self-declare mutations. Synthesize
+      // one from `result.filePath` so the left-tree refresh + content-cache
+      // invalidation fire for sub-agent writes too. `'modify'` is the
+      // conservative default — the directory-tree consumer is kind-agnostic,
+      // and content-cache invalidation correctly no-ops for paths it doesn't
+      // have cached (which includes brand-new files).
+      if ((!mutations || mutations.length === 0) && FILE_OUTPUT_TOOL_NAMES.has(name)) {
+        const filePath = result && typeof result === 'object' ? (result as any).filePath : undefined;
+        const success = result && typeof result === 'object' ? (result as any).success : undefined;
+        if (success === true && typeof filePath === 'string' && filePath.length > 0) {
+          mutations = [{ path: filePath, kind: 'modify' }];
+        }
       }
       if (mutations && mutations.length > 0) {
         try {
