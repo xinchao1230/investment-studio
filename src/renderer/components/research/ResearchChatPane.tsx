@@ -2,6 +2,7 @@ import React, { useCallback } from 'react';
 import {
   PanelRightClose,
   PanelRightOpen,
+  MessageSquarePlus,
   Compass,
   ScanSearch,
   FileText,
@@ -15,6 +16,12 @@ import {
 } from 'lucide-react';
 import ChatView from '../chat/ChatView';
 import { useMessages } from '../../lib/chat/agentChatSessionCacheManager';
+
+export interface ChatHistoryPopoverChat {
+  chatSession_id: string;
+  title?: string | null;
+  updated_at?: number | string;
+}
 
 interface ResearchChatPaneProps {
   activeFileAbsPath: string | null;
@@ -39,6 +46,18 @@ interface ResearchChatPaneProps {
    *   CSS hooks and is never shown to the user.)
    */
   mode?: 'workspace' | 'stella';
+  /** Chat history list for popover (wired in a later task). */
+  chats: ChatHistoryPopoverChat[];
+  /** Currently active chat session id. */
+  activeChatSessionId: string | null;
+  /** Create a new chat session. */
+  onNewChat: () => void | Promise<void>;
+  /** Switch to an existing chat session. */
+  onSelectChat: (chatSessionId: string) => void | Promise<void>;
+  /** Rename a chat session. */
+  onRenameChat: (chatSessionId: string, targetCode: string | null, title: string) => void | Promise<void>;
+  /** Delete a chat session. */
+  onDeleteChat: (chatSessionId: string, targetCode: string | null) => void | Promise<void>;
 }
 
 type QuickStartKind = 'intro' | 'task';
@@ -277,6 +296,12 @@ export const ResearchChatPane: React.FC<ResearchChatPaneProps> = ({
   collapsed = false,
   onToggleCollapsed,
   mode = 'workspace',
+  chats: _chats,
+  activeChatSessionId: _activeChatSessionId,
+  onNewChat,
+  onSelectChat: _onSelectChat,
+  onRenameChat: _onRenameChat,
+  onDeleteChat: _onDeleteChat,
 }) => {
   const messages = useMessages();
   /**
@@ -344,10 +369,20 @@ export const ResearchChatPane: React.FC<ResearchChatPaneProps> = ({
         className="relative flex items-center h-10 px-3 gap-2"
         style={{ background: 'var(--rw-bg-chat-header)' }}
       >
+        <button
+          type="button"
+          className="rw-side-icon-btn flex-shrink-0"
+          title="New chat"
+          aria-label="New chat"
+          onClick={() => { void onNewChat(); }}
+        >
+          <MessageSquarePlus size={14} />
+        </button>
+        <div className="flex-1" />
         {onToggleCollapsed && (
           <button
             type="button"
-            className="rw-side-icon-btn flex-shrink-0 ml-auto"
+            className="rw-side-icon-btn flex-shrink-0"
             title="Collapse assistant (Ctrl+/)"
             aria-label="Collapse assistant"
             onClick={onToggleCollapsed}

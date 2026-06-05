@@ -1639,6 +1639,12 @@ export const ResearchPage: React.FC = () => {
           fill={activeMode === 'stella'}
           collapsed={activeMode === 'stella' ? false : rightCollapsed}
           onToggleCollapsed={activeMode === 'stella' ? undefined : toggleRightCollapsed}
+          chats={contextualChatList}
+          activeChatSessionId={liveChatSessionId}
+          onNewChat={handleNewChatFromPane}
+          onSelectChat={handleSelectChatFromPane}
+          onRenameChat={handleRenameAnyChat}
+          onDeleteChat={handleDeleteAnyChat}
         />
       </div>
       <Dialog open={!!pendingDelete} onOpenChange={(open) => { if (!open && !deleteBusy) setPendingDelete(null); }}>
