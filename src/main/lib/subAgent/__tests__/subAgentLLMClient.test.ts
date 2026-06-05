@@ -1,3 +1,4 @@
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-nocheck
 /**
  * SubAgentLLMClient unit tests
@@ -31,10 +32,11 @@ vi.mock('../../unifiedLogger', async () => ({
 }));
 
 // Mock the providerManager surface that SubAgentLLMClient now depends on.
-const { mockChatCompletionStream, mockWaitUntilReady, mockGetActiveProviderId } = vi.hoisted(() => ({
+const { mockChatCompletionStream, mockWaitUntilReady, mockGetActiveProviderId, mockResolveModelId } = vi.hoisted(() => ({
   mockChatCompletionStream: vi.fn(),
   mockWaitUntilReady: vi.fn().mockResolvedValue(undefined),
   mockGetActiveProviderId: vi.fn(() => 'custom-dynamic'),
+  mockResolveModelId: vi.fn(async (modelId: string) => modelId),
 }));
 
 vi.mock('../../llm/provider', async () => ({
@@ -42,6 +44,7 @@ vi.mock('../../llm/provider', async () => ({
     chatCompletionStream: mockChatCompletionStream,
     waitUntilReady: mockWaitUntilReady,
     getActiveProviderId: mockGetActiveProviderId,
+    resolveModelId: mockResolveModelId,
   },
 }));
 
@@ -109,6 +112,7 @@ describe('SubAgentLLMClient', () => {
     vi.clearAllMocks();
     mockWaitUntilReady.mockResolvedValue(undefined);
     mockGetActiveProviderId.mockReturnValue('custom-dynamic');
+    mockResolveModelId.mockImplementation(async (modelId: string) => modelId);
   });
 
   describe('callLLM — routing through providerManager', () => {
@@ -162,6 +166,49 @@ describe('SubAgentLLMClient', () => {
       expect(params.messages).toHaveLength(2);
       expect(params.messages[0]).toMatchObject({ role: 'system', content: 'sys' });
       expect(params.messages[1]).toMatchObject({ role: 'user', content: 'hi' });
+    });
+
+    it('resolves stale inherited models before calling non-Copilot providers', async () => {
+      mockGetActiveProviderId.mockReturnValue('custom-dynamic');
+      mockResolveModelId.mockResolvedValueOnce('gpt-4o');
+      mockChatCompletionStream.mockResolvedValue(
+        makeChunkStream([{ finishReason: 'stop' }]),
+      );
+      const options = makeOptions({
+        subAgent: {
+          inheritedModel: 'claude-sonnet-4.6',
+          resolvedMcpServers: [],
+          config: { mcp_servers: [] },
+        },
+      });
+      const client = makeClient(options);
+
+      await client.callLLM([], [], []);
+
+      expect(mockResolveModelId).toHaveBeenCalledWith('claude-sonnet-4.6');
+      const params = mockChatCompletionStream.mock.calls[0][0];
+      expect(params.model).toBe('gpt-4o');
+      expect(options.subAgent.inheritedModel).toBe('gpt-4o');
+    });
+
+    it('keeps Copilot inherited models unchanged without provider resolution', async () => {
+      mockGetActiveProviderId.mockReturnValue('copilot');
+      mockChatCompletionStream.mockResolvedValue(
+        makeChunkStream([{ finishReason: 'stop' }]),
+      );
+      const client = makeClient(makeOptions({
+        subAgent: {
+          inheritedModel: 'claude-sonnet-4.6',
+          resolvedMcpServers: [],
+          config: { mcp_servers: [] },
+        },
+      }));
+
+      await client.callLLM([], [], []);
+
+      expect(mockResolveModelId).not.toHaveBeenCalled();
+      const params = mockChatCompletionStream.mock.calls[0][0];
+      expect(params.model).toBe('claude-sonnet-4.6');
     });
 
     it('passes tools using the OpenAI nested format', async () => {
@@ -319,18 +366,6 @@ describe('SubAgentLLMClient', () => {
   });
 
   // ── parseStreamingResponse — legacy method, still exposed via SubAgentChat ──
-
-  /** Build a minimal streaming ReadableStream from an array of SSE data strings */
-  function makeSseStream(lines: string[]): ReadableStream<Uint8Array> {
-    const encoder = new TextEncoder();
-    const text = lines.join('\n') + '\n';
-    return new ReadableStream({
-      start(controller) {
-        controller.enqueue(encoder.encode(text));
-        controller.close();
-      },
-    });
-  }
 
   describe('parseStreamingResponse — streaming emit throttle', () => {
     it('skips emit when interval not elapsed AND delta < 100 chars', async () => {

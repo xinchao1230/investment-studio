@@ -310,8 +310,8 @@ describe('GeminiProvider', () => {
         displayName: 'Gemini 2.5 Flash',
         supportedActions: ['generateContent'],
       });
-      expect(model.maxContextTokens).toBe(1_000_000);
-      expect(model.maxOutputTokens).toBe(8192);
+      expect(model.maxContextTokens).toBe(1_048_576);
+      expect(model.maxOutputTokens).toBe(65_536);
     });
   });
 });

@@ -17,6 +17,7 @@
 
 import Anthropic from '@anthropic-ai/sdk';
 import { createLogger } from '../../unifiedLogger';
+import { guessModelLimitsById, pickModelLimit } from './modelLimitsUtil';
 import {
   ILlmProvider,
   ProviderInfo,
@@ -205,15 +206,25 @@ export class AnthropicProvider implements ILlmProvider {
       .map((m) => {
         const id = typeof m?.id === 'string' ? m.id : undefined;
         if (!id) return null;
-        // Reuse the SDK-shaped mapper; supply the fields it reads (id +
-        // display_name), letting guessContextDefaults fill the rest.
+        // Pass the FULL raw record through to the mapper (not just id +
+        // display_name) so any real limit metadata the gateway returns
+        // (max_input_tokens, context_window, max_tokens, capabilities, ...) is
+        // honored instead of always falling back to guessContextDefaults.
         return this.toProviderModel({
+          ...(m as Record<string, unknown>),
           id,
           display_name: typeof m?.display_name === 'string' ? m.display_name : undefined,
-        } as Anthropic.ModelInfo);
+        } as unknown as Anthropic.ModelInfo);
       })
       .filter((m): m is ProviderModel => m !== null);
     models.sort((a, b) => a.id.localeCompare(b.id));
+    const ctxFromApi = models.filter(
+      (m) => pickModelLimit(m.raw, AnthropicProvider.CONTEXT_FIELD_KEYS) !== undefined,
+    ).length;
+    logger.info(
+      `[anthropicProvider] Resolved ${models.length} models via GET /v1/models ` +
+      `(context window from API: ${ctxFromApi}/${models.length}, rest use family heuristic)`,
+    );
     return models;
   }
 
@@ -225,6 +236,7 @@ export class AnthropicProvider implements ILlmProvider {
   /** Convert an Anthropic SDK ModelInfo to our ProviderModel format. */
   private toProviderModel(raw: Anthropic.ModelInfo): ProviderModel {
     const defaults = this.guessContextDefaults(raw.id);
+    const { maxContextTokens, maxOutputTokens } = this.resolveModelLimits(raw, raw.id, defaults);
     return {
       id: raw.id,
       name: raw.display_name || raw.id,
@@ -233,10 +245,47 @@ export class AnthropicProvider implements ILlmProvider {
       supportsTools: true,     // All current Claude models support tool use
       // Prefer real capability data from the API; fall back to a family heuristic.
       supportsImages: raw.capabilities?.image_input?.supported ?? this.guessImageSupport(raw.id),
-      maxContextTokens: raw.max_input_tokens ?? defaults.context,
-      maxOutputTokens: raw.max_tokens ?? defaults.output,
+      maxContextTokens,
+      maxOutputTokens,
       raw,
     };
+  }
+
+  /**
+   * Field names Anthropic + Anthropic-compatible gateways (bigmodel/GLM, other
+   * proxies) use to advertise the context window / max output. Real
+   * api.anthropic.com's /v1/models historically omits these (uses heuristic), but
+   * some gateways DO return them, so probe a prioritized list before guessing.
+   */
+  static readonly CONTEXT_FIELD_KEYS = [
+    'max_input_tokens', 'context_window', 'context_length',
+    'max_context_tokens', 'max_context_window_tokens',
+  ];
+  static readonly OUTPUT_FIELD_KEYS = [
+    'max_tokens', 'max_output_tokens', 'max_completion_tokens',
+  ];
+
+  /**
+   * Resolve a model's context-window and max-output limits, PREFERRING real
+   * metadata from the listing API over the family heuristic. Logs the resolved
+   * value AND its provenance (which API field matched, or `heuristic`) for every
+   * model so the actual numbers and code path are visible in the dev harness.
+   */
+  private resolveModelLimits(
+    raw: unknown,
+    modelId: string,
+    defaults: { context: number; output: number },
+  ): { maxContextTokens: number; maxOutputTokens: number } {
+    const ctx = pickModelLimit(raw, AnthropicProvider.CONTEXT_FIELD_KEYS);
+    const out = pickModelLimit(raw, AnthropicProvider.OUTPUT_FIELD_KEYS);
+    const maxContextTokens = ctx?.value ?? defaults.context;
+    const maxOutputTokens = out?.value ?? defaults.output;
+    logger.info(
+      `[anthropicProvider] ctxwin model=${modelId} ` +
+      `context=${maxContextTokens} (source=${ctx ? `api:${ctx.key}` : 'heuristic'}) ` +
+      `output=${maxOutputTokens} (source=${out ? `api:${out.key}` : 'heuristic'})`,
+    );
+    return { maxContextTokens, maxOutputTokens };
   }
 
   /** Heuristic image-support fallback when capability data is absent. */
@@ -253,12 +302,7 @@ export class AnthropicProvider implements ILlmProvider {
    * code working with finite numbers instead of NaN.
    */
   private guessContextDefaults(modelId: string): { context: number; output: number } {
-    const id = modelId.toLowerCase();
-    if (id.includes('claude-opus') || id.includes('claude-sonnet')) return { context: 200_000, output: 8_192 };
-    if (id.includes('claude-haiku')) return { context: 200_000, output: 8_192 };
-    if (id.includes('claude-3')) return { context: 200_000, output: 4_096 };
-    // Conservative default — finite, not NaN
-    return { context: 200_000, output: 4_096 };
+    return guessModelLimitsById(modelId, { context: 200_000, output: 4_096 });
   }
 
   // ── Chat Completion (non-streaming) ───────────────────────────────────

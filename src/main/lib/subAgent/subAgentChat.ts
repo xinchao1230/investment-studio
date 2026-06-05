@@ -15,6 +15,7 @@ import type { CancellationToken } from '../cancellation/CancellationToken';
 import type { Message } from '@shared/types/chatTypes';
 import { MessageHelper } from '@shared/types/chatTypes';
 import { getModelCapabilities } from '../llm/ghcModelsManager';
+import { providerManager } from '../llm/provider';
 import type { SubAgentChatOptions } from './types';
 import { buildSubAgentSystemPrompt, buildWorkspaceAndSkillsInfo } from './subAgentPromptBuilder';
 import type { SubAgentConfig } from '../userDataADO/types/profile';
@@ -104,8 +105,7 @@ export class SubAgentChat {
   constructor(private options: SubAgentChatOptions) {
     // Get model context window size
     const modelId = this.options.subAgent.inheritedModel;
-    const capabilities = getModelCapabilities(modelId);
-    this.contextWindowSize = capabilities?.maxContextLength || COMPACT_CONTEXT_CONFIG.FALLBACK_CONTEXT_WINDOW;
+    this.contextWindowSize = this.resolveContextWindowSize(modelId);
     this.compactor = new SubAgentContextCompactor(
       this.contextHistory,
       this.options,
@@ -123,6 +123,23 @@ export class SubAgentChat {
       (messages) => this.compactor.sanitizeOrphanedToolResults(messages),
       () => this.createAbortSignal(),
     );
+  }
+
+  /**
+   * Resolve the model's context window size.
+   *
+   * For non-Copilot providers the Copilot model registry (getModelCapabilities)
+   * does NOT contain the inherited model and returns null, which would collapse
+   * every custom model to the 128K FALLBACK_CONTEXT_WINDOW regardless of its real
+   * limit (mis-timing context compaction). Read the real window from the active
+   * provider's cached model instead; Copilot keeps its registry lookup.
+   */
+  private resolveContextWindowSize(modelId: string): number {
+    if (providerManager.getActiveProviderId() !== 'copilot') {
+      const m = providerManager.getCachedModels().find((pm) => pm.id === modelId);
+      return m?.maxContextTokens || COMPACT_CONTEXT_CONFIG.FALLBACK_CONTEXT_WINDOW;
+    }
+    return getModelCapabilities(modelId)?.maxContextLength || COMPACT_CONTEXT_CONFIG.FALLBACK_CONTEXT_WINDOW;
   }
 
   // ─── Dual history helpers ───

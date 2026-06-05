@@ -27,6 +27,7 @@ import { builtinAgentRegistry } from "./builtinAgentRegistry";
 import { PROFILE_DIR_NAME } from '../userDataADO/pathUtils';
 import {
   resolveSubAgentModel,
+  resolveFallbackModel,
   getParentAgentConfig,
   resolveInheritedConfig,
   validateToolAvailability,
@@ -39,7 +40,6 @@ import { SubAgentTaskStore } from "./subAgentTaskStore";
 import { SubAgentTaskWatcherRegistry } from "./subAgentTaskWatcherRegistry";
 import { AgentChatManager } from "../chat/agentChatManager";
 import { EventEmitter } from 'events';
-import { getDefaultModel } from "../llm/ghcModelsManager";
 import { INHERIT_MODEL_VALUE } from "@shared/constants/subAgent";
 import { mcpClientManager } from "../mcpRuntime/mcpClientManager";
 import { TokenCounter } from '../token/TokenCounter';
@@ -208,7 +208,7 @@ export class SubAgentManager extends EventEmitter {
       // ── 3. Resolve model config from sub-agent override or parent AgentChat ──
       const agentChatManager = AgentChatManager.getInstance();
       const parentChat = agentChatManager.getInstanceByChatSessionId(params.parentSessionId);
-      const parentModel = parentChat?.getCurrentModelId?.() || getDefaultModel();
+      const parentModel = parentChat?.getCurrentModelId?.() || resolveFallbackModel();
       const resolvedModel = resolveSubAgentModel(
         subAgentConfig,
         parentModel,
@@ -491,7 +491,7 @@ export class SubAgentManager extends EventEmitter {
       // ── 3. Resolve model ──
       const agentChatManager = AgentChatManager.getInstance();
       const parentChat = agentChatManager.getInstanceByChatSessionId(params.parentSessionId);
-      const parentModel = parentChat?.getCurrentModelId?.() || getDefaultModel();
+      const parentModel = parentChat?.getCurrentModelId?.() || resolveFallbackModel();
       const resolvedModel = resolveSubAgentModel(syntheticConfig, parentModel, adhocName);
 
       // ── 4. Validate requested tools subset ──

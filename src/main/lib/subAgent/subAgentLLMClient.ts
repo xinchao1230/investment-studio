@@ -164,7 +164,7 @@ export class SubAgentLLMClient {
     const allMessages = [...systemMessages, ...sanitizedContext];
     const formattedMessages = allMessages.map(m => this.formatMessageForAPI(m));
 
-    const modelId = this.options.subAgent.inheritedModel;
+    const modelId = await this.resolveRuntimeModelId(this.options.subAgent.inheritedModel);
 
     // Tools are always built in the OpenAI nested format. Each provider's
     // chatCompletionStream translates to its own wire protocol internally
@@ -209,6 +209,30 @@ export class SubAgentLLMClient {
       }
       throw error;
     }
+  }
+
+  /**
+   * Final provider-aware model guard for sub-agent LLM calls.
+   *
+   * The parent chat request path resolves stale models before sending to custom
+   * providers. Sub-agents can inherit the parent model through a different path,
+   * so repeat that low-cost guard here for non-Copilot providers only. Copilot
+   * keeps the exact inherited model to avoid changing existing registry behavior.
+   */
+  private async resolveRuntimeModelId(modelId: string): Promise<string> {
+    if (providerManager.getActiveProviderId() === 'copilot') {
+      return modelId;
+    }
+
+    const resolvedModelId = await providerManager.resolveModelId(modelId);
+    if (resolvedModelId !== modelId) {
+      getLogger().info?.(
+        `[SubAgentLLMClient] Resolved inherited model "${modelId}" to active-provider model "${resolvedModelId}".`,
+        'resolveRuntimeModelId',
+      );
+      this.options.subAgent.inheritedModel = resolvedModelId;
+    }
+    return resolvedModelId;
   }
 
   /**
