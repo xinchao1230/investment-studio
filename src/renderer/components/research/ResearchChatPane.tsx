@@ -1,8 +1,9 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, useState, useEffect } from 'react';
 import {
   PanelRightClose,
   PanelRightOpen,
   MessageSquarePlus,
+  MessagesSquare,
   Compass,
   ScanSearch,
   FileText,
@@ -16,6 +17,7 @@ import {
 } from 'lucide-react';
 import ChatView from '../chat/ChatView';
 import { useMessages } from '../../lib/chat/agentChatSessionCacheManager';
+import { ChatHistoryPopover } from './ChatHistoryPopover';
 
 export interface ChatHistoryPopoverChat {
   chatSession_id: string;
@@ -296,12 +298,12 @@ export const ResearchChatPane: React.FC<ResearchChatPaneProps> = ({
   collapsed = false,
   onToggleCollapsed,
   mode = 'workspace',
-  chats: _chats,
-  activeChatSessionId: _activeChatSessionId,
+  chats,
+  activeChatSessionId,
   onNewChat,
-  onSelectChat: _onSelectChat,
-  onRenameChat: _onRenameChat,
-  onDeleteChat: _onDeleteChat,
+  onSelectChat,
+  onRenameChat,
+  onDeleteChat,
 }) => {
   const messages = useMessages();
   /**
@@ -334,6 +336,9 @@ export const ResearchChatPane: React.FC<ResearchChatPaneProps> = ({
       new CustomEvent('agent:fillInput', { detail: { text, autoSubmit: true } }),
     );
   }, []);
+
+  const [historyOpen, setHistoryOpen] = useState(false);
+  useEffect(() => { setHistoryOpen(false); }, [targetCode]);
 
   const hasTarget = Boolean(targetName || targetCode);
 
@@ -378,6 +383,15 @@ export const ResearchChatPane: React.FC<ResearchChatPaneProps> = ({
         >
           <MessageSquarePlus size={14} />
         </button>
+        <button
+          type="button"
+          className="rw-side-icon-btn flex-shrink-0"
+          title="Chat history"
+          aria-label="Chat history"
+          onClick={() => setHistoryOpen((v) => !v)}
+        >
+          <MessagesSquare size={14} />
+        </button>
         <div className="flex-1" />
         {onToggleCollapsed && (
           <button
@@ -391,6 +405,17 @@ export const ResearchChatPane: React.FC<ResearchChatPaneProps> = ({
           </button>
         )}
       </header>
+      {historyOpen && (
+        <ChatHistoryPopover
+          chats={chats}
+          activeChatSessionId={activeChatSessionId}
+          targetCode={targetCode ?? null}
+          onSelectChat={onSelectChat}
+          onRenameChat={onRenameChat}
+          onDeleteChat={onDeleteChat}
+          onClose={() => setHistoryOpen(false)}
+        />
+      )}
       <div className="flex-1 min-h-0 overflow-hidden relative">
         {isEmpty && (
           <div className="absolute inset-x-0 top-0 z-10 pointer-events-none">

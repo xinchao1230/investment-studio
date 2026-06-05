@@ -36,3 +36,63 @@ describe('ResearchChatPane header — new chat button', () => {
     expect(screen.queryByRole('button', { name: /new chat/i })).toBeNull();
   });
 });
+
+describe('ResearchChatPane header — history popover', () => {
+  const chats = [{ chatSession_id: 's1', title: 'Hi', updated_at: Date.now() }];
+
+  it('history button toggles the popover open/closed', () => {
+    render(
+      <ResearchChatPane
+        {...baseProps}
+        chats={chats}
+        activeChatSessionId="s1"
+      />,
+    );
+    expect(screen.queryByRole('listbox', { name: /chat history/i })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: /chat history/i }));
+    expect(screen.getByRole('listbox', { name: /chat history/i })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /chat history/i }));
+    expect(screen.queryByRole('listbox', { name: /chat history/i })).toBeNull();
+  });
+
+  it('selecting a row closes the popover', () => {
+    const onSelectChat = vi.fn();
+    render(
+      <ResearchChatPane
+        {...baseProps}
+        chats={chats}
+        activeChatSessionId={null}
+        onSelectChat={onSelectChat}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: /chat history/i }));
+    fireEvent.click(screen.getByText('Hi'));
+    expect(onSelectChat).toHaveBeenCalledWith('s1');
+    expect(screen.queryByRole('listbox', { name: /chat history/i })).toBeNull();
+  });
+
+  it('does not render history icon in collapsed mode', () => {
+    render(
+      <ResearchChatPane
+        {...baseProps}
+        chats={chats}
+        activeChatSessionId={null}
+        collapsed
+        onToggleCollapsed={vi.fn()}
+      />,
+    );
+    expect(screen.queryByRole('button', { name: /chat history/i })).toBeNull();
+  });
+
+  it('closes the popover when targetCode changes', () => {
+    const { rerender } = render(
+      <ResearchChatPane {...baseProps} chats={chats} activeChatSessionId="s1" targetCode="AAA" />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: /chat history/i }));
+    expect(screen.getByRole('listbox', { name: /chat history/i })).toBeInTheDocument();
+    rerender(
+      <ResearchChatPane {...baseProps} chats={chats} activeChatSessionId="s1" targetCode="BBB" />,
+    );
+    expect(screen.queryByRole('listbox', { name: /chat history/i })).toBeNull();
+  });
+});
