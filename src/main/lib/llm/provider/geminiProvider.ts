@@ -45,6 +45,7 @@ import {
   ProviderStreamChunk,
   ConnectionTestResult,
 } from './types';
+import { guessModelLimitsById } from './modelLimitsUtil';
 
 const logger = createLogger();
 
@@ -211,12 +212,7 @@ export class GeminiProvider implements ILlmProvider {
    * code working with finite numbers instead of NaN.
    */
   private guessContextDefaults(modelId: string): { context: number; output: number } {
-    const id = modelId.toLowerCase();
-    // Gemini 1.5 / 2.x Pro and Flash advertise ~1M-2M context, 8K output.
-    if (id.includes('gemini-1.5-pro') || /gemini-[2-9].*pro/.test(id)) return { context: 2_000_000, output: 8_192 };
-    if (id.includes('gemini-1.5') || /gemini-[2-9]/.test(id)) return { context: 1_000_000, output: 8_192 };
-    // Conservative default — finite, not NaN
-    return { context: 1_000_000, output: 8_192 };
+    return guessModelLimitsById(modelId, { context: 1_048_576, output: 65_536 });
   }
 
   // ── Chat Completion (non-streaming) ───────────────────────────────────

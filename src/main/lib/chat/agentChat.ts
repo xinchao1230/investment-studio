@@ -251,8 +251,7 @@ export class AgentChat {
     // Initialize token counter and compressor
     // Use the model's tokenizer encoder, falling back to o200k_base (aligned with VS Code Copilot)
     const modelId = this.getCurrentModelId();
-    const modelCaps = getModelCapabilities(modelId);
-    const encoding = modelCaps?.tokenizer || 'o200k_base';
+    const encoding = this.resolveTokenizerEncoding(modelId);
     this.tokenCounterEncoding = encoding;
     this.tokenCounter = createTokenCounter({
       defaultEncoding: encoding,
@@ -759,14 +758,33 @@ export class AgentChat {
   }
 
   /**
+   * Resolve the tiktoken encoding for the token counter.
+   *
+   * For non-Copilot providers the Copilot model registry (the module-level
+   * getModelCapabilities) does NOT contain the active model, so it returns null
+   * and the counter would silently fall back to 'o200k_base' — an UNDER-count for
+   * non-OpenAI models that defeats the conservative-overestimate design (see the
+   * token-estimation overflow postmortem). Derive the encoding from the active
+   * provider family instead, matching agentChatContextService's compression
+   * tokenizer selection (PROVIDER_TOKENIZER). Copilot keeps its registry-derived
+   * tokenizer with the existing o200k_base default.
+   */
+  private resolveTokenizerEncoding(modelId: string): 'cl100k_base' | 'o200k_base' {
+    if (providerManager.getActiveProviderId() !== 'copilot') {
+      const providerId = providerManager.getActiveProviderId();
+      return (PROVIDER_TOKENIZER[providerId] || 'cl100k_base') as 'cl100k_base' | 'o200k_base';
+    }
+    return (getModelCapabilities(modelId)?.tokenizer as 'cl100k_base' | 'o200k_base') || 'o200k_base';
+  }
+
+  /**
    * Get the token counter, recreating it if the active model's tokenizer
    * has changed since the counter was last built. This ensures encoder
    * alignment survives mid-session model switches in cached AgentChat instances.
    */
   private getTokenCounter(): TokenCounter {
     const modelId = this.getCurrentModelId();
-    const caps = getModelCapabilities(modelId);
-    const requiredEncoding = caps?.tokenizer || 'o200k_base';
+    const requiredEncoding = this.resolveTokenizerEncoding(modelId);
     if (requiredEncoding !== this.tokenCounterEncoding) {
       this.tokenCounterEncoding = requiredEncoding;
       this.tokenCounter = createTokenCounter({

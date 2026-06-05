@@ -10,6 +10,7 @@
  */
 
 import { createLogger } from '../../unifiedLogger';
+import { guessModelLimitsById, pickModelLimit } from './modelLimitsUtil';
 import {
   ILlmProvider,
   ProviderInfo,
@@ -145,7 +146,17 @@ export class OpenAICompatibleProvider implements ILlmProvider {
         .sort((a, b) => a.id.localeCompare(b.id));
 
       this.modelsCacheTime = Date.now();
-      logger.debug(`[${this.info.id}Provider] Loaded ${this.modelsCache.length} models`);
+      // Summary: how many models got a REAL context window from the API vs the
+      // family heuristic. A low api-context count means this endpoint omits limit
+      // metadata and we're relying on name-based guesses (see resolveModelLimits).
+      const ctxFromApi = rawModels.filter(
+        (m: any) => pickModelLimit(m, OpenAICompatibleProvider.CONTEXT_FIELD_KEYS, OpenAICompatibleProvider.CONTEXT_NESTED_PATHS) !== undefined,
+      ).length;
+      logger.info(
+        `[${this.info.id}Provider] Loaded ${this.modelsCache.length} models ` +
+        `(context window from API: ${ctxFromApi}/${this.modelsCache.length}, rest use family heuristic) ` +
+        `from ${modelsUrl}`,
+      );
 
       return this.modelsCache;
     } catch (error) {
@@ -162,6 +173,7 @@ export class OpenAICompatibleProvider implements ILlmProvider {
   /** Convert a raw OpenAI model object to our ProviderModel format */
   private toProviderModel(raw: any): ProviderModel {
     const defaults = this.guessContextDefaults(raw.id);
+    const { maxContextTokens, maxOutputTokens } = this.resolveModelLimits(raw, raw.id, defaults);
     return {
       id: raw.id,
       name: raw.id, // OpenAI /models doesn't return display names
@@ -169,11 +181,65 @@ export class OpenAICompatibleProvider implements ILlmProvider {
       supportsStreaming: true, // Assume all OpenAI-compatible models support streaming
       supportsTools: !this.isEmbeddingOrAudio(raw.id), // Embeddings/audio models can't do tool calls
       supportsImages: this.guessImageSupport(raw.id),
-      maxContextTokens: raw.context_window || defaults.context,
-      maxOutputTokens: raw.max_output_tokens || defaults.output,
+      maxContextTokens,
+      maxOutputTokens,
       usesMaxCompletionTokens: this.guessUsesMaxCompletionTokens(raw.id),
       raw,
     };
+  }
+
+  /**
+   * Field names that OpenAI-compatible /models endpoints use to advertise the
+   * context window / max output. Standard OpenAI omits all of these (so we fall
+   * back to the family heuristic), but aggregators vary widely:
+   *   - OpenRouter: top-level `context_length` AND nested `top_provider.context_length`
+   *   - Various gateways: `max_context_length`, `max_input_tokens`
+   *   - vLLM / TGI self-hosted: `max_model_len`
+   * Probed in priority order; first finite positive value wins.
+   */
+  private static readonly CONTEXT_FIELD_KEYS = [
+    'context_window', 'context_length', 'max_context_length',
+    'max_context_window_tokens', 'max_input_tokens', 'max_model_len',
+  ];
+  private static readonly CONTEXT_NESTED_PATHS = [
+    'top_provider.context_length', 'top_provider.context_window',
+  ];
+  private static readonly OUTPUT_FIELD_KEYS = [
+    'max_output_tokens', 'max_completion_tokens', 'max_tokens', 'max_output',
+  ];
+  private static readonly OUTPUT_NESTED_PATHS = [
+    'top_provider.max_completion_tokens',
+  ];
+
+  /**
+   * Resolve a model's context-window and max-output limits, PREFERRING real
+   * metadata from the listing API over the family heuristic. Logs the resolved
+   * value AND its provenance (which API field matched, or `heuristic`) for every
+   * model, so the actual numbers and code path are visible in the dev harness.
+   */
+  private resolveModelLimits(
+    raw: any,
+    modelId: string,
+    defaults: { context: number; output: number },
+  ): { maxContextTokens: number; maxOutputTokens: number } {
+    const ctx = pickModelLimit(
+      raw,
+      OpenAICompatibleProvider.CONTEXT_FIELD_KEYS,
+      OpenAICompatibleProvider.CONTEXT_NESTED_PATHS,
+    );
+    const out = pickModelLimit(
+      raw,
+      OpenAICompatibleProvider.OUTPUT_FIELD_KEYS,
+      OpenAICompatibleProvider.OUTPUT_NESTED_PATHS,
+    );
+    const maxContextTokens = ctx?.value ?? defaults.context;
+    const maxOutputTokens = out?.value ?? defaults.output;
+    logger.info(
+      `[${this.info.id}Provider] ctxwin model=${modelId} ` +
+      `context=${maxContextTokens} (source=${ctx ? `api:${ctx.key}` : 'heuristic'}) ` +
+      `output=${maxOutputTokens} (source=${out ? `api:${out.key}` : 'heuristic'})`,
+    );
+    return { maxContextTokens, maxOutputTokens };
   }
 
   /** Heuristic: does this model likely support images? */
@@ -204,29 +270,7 @@ export class OpenAICompatibleProvider implements ILlmProvider {
    * numbers to work with instead of NaN.
    */
   private guessContextDefaults(modelId: string): { context: number; output: number } {
-    const id = modelId.toLowerCase();
-    // OpenAI families
-    if (/^gpt-5/.test(id)) return { context: 400_000, output: 128_000 };
-    if (/^gpt-4\.1/.test(id)) return { context: 1_000_000, output: 32_768 };
-    if (/^gpt-4o/.test(id)) return { context: 128_000, output: 16_384 };
-    if (/^o4-mini/.test(id) || /^o3-mini/.test(id)) return { context: 200_000, output: 100_000 };
-    if (/^o3/.test(id) || /^o1/.test(id)) return { context: 200_000, output: 100_000 };
-    if (/^gpt-4-turbo/.test(id)) return { context: 128_000, output: 4_096 };
-    if (/^gpt-3\.5/.test(id)) return { context: 16_385, output: 4_096 };
-    // DeepSeek
-    if (id.includes('deepseek-r1') || id.includes('reasoner')) return { context: 64_000, output: 8_192 };
-    if (id.includes('deepseek')) return { context: 64_000, output: 8_192 };
-    // Claude
-    if (id.includes('claude-opus') || id.includes('claude-sonnet')) return { context: 200_000, output: 8_192 };
-    if (id.includes('claude-haiku')) return { context: 200_000, output: 8_192 };
-    // Gemini
-    if (id.includes('gemini-2') || id.includes('gemini-1.5')) return { context: 1_000_000, output: 8_192 };
-    // Llama / Mistral / Qwen (open-weight models via custom endpoints) — conservative
-    if (id.includes('llama') || id.includes('mistral') || id.includes('qwen') || id.includes('gemma')) {
-      return { context: 32_768, output: 4_096 };
-    }
-    // Conservative default — finite, not NaN
-    return { context: 128_000, output: 4_096 };
+    return guessModelLimitsById(modelId, { context: 128_000, output: 4_096 });
   }
 
   /** Heuristic: does this model use max_completion_tokens instead of max_tokens? */

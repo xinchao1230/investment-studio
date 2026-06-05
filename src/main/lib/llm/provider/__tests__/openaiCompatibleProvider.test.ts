@@ -191,4 +191,48 @@ describe('OpenAICompatibleProvider', () => {
       expect(body.stream_options).toEqual({ include_usage: true });
     });
   });
+
+  describe('toProviderModel context-window resolution', () => {
+    const toModel = (raw: any) => (provider as any).toProviderModel.bind(provider)(raw);
+
+    it('uses context_window when present (standard OpenAI extension)', () => {
+      const m = toModel({ id: 'gpt-4o', context_window: 128000, max_output_tokens: 16384 });
+      expect(m.maxContextTokens).toBe(128000);
+      expect(m.maxOutputTokens).toBe(16384);
+    });
+
+    it('uses OpenRouter-style top-level context_length', () => {
+      const m = toModel({ id: 'some/model', context_length: 64000 });
+      expect(m.maxContextTokens).toBe(64000);
+    });
+
+    it('uses nested top_provider.context_length (OpenRouter)', () => {
+      const m = toModel({ id: 'some/model', top_provider: { context_length: 256000, max_completion_tokens: 32000 } });
+      expect(m.maxContextTokens).toBe(256000);
+      expect(m.maxOutputTokens).toBe(32000);
+    });
+
+    it('uses vLLM/TGI max_model_len', () => {
+      const m = toModel({ id: 'my-local-model', max_model_len: 8192 });
+      expect(m.maxContextTokens).toBe(8192);
+    });
+
+    it('accepts numeric-string limits from gateways', () => {
+      const m = toModel({ id: 'gateway-model', context_length: '200000' });
+      expect(m.maxContextTokens).toBe(200000);
+    });
+
+    it('falls back to the family heuristic when no limit field is present', () => {
+      // gpt-4o heuristic = 128000 context / 16384 output
+      const m = toModel({ id: 'gpt-4o' });
+      expect(m.maxContextTokens).toBe(128000);
+      expect(m.maxOutputTokens).toBe(16384);
+    });
+
+    it('ignores zero / negative limit values and falls back to heuristic', () => {
+      const m = toModel({ id: 'gpt-4o', context_window: 0, max_output_tokens: -1 });
+      expect(m.maxContextTokens).toBe(128000);
+      expect(m.maxOutputTokens).toBe(16384);
+    });
+  });
 });

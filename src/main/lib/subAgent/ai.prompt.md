@@ -1,4 +1,4 @@
-<!-- Last verified: 2026-07-30 -->
+<!-- Last verified: 2026-06-05 -->
 # Sub-Agent System
 
 > Manages spawning, lifecycle, and scoped execution of task-focused sub-agents from within a parent agent conversation.
@@ -50,7 +50,7 @@
 | Expose sub-agent state to renderer | `subAgentManager.ts` + IPC handler in `main.ts` | Use existing `SubAgentRuntimeState` shape |
 
 ## Gotchas
-- ⚠️ Persistence types (`SubAgentConfig`, `SubAgentRuntimeState`) live in `userDataADO/types/profile.ts`, NOT in `types.ts` here (which holds runtime-only types). Confusing these causes type mismatches.
+- ⚠️ **Model resolution must be provider-aware, not Copilot-registry-bound.** When a non-Copilot provider is active (`providerManager.getActiveProviderId() !== 'copilot'`), the Copilot helpers `getModelById` / `getModelCapabilities` (from `ghcModelsManager`) do NOT contain the active model and return null/undefined. Three sub-agent paths branch on the active provider: `resolveSubAgentModel` (validates an explicit override against `providerManager.getCachedModels()` instead of `getModelById`, which previously rejected every custom model and silently downgraded to the parent); `SubAgentChat.resolveContextWindowSize` (reads `ProviderModel.maxContextTokens` from the provider cache instead of collapsing to the 128K fallback); and `resolveFallbackModel` (the no-parent edge case prefers the active provider's configured default / first cached model rather than the hardcoded Copilot default `claude-sonnet-4.6`). `SubAgentLLMClient.resolveRuntimeModelId` is the final guard: before a non-Copilot provider call it resolves the inherited model through `providerManager.resolveModelId(...)` and updates the runtime `inheritedModel`, while Copilot keeps the exact inherited id. When adding new model/capability lookups in this module, never call the Copilot registry directly without a `getActiveProviderId()` branch.
 - ⚠️ SubAgentChat wires streaming chunks to the renderer **only when a watcher is registered** via `SubAgentTaskWatcherRegistry`. Streaming is conditional — do not expect chunks unless the UI panel is open for that task.
 - ⚠️ The `sub_agent` built-in tool is declared in `mcpRuntime/builtinTools/` and dispatches through `SubAgentManager`; changes to the tool argument schema must be mirrored in both places.
 - ⚠️ Write operations to AGENT.md are serialized via `writeLock` Map (same pattern as `RuntimeManager.installLocks`). Bypassing this can cause file corruption under concurrent spawns.

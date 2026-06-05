@@ -17,7 +17,8 @@ import * as path from 'path';
 import { extractMonthFromChatSessionId } from '../userDataADO/pathUtils';
 import { PROFILE_DIR_NAME } from '../userDataADO/pathUtils';
 import { app } from 'electron';
-import { getModelById } from '../llm/ghcModelsManager';
+import { getModelById, getDefaultModel } from '../llm/ghcModelsManager';
+import { providerManager } from '../llm/provider';
 import { INHERIT_MODEL_VALUE } from '@shared/constants/subAgent';
 import { mcpClientManager } from '../mcpRuntime/mcpClientManager';
 import { existsSync } from 'fs';
@@ -50,14 +51,48 @@ export function resolveSubAgentModel(
   if (!configuredModel || configuredModel.toLowerCase() === INHERIT_MODEL_VALUE) {
     return parentModel;
   }
-  if (getModelById(configuredModel)) {
+
+  // Validate the explicit override against the ACTIVE provider, not just the
+  // Copilot registry. For non-Copilot providers the Copilot registry
+  // (getModelById) never contains custom-provider models, so validating against
+  // it would reject every explicit override and silently downgrade to the parent
+  // model. Use the active provider's cached model list instead; if that cache is
+  // not warm yet we cannot reject, so trust the user's explicit choice.
+  const isValid =
+    providerManager.getActiveProviderId() !== 'copilot'
+      ? (() => {
+          const cached = providerManager.getCachedModels();
+          return cached.length === 0 || cached.some((m) => m.id === configuredModel);
+        })()
+      : !!getModelById(configuredModel);
+
+  if (isValid) {
     return configuredModel;
   }
+
   getLogger().warn?.(
     `[SubAgentConfigResolver] Sub-agent "${subAgentName}" requested unknown model "${configuredModel}"; falling back to parent model "${parentModel}".`,
     'resolveSubAgentModel',
   );
   return parentModel;
+}
+
+/**
+ * Provider-aware fallback model for the rare case where no parent chat exists to
+ * inherit from. Copilot uses its registry default (getDefaultModel); a
+ * non-Copilot provider must NOT fall back to that Copilot model (it may be
+ * invalid on, e.g., an OpenAI-only endpoint), so prefer the active provider's
+ * configured default model or, failing that, its first cached model.
+ */
+export function resolveFallbackModel(): string {
+  if (providerManager.getActiveProviderId() !== 'copilot') {
+    const activeId = providerManager.getActiveProviderId();
+    const cfg = providerManager.getProviderConfig(activeId);
+    if (cfg?.defaultModel) return cfg.defaultModel;
+    const cached = providerManager.getCachedModels();
+    if (cached.length > 0) return cached[0].id;
+  }
+  return getDefaultModel();
 }
 
 /**

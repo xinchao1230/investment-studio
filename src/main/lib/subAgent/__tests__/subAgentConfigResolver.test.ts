@@ -28,8 +28,21 @@ vi.mock('../../unifiedLogger', async () => ({
 }));
 
 const mockGetModelById = vi.fn();
+const mockGetDefaultModel = vi.fn((..._args: any[]) => 'claude-sonnet-4.6');
 vi.mock('../../llm/ghcModelsManager', async () => ({
   getModelById: (...args: any[]) => mockGetModelById(...args),
+  getDefaultModel: (...args: any[]) => mockGetDefaultModel(...args),
+}));
+
+const mockGetActiveProviderId = vi.fn((..._args: any[]) => 'copilot');
+const mockGetCachedModels = vi.fn((..._args: any[]) => [] as Array<{ id: string }>);
+const mockGetProviderConfig = vi.fn((..._args: any[]) => undefined as { defaultModel?: string } | undefined);
+vi.mock('../../llm/provider', async () => ({
+  providerManager: {
+    getActiveProviderId: (...args: any[]) => mockGetActiveProviderId(...args),
+    getCachedModels: (...args: any[]) => mockGetCachedModels(...args),
+    getProviderConfig: (...args: any[]) => mockGetProviderConfig(...args),
+  },
 }));
 
 vi.mock('@shared/constants/subAgent', async () => ({
@@ -68,6 +81,7 @@ vi.mock('../../userDataADO/pathUtils', async () => ({
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import {
   resolveSubAgentModel,
+  resolveFallbackModel,
   getParentAgentConfig,
   resolveInheritedConfig,
   validateToolAvailability,
@@ -96,6 +110,11 @@ function makeConfig(overrides: Partial<SubAgentConfig> = {}): SubAgentConfig {
 describe('SubAgentConfigResolver', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // Default to the Copilot provider so the existing registry-based tests below
+    // exercise the getModelById validation branch.
+    mockGetActiveProviderId.mockReturnValue('copilot');
+    mockGetCachedModels.mockReturnValue([]);
+    mockGetProviderConfig.mockReturnValue(undefined);
   });
 
   // ─── resolveSubAgentModel ───
@@ -132,6 +151,65 @@ describe('SubAgentConfigResolver', () => {
       mockGetModelById.mockReturnValue({ id: 'gpt-4o' });
       const result = resolveSubAgentModel(makeConfig({ model: '  gpt-4o  ' }), 'parent-model', 'agent-1');
       expect(result).toBe('gpt-4o');
+    });
+
+    // ─── Non-Copilot (custom) provider validation ───
+
+    it('validates against the active provider cache (not the Copilot registry) for non-Copilot providers', () => {
+      mockGetActiveProviderId.mockReturnValue('openai');
+      mockGetCachedModels.mockReturnValue([{ id: 'gpt-4-turbo' }]);
+      // getModelById would reject this (not a Copilot model), but it must NOT be consulted.
+      mockGetModelById.mockReturnValue(undefined);
+      const result = resolveSubAgentModel(makeConfig({ model: 'gpt-4-turbo' }), 'parent-model', 'agent-1');
+      expect(result).toBe('gpt-4-turbo');
+      expect(mockGetModelById).not.toHaveBeenCalled();
+    });
+
+    it('falls back to parent when a non-Copilot model is absent from a warm provider cache', () => {
+      mockGetActiveProviderId.mockReturnValue('openai');
+      mockGetCachedModels.mockReturnValue([{ id: 'gpt-4-turbo' }]);
+      const result = resolveSubAgentModel(makeConfig({ model: 'made-up-model' }), 'parent-model', 'agent-1');
+      expect(result).toBe('parent-model');
+    });
+
+    it('trusts the explicit non-Copilot model when the provider cache is not warm yet', () => {
+      mockGetActiveProviderId.mockReturnValue('custom-dynamic');
+      mockGetCachedModels.mockReturnValue([]); // cold cache → cannot reject
+      const result = resolveSubAgentModel(makeConfig({ model: 'llama-3.3-70b' }), 'parent-model', 'agent-1');
+      expect(result).toBe('llama-3.3-70b');
+    });
+  });
+
+  // ─── resolveFallbackModel ───
+
+  describe('resolveFallbackModel', () => {
+    it('uses the Copilot registry default when Copilot is active', () => {
+      mockGetActiveProviderId.mockReturnValue('copilot');
+      expect(resolveFallbackModel()).toBe('claude-sonnet-4.6');
+      expect(mockGetDefaultModel).toHaveBeenCalled();
+    });
+
+    it('prefers the active provider configured default for non-Copilot providers', () => {
+      mockGetActiveProviderId.mockReturnValue('openai');
+      mockGetProviderConfig.mockReturnValue({ defaultModel: 'gpt-4o' });
+      expect(resolveFallbackModel()).toBe('gpt-4o');
+      expect(mockGetDefaultModel).not.toHaveBeenCalled();
+    });
+
+    it('falls back to the first cached model when no configured default exists', () => {
+      mockGetActiveProviderId.mockReturnValue('anthropic');
+      mockGetProviderConfig.mockReturnValue(undefined);
+      mockGetCachedModels.mockReturnValue([{ id: 'claude-3-7-sonnet' }, { id: 'claude-3-5-haiku' }]);
+      expect(resolveFallbackModel()).toBe('claude-3-7-sonnet');
+    });
+
+    it('does not return the Copilot default for a non-Copilot provider with no models', () => {
+      mockGetActiveProviderId.mockReturnValue('gemini');
+      mockGetProviderConfig.mockReturnValue(undefined);
+      mockGetCachedModels.mockReturnValue([]);
+      // No provider default and cold cache → only then does it fall through to the
+      // Copilot registry default (best-effort last resort).
+      expect(resolveFallbackModel()).toBe('claude-sonnet-4.6');
     });
   });
 
