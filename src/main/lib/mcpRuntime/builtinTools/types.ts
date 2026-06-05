@@ -30,6 +30,23 @@ export interface FsMutation {
 }
 
 /**
+ * Builtin tools whose successful result represents a write to `result.filePath`.
+ * Used by `BuiltinToolsManager.executeTool` to synthesize a `kosmos:fs-changed`
+ * mutation when the tool itself does not declare `mutations` in its return — and
+ * by sub-agent deliverable tracking to recognise file outputs.
+ *
+ * Keep this list and the union of these tools' real success-return shapes in
+ * sync: each tool listed here must return `{ success: true, filePath: string,
+ * ... }` on success, otherwise the synthesizer will silently no-op.
+ */
+export const FILE_OUTPUT_TOOL_NAMES: ReadonlySet<string> = new Set([
+  'write_file',
+  'create_file',
+  'append_to_file',
+  'download_file',
+]);
+
+/**
  * Tool execution result interface
  * Unified return format for tool execution
  */

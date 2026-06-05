@@ -11,6 +11,7 @@ import type { SubAgentChatOptions } from './types';
 import { createConsoleLogger } from '../unifiedLogger';
 import { BuiltinToolsManager } from '../mcpRuntime/builtinTools/builtinToolsManager';
 import { mcpClientManager } from '../mcpRuntime/mcpClientManager';
+import { FILE_OUTPUT_TOOL_NAMES } from '../mcpRuntime/builtinTools/types';
 
 // Lazy-init logger
 let logger: any;
@@ -22,10 +23,12 @@ function getLogger() {
   return logger || console;
 }
 
-/** Set of tool names that produce file output (used for automatic deliverables tracking) */
-export const FILE_OUTPUT_TOOLS = new Set([
-  'write_file', 'create_file', 'append_to_file', 'download_file',
-]);
+/**
+ * Set of tool names that produce file output (used for automatic deliverables tracking).
+ * Re-exported from the canonical declaration in `builtinTools/types` so the
+ * sub-agent tracker and `BuiltinToolsManager`'s fs-changed synthesizer agree.
+ */
+export const FILE_OUTPUT_TOOLS = FILE_OUTPUT_TOOL_NAMES;
 
 /**
  * Generate a short human-readable summary of tool call arguments.
