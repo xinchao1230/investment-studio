@@ -25,6 +25,7 @@ import { OverlayFileViewer } from '../ui/OverlayFileViewer';
 import { OverlayImageViewer } from '../ui/OverlayImageViewer';
 import { AttachMenuDropdown } from '../menu';
 import { agentChatSessionCacheManager, useCurrentChatSessionId } from '../../lib/chat/agentChatSessionCacheManager';
+import { ensureCompactChatSession } from '../../lib/chat/ensureCompactChatSession';
 import { profileDataManager } from '@renderer/lib/userData';
 import { useFsChanged } from '../../hooks/useFsChanged';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../ui/dialog';
@@ -742,6 +743,7 @@ export const ResearchPage: React.FC = () => {
       }
       if (wasLive) {
         agentChatSessionCacheManager.setCurrentChatSessionId(null, null);
+        void ensureCompactChatSession();
       }
       // Refresh the unified Ask list so the deleted row disappears even
       // when no chatSession:updated event fires for the structural change.
@@ -1125,10 +1127,14 @@ export const ResearchPage: React.FC = () => {
       // deleted (see researchChatIpc.unbindTarget inside deleteTarget) —
       // they survive as ordinary "Ask Stella" history. So no cascade-
       // delete loop here. Instead, if the agent engine was actively
-      // talking to one of those chats, clear its cache so the right pane
-      // resets instead of continuing to render the now-orphaned session.
+      // talking to one of those chats, clear its cache and bootstrap a
+      // fresh primary-agent session so the right pane immediately has a
+      // valid chatSessionId (otherwise the user is stuck with a null
+      // pointer; selecting a model in the dropdown won't create one and
+      // sendUserMessage rejects with "chat status is ready").
       if (liveBelongedToTarget) {
         agentChatSessionCacheManager.setCurrentChatSessionId(null, null);
+        void ensureCompactChatSession();
       }
       // Cleanup: clear this target's tab state entirely (Layer 1 of the
       // anti-bug defense against recreated same-stockCode targets) and flush

@@ -16,56 +16,10 @@ import { CurrentSessionStatus, useHasChatSessionCache, agentChatSessionCacheMana
 import { profileDataManager } from '../../lib/userData';
 import { getPmAgentSayHiMessageConfig } from '../../lib/chat/pmAgentSayHi';
 import { startNewChatFor } from '../../lib/chat/startNewChatFor';
+import { ensureCompactChatSession } from '../../lib/chat/ensureCompactChatSession';
 import { createLogger } from '../../lib/utilities/logger';
 import { ScheduleSidepaneAtom } from './chat-side.atom';
-import { getDefaultPrimaryAgentName } from '../../../main/lib/userDataADO/types/profile';
-import { BRAND_NAME } from '../../../shared/constants/branding';
 const logger = createLogger('[ChatView]');
-
-// Compact (embedded) mode: ensure the backend has an active chat session.
-// After sign-out → sign-in, renderer-side profile data may be stale, so we
-// prefer the main-process-authoritative `startNewChatForPrimaryAgent` IPC
-// which resolves the correct chatId for the current user without relying on
-// renderer cache timing.
-async function ensureCompactChatSession(): Promise<void> {
-  if (agentChatSessionCacheManager.getCurrentChatSessionId()) return;
-  try {
-    // 1. Try recovering an existing backend session
-    if (window.electronAPI?.agentChat?.getCurrentChatSession) {
-      const cur = await window.electronAPI.agentChat.getCurrentChatSession();
-      if (cur?.success && cur.data?.chatId && cur.data?.chatSessionId) {
-        agentChatSessionCacheManager.setCurrentChatSessionId(cur.data.chatId, cur.data.chatSessionId);
-        return;
-      }
-    }
-
-    // 2. Ask the main process to create a session for the primary agent
-    const ipc = (window as any).electronAPI?.agentChat;
-    if (ipc?.startNewChatForPrimaryAgent) {
-      const result = await ipc.startNewChatForPrimaryAgent();
-      if (result?.success && result.chatId && result.chatSessionId) {
-        agentChatSessionCacheManager.setCurrentChatSessionId(result.chatId, result.chatSessionId);
-        return;
-      }
-    }
-
-    // 3. Fallback: renderer-side profile lookup (original path)
-    const profile = profileDataManager.getProfile() as any;
-    if (!profile) return;
-    const primaryAgentName: string = profile.primaryAgent || getDefaultPrimaryAgentName(BRAND_NAME);
-    const chats: any[] = profile.chats || [];
-    if (chats.length === 0) return;
-    const primaryChat = chats.find((c: any) => c.agent?.name === primaryAgentName);
-    const targetChatId = primaryChat?.chat_id || chats[0]?.chat_id;
-    if (!targetChatId) return;
-    const result = await startNewChatFor(targetChatId);
-    if (result?.success && result.chatSessionId) {
-      agentChatSessionCacheManager.setCurrentChatSessionId(targetChatId, result.chatSessionId);
-    }
-  } catch (err) {
-    logger.error('[ChatView compact] ensureCompactChatSession failed:', err);
-  }
-}
 
 export interface ChatViewProps {
   /**
