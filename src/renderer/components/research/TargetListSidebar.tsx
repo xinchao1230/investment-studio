@@ -1112,7 +1112,7 @@ export const TargetListSidebar: React.FC<TargetListSidebarProps> = ({
                       <div
                         key={file.absPath}
                         draggable={!ref.isProtected}
-                        className={`rw-tree-row ${activeFileAbsPath === file.absPath ? 'is-active' : ''} ${isCut ? 'opacity-50' : ''}`}
+                        className={`rw-tree-row rw-file-row ${activeFileAbsPath === file.absPath ? 'is-active' : ''} ${isCut ? 'opacity-50' : ''}`}
                         style={{ paddingLeft: 12 }}
                         onClick={() => onOpenFile(file)}
                         onContextMenu={(e) => openFileContextMenu(e, file, code)}
@@ -1246,7 +1246,7 @@ export const TargetListSidebar: React.FC<TargetListSidebarProps> = ({
                                   <div
                                     key={f.absPath}
                                     draggable={!ref.isProtected}
-                                    className={`rw-tree-row ${activeFileAbsPath === f.absPath ? 'is-active' : ''} ${isCut ? 'opacity-50' : ''}`}
+                                    className={`rw-tree-row rw-file-row ${activeFileAbsPath === f.absPath ? 'is-active' : ''} ${isCut ? 'opacity-50' : ''}`}
                                     style={{ paddingLeft }}
                                     onClick={() => onOpenFile(f)}
                                     onContextMenu={(e) => openFileContextMenu(e, f, code)}

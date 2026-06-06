@@ -867,7 +867,12 @@ export const ContentTabs: React.FC<ContentTabsProps> = ({
               className={`rw-tab group shrink-0 max-w-[160px] ${isActive ? 'is-active' : ''}`}
               onClick={() => onTabSelect(tab.id)}
             >
-              <span className="truncate max-w-[120px]">{tab.label}</span>
+              <span
+                className="rw-tab-label truncate max-w-[120px]"
+                data-text={tab.label}
+              >
+                {tab.label}
+              </span>
               {tabIsDirty && (
                 <span className="rw-tab-dirty" title="Unsaved changes" />
               )}
