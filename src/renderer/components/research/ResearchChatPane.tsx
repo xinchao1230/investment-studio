@@ -371,7 +371,7 @@ export const ResearchChatPane: React.FC<ResearchChatPaneProps> = ({
       data-research-mode={mode}
     >
       <header
-        className="relative flex items-center h-10 px-3 gap-2"
+        className="relative flex items-center h-10 px-3 gap-2 rw-divider"
         style={{ background: 'var(--rw-bg-chat-header)' }}
       >
         <button
