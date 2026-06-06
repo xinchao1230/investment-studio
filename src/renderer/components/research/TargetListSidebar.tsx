@@ -905,6 +905,21 @@ export const TargetListSidebar: React.FC<TargetListSidebarProps> = ({
                       type="button"
                       onClick={(e) => {
                         e.stopPropagation();
+                        // Skip the confirm dialog for chats that have never
+                        // received a user message — the backend stamps such
+                        // sessions with the literal 'New Chat' title and
+                        // rewrites it on the first send (see
+                        // agentChatSessionService.ts), so an exact match is a
+                        // reliable "untouched" signal.
+                        const untouched = !chat.title || chat.title === 'New Chat';
+                        if (untouched) {
+                          if (useUnified) {
+                            void onDeleteAnyChat?.(chat.chatSession_id, targetCode);
+                          } else {
+                            void onDeleteStellaChat?.(chat.chatSession_id);
+                          }
+                          return;
+                        }
                         if (useUnified) {
                           setPendingDeleteChat({ kind: 'ask', targetCode, sessionId: chat.chatSession_id, title: chat.title || 'Untitled' });
                         } else {
@@ -1078,6 +1093,11 @@ export const TargetListSidebar: React.FC<TargetListSidebarProps> = ({
                               type="button"
                               onClick={(e) => {
                                 e.stopPropagation();
+                                const untouched = !chat.title || chat.title === 'New Chat';
+                                if (untouched) {
+                                  void onDeleteChat(code, chat.chatSession_id);
+                                  return;
+                                }
                                 setPendingDeleteChat({ kind: 'workspace', code, sessionId: chat.chatSession_id, title: chat.title || 'Untitled' });
                               }}
                               className="ml-1 p-0.5 rounded hidden group-hover:inline-flex hover:bg-black/10 text-[var(--rw-text-3)] hover:text-red-500"
