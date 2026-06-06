@@ -250,7 +250,11 @@
   /* Match the Settings nav rail's row weight (.nav-item-label is 500) so the
      two side panes read identically. Was 400 (inherited from body). */
   font-weight: 500;
-  color: var(--rw-text);
+  /* Inactive Chat / file rows render in muted grey so the selected row (which
+     stays at the full --rw-text ink) reads as the strongest item in the tree.
+     Target rows opt back into ink via .rw-target-row below — they already use
+     the filled-pill background and should keep crisp dark text. */
+  color: var(--rw-text-2);
   height: 28px;
   display: flex;
   align-items: center;
@@ -287,11 +291,22 @@
   background: var(--rw-accent-soft, rgba(37, 99, 235, 0.08)) !important;
 }
 
-/* Active chat row — emphasize with accent color + bolder weight, on top of the
-   shared .is-active background/left-bar treatment. */
-[data-theme="research"] .rw-chat-row.is-active {
-  color: var(--rw-accent);
+/* Chat / file rows: minimal selected state — no background block, ink color
+   + bolder weight. Inactive rows stay at the muted grey set on .rw-tree-row
+   above; the contrast between dark+bold (active) and grey (inactive) is what
+   signals selection. Rows are stacked vertically, so 500 -> 600 doesn't shift
+   sibling rows the way it does inside the horizontal content-tab strip. Only
+   the Target row keeps the filled-pill highlight so the sidebar shows at most
+   one strong selection block at a time. */
+[data-theme="research"] .rw-chat-row.is-active,
+[data-theme="research"] .rw-file-row.is-active {
+  background: transparent;
+  color: var(--rw-text);
   font-weight: 600;
+}
+[data-theme="research"] .rw-chat-row.is-active:hover,
+[data-theme="research"] .rw-file-row.is-active:hover {
+  background: rgba(11, 46, 79, 0.05);
 }
 
 /* Sidebar header / tab styles */
@@ -1440,9 +1455,28 @@
 [data-theme="research"] .rw-tab.is-active {
   background: var(--tabs-active-bg);
   color: var(--tabs-active-fg);
-  font-weight: 400;
+  font-weight: 600;
   border-color: var(--si-gold);
   z-index: 3;
+}
+
+/* Width-stable bold trick: the label always reserves the bold-weight width
+   (via a zero-height ::after copy in 600), so switching tabs doesn't shift
+   surrounding tabs as the active label transitions 500 -> 600. The visible
+   text still renders at the parent's font-weight (500 inactive / 600 active).
+   Truncation still applies because the parent caps width via max-w-[120px]. */
+[data-theme="research"] .rw-tab-label {
+  display: inline-block;
+}
+[data-theme="research"] .rw-tab-label::after {
+  content: attr(data-text);
+  display: block;
+  font-weight: 600;
+  height: 0;
+  overflow: hidden;
+  visibility: hidden;
+  pointer-events: none;
+  user-select: none;
 }
 
 [data-theme="research"] .rw-tab-dirty {

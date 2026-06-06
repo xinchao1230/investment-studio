@@ -87,7 +87,9 @@ export const ChatHistoryPopover: React.FC<ChatHistoryPopoverProps> = ({
               role="option"
               aria-selected={isActive}
               aria-current={isActive ? 'true' : 'false'}
-              className="group flex items-start justify-between gap-2 px-3 py-2 text-sm cursor-pointer hover:bg-gray-50"
+              className={`group flex items-start justify-between gap-2 px-3 py-2 text-sm cursor-pointer hover:bg-gray-50 ${
+                isActive ? 'is-active' : ''
+              }`}
               onClick={() => {
                 if (isRenaming) return;
                 void onSelectChat(c.chatSession_id);
@@ -116,7 +118,15 @@ export const ChatHistoryPopover: React.FC<ChatHistoryPopoverProps> = ({
                   />
                 ) : (
                   <>
-                    <div className="truncate">{displayTitle}</div>
+                    <div
+                      className="truncate"
+                      style={{
+                        color: isActive ? 'var(--rw-text)' : 'var(--rw-text-2)',
+                        fontWeight: isActive ? 600 : 500,
+                      }}
+                    >
+                      {displayTitle}
+                    </div>
                     <div className="text-xs text-gray-500">{formatRelative(c.updated_at)}</div>
                   </>
                 )}
