@@ -783,38 +783,48 @@ export const ResearchPage: React.FC = () => {
   );
 
   // Right-pane (compact chat) dispatchers. Pick between target-bound and
-  // Stella chat surfaces based on the current sidebar selection so the
-  // "+ New chat" / history popover in ResearchChatPane stay context-aware.
+  // Stella chat surfaces based on the ACTIVE MODE rather than the sidebar's
+  // selectedCode. Switching the workspace/stella tab does NOT clear
+  // selectedCode (so target context survives a round-trip), but the right
+  // pane's New chat / history popover should follow the user-visible mode:
+  // - Stella tab → always create a global chat, list global chats.
+  // - Workspace tab → create/list against the currently-selected target.
+  //   (No-op when no target is selected; user is expected to pick one.)
   const handleNewChatFromPane = useCallback(async () => {
-    const code = selectedCodeRef.current;
-    if (code) {
+    if (activeMode === 'stella') {
+      await stella.createChat();
+    } else {
+      const code = selectedCodeRef.current;
+      if (!code) return;
       const target = targetsRef.current.find((t) => t.stock_code === code);
       await targetChats.createChatForTarget(code, target);
-    } else {
-      await stella.createChat();
     }
     void allChats.refresh();
-  }, [targetChats, stella, allChats]);
+  }, [activeMode, targetChats, stella, allChats]);
 
   const handleSelectChatFromPane = useCallback(
     async (chatSessionId: string) => {
-      const code = selectedCodeRef.current;
-      if (code) {
-        const target = targetsRef.current.find((t) => t.stock_code === code);
-        await targetChats.selectChatForTarget(code, target, chatSessionId);
-      } else {
+      if (activeMode === 'stella') {
         await stella.selectChat(chatSessionId);
+        return;
       }
+      const code = selectedCodeRef.current;
+      if (!code) return;
+      const target = targetsRef.current.find((t) => t.stock_code === code);
+      await targetChats.selectChatForTarget(code, target, chatSessionId);
     },
-    [targetChats, stella],
+    [activeMode, targetChats, stella],
   );
 
   const contextualChatList = useMemo(() => {
+    if (activeMode === 'stella') {
+      return stella.chats ?? [];
+    }
     if (selectedCode) {
       return targetChats.chatsByCode[selectedCode] ?? [];
     }
-    return stella.chats ?? [];
-  }, [selectedCode, targetChats.chatsByCode, stella.chats]);
+    return [];
+  }, [activeMode, selectedCode, targetChats.chatsByCode, stella.chats]);
 
   const handleDeleteChat = useCallback(
     async (code: string, chatSessionId: string) => {
@@ -1558,7 +1568,6 @@ export const ResearchPage: React.FC = () => {
             stellaChats={stella.chats}
             stellaActiveSessionId={stella.active?.chatSessionId ?? null}
             onSelectStellaChat={(sid) => stella.selectChat(sid)}
-            onNewStellaChat={() => stella.createChat().then(() => allChats.refresh())}
             onDeleteStellaChat={(sid) => stella.deleteChat(sid)}
             onRenameStellaChat={(sid, t) => stella.renameChat(sid, t)}
             allChats={allChats.chats}

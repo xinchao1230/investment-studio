@@ -108,7 +108,6 @@ interface TargetListSidebarProps {
   /** Currently-active Stella chat session id (highlighted). */
   stellaActiveSessionId?: string | null;
   onSelectStellaChat?: (chatSessionId: string) => void;
-  onNewStellaChat?: () => void;
   onDeleteStellaChat?: (chatSessionId: string) => void;
   onRenameStellaChat?: (chatSessionId: string, newTitle: string) => void;
 
@@ -177,7 +176,6 @@ export const TargetListSidebar: React.FC<TargetListSidebarProps> = ({
   stellaChats,
   stellaActiveSessionId,
   onSelectStellaChat,
-  onNewStellaChat,
   onDeleteStellaChat,
   onRenameStellaChat,
   allChats,
@@ -805,16 +803,6 @@ export const TargetListSidebar: React.FC<TargetListSidebarProps> = ({
               aria-pressed={addFormOpen}
             >
               <Search size={14} />
-            </button>
-          )}
-          {activeMode === 'stella' && onNewStellaChat && (
-            <button
-              type="button"
-              className="rw-side-icon-btn"
-              onClick={onNewStellaChat}
-              title="New chat"
-            >
-              <Plus size={14} />
             </button>
           )}
           {onCollapse && (

@@ -110,6 +110,18 @@
 [data-theme="research"] .rw-pane-right > .rw-divider {
   border-bottom-color: var(--tabs-border);
 }
+/* In Stella mode the center workbench is hidden, so the right pane's chat
+   header sits directly next to the left pane's tab row. The chat header's
+   default 12px left padding (px-3) then doubles up with the left pane's
+   12px right padding, producing a 24px void between the rightmost left-pane
+   button and the leftmost chat-header button (New chat) — about 3x the
+   inter-button gap. Drop the chat header's left padding to 0 in Stella mode
+   so the New chat / history buttons sit close to the inter-pane seam and the
+   horizontal button rhythm across the two panes reads as one continuous
+   group. Scoped via data-research-mode set on .rw-pane-right. */
+[data-theme="research"] .rw-pane-right[data-research-mode="stella"] > .rw-divider {
+  padding-left: 0;
+}
 /* Top hairline — used by the sidebar's bottom-left footer to separate it
    from the scrollable body above. */
 [data-theme="research"] .rw-divider-top {
