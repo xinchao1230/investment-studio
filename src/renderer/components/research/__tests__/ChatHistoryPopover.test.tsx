@@ -205,7 +205,7 @@ describe('ChatHistoryPopover — create entries (Workbench mode)', () => {
         onCreateGlobalChat={vi.fn()}
       />,
     );
-    expect(screen.getByText(/new chat for tencent/i)).toBeInTheDocument();
+    expect(screen.getByText(/^new chat$/i)).toBeInTheDocument();
     expect(screen.getByText(/new global chat/i)).toBeInTheDocument();
   });
 
@@ -219,7 +219,7 @@ describe('ChatHistoryPopover — create entries (Workbench mode)', () => {
         onCreateGlobalChat={vi.fn()}
       />,
     );
-    expect(screen.queryByText(/new chat for/i)).toBeNull();
+    expect(screen.queryByText(/^new chat$/i)).toBeNull();
     expect(screen.getByText(/new global chat/i)).toBeInTheDocument();
   });
 
@@ -233,12 +233,12 @@ describe('ChatHistoryPopover — create entries (Workbench mode)', () => {
         onCreateGlobalChat={vi.fn()}
       />,
     );
-    expect(screen.queryByText(/new chat for/i)).toBeNull();
+    expect(screen.queryByText(/^new chat$/i)).toBeNull();
   });
 
   it('renders no create rows by default (Stella mode parity)', () => {
     render(<ChatHistoryPopover {...baseProps} />);
-    expect(screen.queryByText(/new chat for/i)).toBeNull();
+    expect(screen.queryByText(/^new chat$/i)).toBeNull();
     expect(screen.queryByText(/new global chat/i)).toBeNull();
   });
 
@@ -256,7 +256,7 @@ describe('ChatHistoryPopover — create entries (Workbench mode)', () => {
         onClose={onClose}
       />,
     );
-    fireEvent.click(screen.getByText(/new chat for tencent/i));
+    fireEvent.click(screen.getByText(/^new chat$/i));
     expect(onCreateTargetChat).toHaveBeenCalledTimes(1);
     expect(onCreateGlobalChat).not.toHaveBeenCalled();
     expect(onClose).toHaveBeenCalledTimes(1);
@@ -282,7 +282,7 @@ describe('ChatHistoryPopover — create entries (Workbench mode)', () => {
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
-  it('long target name keeps the truncate class on the label span', () => {
+  it('target create row label keeps the truncate class so long sibling rows don\'t overflow', () => {
     render(
       <ChatHistoryPopover
         {...baseProps}
@@ -292,7 +292,7 @@ describe('ChatHistoryPopover — create entries (Workbench mode)', () => {
         onCreateGlobalChat={vi.fn()}
       />,
     );
-    const label = screen.getByText(/new chat for bytedance holdings limited/i);
+    const label = screen.getByText(/^new chat$/i);
     expect(label.className).toContain('truncate');
   });
 
@@ -307,7 +307,7 @@ describe('ChatHistoryPopover — create entries (Workbench mode)', () => {
         onCreateGlobalChat={vi.fn()}
       />,
     );
-    expect(screen.getByText(/^no chats yet\.$/i)).toBeInTheDocument();
+    expect(screen.getByText(/no previous chats/i)).toBeInTheDocument();
     expect(screen.queryByText(/click \+ to start one/i)).toBeNull();
   });
 });

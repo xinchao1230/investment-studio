@@ -1645,6 +1645,31 @@
   background: var(--rw-border);
   margin: 4px 0;
 }
+/* Empty-state shown below the create rows when no chat history exists yet.
+   Centered icon + label feels intentional instead of looking like an
+   accidentally-truncated row. */
+[data-theme="research"] .rw-history-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 20px 12px 18px;
+  color: var(--rw-text-3);
+}
+[data-theme="research"] .rw-history-empty > svg {
+  color: var(--rw-text-3);
+  opacity: 0.6;
+}
+[data-theme="research"] .rw-history-empty-text {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--rw-text-2);
+}
+[data-theme="research"] .rw-history-empty-hint {
+  font-size: 11px;
+  color: var(--rw-text-3);
+}
 /* Chat-history popover chat row. Mirrors the create row's icon column + left
    padding (12px), uses smaller vertical padding so the popover packs more
    chats per viewport, and inlines the relative timestamp on the right. On
@@ -1669,6 +1694,13 @@
 [data-theme="research"] .rw-history-chat-row .rw-side-icon-btn {
   width: 20px;
   height: 20px;
+}
+[data-theme="research"] .rw-history-chat-row .rw-side-icon-btn.rw-history-confirm-yes {
+  color: #dc2626;
+}
+[data-theme="research"] .rw-history-chat-row .rw-side-icon-btn.rw-history-confirm-yes:hover {
+  background: rgba(220, 38, 38, 0.1);
+  color: #dc2626;
 }
 [data-theme="research"] .rw-history-chat-time {
   font-size: 11px;

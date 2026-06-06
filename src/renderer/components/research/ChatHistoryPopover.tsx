@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { MessageSquare, Pencil, Plus, Trash2 } from 'lucide-react';
+import { Check, MessageSquare, Pencil, Plus, Trash2, X } from 'lucide-react';
 import type { ChatHistoryPopoverChat } from './ResearchChatPane';
 
 export interface ChatHistoryPopoverProps {
@@ -61,6 +61,11 @@ export const ChatHistoryPopover: React.FC<ChatHistoryPopoverProps> = ({
   const showGlobalCreateRow = showCreateActions;
   const ref = useRef<HTMLDivElement>(null);
   const [renamingRow, setRenamingRow] = useState<{ id: string; value: string } | null>(null);
+  // Inline confirm for delete on chats the user has actually used. Untouched
+  // chats (default 'New Chat' title — see agentChatSessionService.ts) skip
+  // confirm entirely. Keeps the popover self-contained: no portaled dialog,
+  // no second focus layer.
+  const [confirmingDeleteId, setConfirmingDeleteId] = useState<string | null>(null);
 
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
@@ -107,7 +112,7 @@ export const ChatHistoryPopover: React.FC<ChatHistoryPopoverProps> = ({
               }}
             >
               <Plus size={14} />
-              <span className="truncate">New chat for {trimmedTargetName}</span>
+              <span className="truncate">New chat</span>
             </button>
           )}
           {showGlobalCreateRow && (
@@ -127,8 +132,16 @@ export const ChatHistoryPopover: React.FC<ChatHistoryPopoverProps> = ({
         </>
       )}
       {chats.length === 0 ? (
-        <div className="px-3 py-4 text-xs text-gray-500">
-          {showCreateActions ? 'No chats yet.' : 'No chats yet. Click + to start one.'}
+        <div className="rw-history-empty">
+          <MessageSquare size={20} strokeWidth={1.5} />
+          <div className="rw-history-empty-text">
+            {showCreateActions
+              ? 'No previous chats'
+              : 'No chats yet'}
+          </div>
+          {!showCreateActions && (
+            <div className="rw-history-empty-hint">Click + to start one</div>
+          )}
         </div>
       ) : (
         chats.map((c) => {
@@ -184,32 +197,67 @@ export const ChatHistoryPopover: React.FC<ChatHistoryPopoverProps> = ({
               {!isRenaming && (
                 <>
                   <span className="rw-history-chat-time">{formatRelative(c.last_updated)}</span>
-                  <div className="hidden group-hover:flex items-center gap-1">
-                    <button
-                      type="button"
-                      className="rw-side-icon-btn"
-                      title="Rename chat"
-                      aria-label="Rename chat"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setRenamingRow({ id: c.chatSession_id, value: c.title ?? '' });
-                      }}
-                    >
-                      <Pencil size={12} />
-                    </button>
-                    <button
-                      type="button"
-                      className="rw-side-icon-btn"
-                      title="Delete chat"
-                      aria-label="Delete chat"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        void onDeleteChat(c.chatSession_id, targetCode);
-                      }}
-                    >
-                      <Trash2 size={12} />
-                    </button>
-                  </div>
+                  {confirmingDeleteId === c.chatSession_id ? (
+                    <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                      <button
+                        type="button"
+                        className="rw-side-icon-btn rw-history-confirm-yes"
+                        title="Confirm delete"
+                        aria-label="Confirm delete"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          void onDeleteChat(c.chatSession_id, targetCode);
+                          setConfirmingDeleteId(null);
+                        }}
+                      >
+                        <Check size={12} />
+                      </button>
+                      <button
+                        type="button"
+                        className="rw-side-icon-btn"
+                        title="Cancel"
+                        aria-label="Cancel delete"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setConfirmingDeleteId(null);
+                        }}
+                      >
+                        <X size={12} />
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="hidden group-hover:flex items-center gap-1">
+                      <button
+                        type="button"
+                        className="rw-side-icon-btn"
+                        title="Rename chat"
+                        aria-label="Rename chat"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setRenamingRow({ id: c.chatSession_id, value: c.title ?? '' });
+                        }}
+                      >
+                        <Pencil size={12} />
+                      </button>
+                      <button
+                        type="button"
+                        className="rw-side-icon-btn"
+                        title="Delete chat"
+                        aria-label="Delete chat"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          const untouched = !c.title || c.title === 'New Chat';
+                          if (untouched) {
+                            void onDeleteChat(c.chatSession_id, targetCode);
+                          } else {
+                            setConfirmingDeleteId(c.chatSession_id);
+                          }
+                        }}
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                    </div>
+                  )}
                 </>
               )}
             </div>
