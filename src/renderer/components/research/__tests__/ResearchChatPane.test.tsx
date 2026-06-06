@@ -38,7 +38,7 @@ describe('ResearchChatPane header — new chat button', () => {
 });
 
 describe('ResearchChatPane header — history popover', () => {
-  const chats = [{ chatSession_id: 's1', title: 'Hi', updated_at: Date.now() }];
+  const chats = [{ chatSession_id: 's1', title: 'Hi', last_updated: Date.now() }];
 
   it('history button toggles the popover open/closed', () => {
     render(

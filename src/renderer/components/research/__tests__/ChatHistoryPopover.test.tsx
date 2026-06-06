@@ -5,8 +5,8 @@ import { ChatHistoryPopover } from '../ChatHistoryPopover';
 
 const baseProps = {
   chats: [
-    { chatSession_id: 's1', title: 'First chat',  updated_at: Date.now() - 3_600_000 },
-    { chatSession_id: 's2', title: 'Second chat', updated_at: Date.now() - 86_400_000 },
+    { chatSession_id: 's1', title: 'First chat',  last_updated: Date.now() - 3_600_000 },
+    { chatSession_id: 's2', title: 'Second chat', last_updated: Date.now() - 86_400_000 },
   ],
   activeChatSessionId: 's1',
   targetCode: null,
@@ -44,7 +44,7 @@ describe('ChatHistoryPopover — basic rendering', () => {
     render(
       <ChatHistoryPopover
         {...baseProps}
-        chats={[{ chatSession_id: 's3', title: '', updated_at: Date.now() }]}
+        chats={[{ chatSession_id: 's3', title: '', last_updated: Date.now() }]}
         activeChatSessionId={null}
       />,
     );
@@ -55,7 +55,7 @@ describe('ChatHistoryPopover — basic rendering', () => {
     render(
       <ChatHistoryPopover
         {...baseProps}
-        chats={[{ chatSession_id: 's4', title: null, updated_at: Date.now() }]}
+        chats={[{ chatSession_id: 's4', title: null, last_updated: Date.now() }]}
         activeChatSessionId={null}
       />,
     );
@@ -191,5 +191,123 @@ describe('ChatHistoryPopover — row actions', () => {
     fireEvent.click(input);
     expect(onSelectChat).not.toHaveBeenCalled();
     expect(onClose).not.toHaveBeenCalled();
+  });
+});
+
+describe('ChatHistoryPopover — create entries (Workbench mode)', () => {
+  it('renders both create rows when showCreateActions and selectedTargetName are set', () => {
+    render(
+      <ChatHistoryPopover
+        {...baseProps}
+        showCreateActions
+        selectedTargetName="Tencent"
+        onCreateTargetChat={vi.fn()}
+        onCreateGlobalChat={vi.fn()}
+      />,
+    );
+    expect(screen.getByText(/new chat for tencent/i)).toBeInTheDocument();
+    expect(screen.getByText(/new global chat/i)).toBeInTheDocument();
+  });
+
+  it('omits the target create row when selectedTargetName is null', () => {
+    render(
+      <ChatHistoryPopover
+        {...baseProps}
+        showCreateActions
+        selectedTargetName={null}
+        onCreateTargetChat={vi.fn()}
+        onCreateGlobalChat={vi.fn()}
+      />,
+    );
+    expect(screen.queryByText(/new chat for/i)).toBeNull();
+    expect(screen.getByText(/new global chat/i)).toBeInTheDocument();
+  });
+
+  it('omits the target create row when selectedTargetName is whitespace', () => {
+    render(
+      <ChatHistoryPopover
+        {...baseProps}
+        showCreateActions
+        selectedTargetName="   "
+        onCreateTargetChat={vi.fn()}
+        onCreateGlobalChat={vi.fn()}
+      />,
+    );
+    expect(screen.queryByText(/new chat for/i)).toBeNull();
+  });
+
+  it('renders no create rows by default (Stella mode parity)', () => {
+    render(<ChatHistoryPopover {...baseProps} />);
+    expect(screen.queryByText(/new chat for/i)).toBeNull();
+    expect(screen.queryByText(/new global chat/i)).toBeNull();
+  });
+
+  it('clicking target create row calls handler then closes the popover', () => {
+    const onCreateTargetChat = vi.fn();
+    const onCreateGlobalChat = vi.fn();
+    const onClose = vi.fn();
+    render(
+      <ChatHistoryPopover
+        {...baseProps}
+        showCreateActions
+        selectedTargetName="Tencent"
+        onCreateTargetChat={onCreateTargetChat}
+        onCreateGlobalChat={onCreateGlobalChat}
+        onClose={onClose}
+      />,
+    );
+    fireEvent.click(screen.getByText(/new chat for tencent/i));
+    expect(onCreateTargetChat).toHaveBeenCalledTimes(1);
+    expect(onCreateGlobalChat).not.toHaveBeenCalled();
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('clicking global create row calls handler then closes the popover', () => {
+    const onCreateTargetChat = vi.fn();
+    const onCreateGlobalChat = vi.fn();
+    const onClose = vi.fn();
+    render(
+      <ChatHistoryPopover
+        {...baseProps}
+        showCreateActions
+        selectedTargetName="Tencent"
+        onCreateTargetChat={onCreateTargetChat}
+        onCreateGlobalChat={onCreateGlobalChat}
+        onClose={onClose}
+      />,
+    );
+    fireEvent.click(screen.getByText(/new global chat/i));
+    expect(onCreateGlobalChat).toHaveBeenCalledTimes(1);
+    expect(onCreateTargetChat).not.toHaveBeenCalled();
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('long target name keeps the truncate class on the label span', () => {
+    render(
+      <ChatHistoryPopover
+        {...baseProps}
+        showCreateActions
+        selectedTargetName="Bytedance Holdings Limited"
+        onCreateTargetChat={vi.fn()}
+        onCreateGlobalChat={vi.fn()}
+      />,
+    );
+    const label = screen.getByText(/new chat for bytedance holdings limited/i);
+    expect(label.className).toContain('truncate');
+  });
+
+  it('shows shortened empty-state copy when showCreateActions is true', () => {
+    render(
+      <ChatHistoryPopover
+        {...baseProps}
+        chats={[]}
+        showCreateActions
+        selectedTargetName="Tencent"
+        onCreateTargetChat={vi.fn()}
+        onCreateGlobalChat={vi.fn()}
+      />,
+    );
+    expect(screen.getByText(/^no chats yet\.$/i)).toBeInTheDocument();
+    expect(screen.queryByText(/click \+ to start one/i)).toBeNull();
   });
 });

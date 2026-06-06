@@ -306,10 +306,21 @@
 
 /* File rows always render in full ink — the open file is already signaled
    by the center pane's tab strip, so the sidebar doesn't need a second
-   active-state treatment for files. Chat rows still use the muted-grey /
-   dark-bold contrast from .rw-tree-row + .rw-chat-row.is-active below. */
+   active-state treatment for files. The `.is-active` class is still set on
+   the row (other code keys off it) but we strip the filled-pill background
+   so opening a file leaves only the hover affordance. Chat rows still use
+   the muted-grey / dark-bold contrast from .rw-tree-row + .rw-chat-row.is-active
+   below. */
 [data-theme="research"] .rw-file-row {
   color: var(--rw-text);
+}
+[data-theme="research"] .rw-file-row.is-active {
+  background: transparent;
+  color: var(--rw-text);
+  font-weight: 500;
+}
+[data-theme="research"] .rw-file-row.is-active:hover {
+  background: rgba(11, 46, 79, 0.05);
 }
 
 /* Chat rows: minimal selected state — no background block, ink color +
@@ -1600,4 +1611,68 @@
 [data-theme="research"] .rw-navbtn:disabled {
   opacity: 0.3;
   cursor: default;
+}
+
+/* Chat-history popover create entries. Rendered in Workbench mode above the
+   target chat list so users can create a target-bound or global chat without
+   leaving the popover. Row height (~36px) intentionally matches the chat row
+   below the divider so the popover reads as one coherent list. Hover uses
+   the same --rw-accent-soft fill as the left sidebar's selected state to
+   signal "actionable". */
+[data-theme="research"] .rw-history-create-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 12px;
+  font-size: 13px;
+  color: var(--rw-text);
+  font-weight: 500;
+  cursor: pointer;
+  background: transparent;
+  border: 0;
+  text-align: left;
+}
+[data-theme="research"] .rw-history-create-row:hover {
+  background: var(--rw-accent-soft);
+}
+[data-theme="research"] .rw-history-create-row svg {
+  color: var(--rw-text-2);
+  flex-shrink: 0;
+}
+[data-theme="research"] .rw-history-create-divider {
+  height: 1px;
+  background: var(--rw-border);
+  margin: 4px 0;
+}
+/* Chat-history popover chat row. Mirrors the create row's icon column + left
+   padding (12px), uses smaller vertical padding so the popover packs more
+   chats per viewport, and inlines the relative timestamp on the right. On
+   hover the timestamp hides so the rename/delete action buttons can take its
+   place without a layout jump from a wider button cluster. */
+[data-theme="research"] .rw-history-chat-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
+  height: 32px;
+  font-size: 13px;
+  cursor: pointer;
+}
+[data-theme="research"] .rw-history-chat-row:hover {
+  background: #fafafa;
+}
+[data-theme="research"] .rw-history-chat-row > svg:first-child {
+  color: var(--rw-text-2);
+  flex-shrink: 0;
+}
+[data-theme="research"] .rw-history-chat-row .rw-side-icon-btn {
+  width: 20px;
+  height: 20px;
+}
+[data-theme="research"] .rw-history-chat-time {
+  font-size: 11px;
+  color: #9ca3af;
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
 }
