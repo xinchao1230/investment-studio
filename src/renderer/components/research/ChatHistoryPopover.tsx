@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Pencil, Trash2 } from 'lucide-react';
+import { MessageSquare, Pencil, Plus, Trash2 } from 'lucide-react';
 import type { ChatHistoryPopoverChat } from './ResearchChatPane';
 
 export interface ChatHistoryPopoverProps {
@@ -12,6 +12,18 @@ export interface ChatHistoryPopoverProps {
   onRenameChat: (chatSessionId: string, targetCode: string | null, title: string) => void | Promise<void>;
   onDeleteChat: (chatSessionId: string, targetCode: string | null) => void | Promise<void>;
   onClose: () => void;
+  /** When true, render a create section above the chat list (Workbench mode).
+   * Stella mode omits this since the right-pane New chat button already
+   * creates a global chat. */
+  showCreateActions?: boolean;
+  /** Display name of the currently-selected target. When provided, a
+   * "+ New chat for <name>" row is rendered. Null/empty hides it. */
+  selectedTargetName?: string | null;
+  /** Workbench mode: create a chat bound to the currently-selected target. */
+  onCreateTargetChat?: () => void;
+  /** Workbench mode: create a global chat. Parent is expected to also
+   * switch the sidebar to Stella mode so the new chat is visible. */
+  onCreateGlobalChat?: () => void;
 }
 
 function formatRelative(ts?: number | string): string {
@@ -37,7 +49,16 @@ export const ChatHistoryPopover: React.FC<ChatHistoryPopoverProps> = ({
   onRenameChat,
   onDeleteChat,
   onClose,
+  showCreateActions = false,
+  selectedTargetName = null,
+  onCreateTargetChat,
+  onCreateGlobalChat,
 }) => {
+  const trimmedTargetName = selectedTargetName && selectedTargetName.trim()
+    ? selectedTargetName.trim()
+    : null;
+  const showTargetCreateRow = showCreateActions && !!trimmedTargetName;
+  const showGlobalCreateRow = showCreateActions;
   const ref = useRef<HTMLDivElement>(null);
   const [renamingRow, setRenamingRow] = useState<{ id: string; value: string } | null>(null);
 
@@ -68,13 +89,46 @@ export const ChatHistoryPopover: React.FC<ChatHistoryPopoverProps> = ({
         width: 'min(320px, calc(100% - 24px))',
         maxHeight: '60vh',
         overflowY: 'auto',
+        paddingTop: 4,
+        paddingBottom: 6,
         background: 'var(--rw-bg-popover, white)',
         borderColor: 'var(--rw-border, rgba(0,0,0,0.1))',
       }}
     >
+      {showCreateActions && (
+        <>
+          {showTargetCreateRow && (
+            <button
+              type="button"
+              className="rw-history-create-row"
+              onClick={() => {
+                onCreateTargetChat?.();
+                onClose();
+              }}
+            >
+              <Plus size={14} />
+              <span className="truncate">New chat for {trimmedTargetName}</span>
+            </button>
+          )}
+          {showGlobalCreateRow && (
+            <button
+              type="button"
+              className="rw-history-create-row"
+              onClick={() => {
+                onCreateGlobalChat?.();
+                onClose();
+              }}
+            >
+              <Plus size={14} />
+              <span>New global chat</span>
+            </button>
+          )}
+          <div className="rw-history-create-divider" />
+        </>
+      )}
       {chats.length === 0 ? (
         <div className="px-3 py-4 text-xs text-gray-500">
-          No chats yet. Click + to start one.
+          {showCreateActions ? 'No chats yet.' : 'No chats yet. Click + to start one.'}
         </div>
       ) : (
         chats.map((c) => {
@@ -87,20 +141,19 @@ export const ChatHistoryPopover: React.FC<ChatHistoryPopoverProps> = ({
               role="option"
               aria-selected={isActive}
               aria-current={isActive ? 'true' : 'false'}
-              className={`group flex items-start justify-between gap-2 px-3 py-2 text-sm cursor-pointer hover:bg-gray-50 ${
-                isActive ? 'is-active' : ''
-              }`}
+              className={`group rw-history-chat-row ${isActive ? 'is-active' : ''}`}
               onClick={() => {
                 if (isRenaming) return;
                 void onSelectChat(c.chatSession_id);
                 onClose();
               }}
             >
+              <MessageSquare size={14} aria-hidden />
               <div className="min-w-0 flex-1">
                 {isRenaming ? (
                   <input
                     autoFocus
-                    className="w-full px-1 py-0.5 text-sm border rounded"
+                    className="w-full px-1 py-0.5 text-[13px] border rounded"
                     value={renamingRow!.value}
                     onChange={(e) => setRenamingRow({ id: c.chatSession_id, value: e.target.value })}
                     onClick={(e) => e.stopPropagation()}
@@ -117,47 +170,47 @@ export const ChatHistoryPopover: React.FC<ChatHistoryPopoverProps> = ({
                     }}
                   />
                 ) : (
-                  <>
-                    <div
-                      className="truncate"
-                      style={{
-                        color: isActive ? 'var(--rw-text)' : 'var(--rw-text-2)',
-                        fontWeight: isActive ? 600 : 500,
-                      }}
-                    >
-                      {displayTitle}
-                    </div>
-                    <div className="text-xs text-gray-500">{formatRelative(c.updated_at)}</div>
-                  </>
+                  <div
+                    className="truncate"
+                    style={{
+                      color: isActive ? 'var(--rw-text)' : 'var(--rw-text-2)',
+                      fontWeight: isActive ? 600 : 500,
+                    }}
+                  >
+                    {displayTitle}
+                  </div>
                 )}
               </div>
               {!isRenaming && (
-                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100">
-                  <button
-                    type="button"
-                    className="rw-side-icon-btn"
-                    title="Rename chat"
-                    aria-label="Rename chat"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setRenamingRow({ id: c.chatSession_id, value: c.title ?? '' });
-                    }}
-                  >
-                    <Pencil size={12} />
-                  </button>
-                  <button
-                    type="button"
-                    className="rw-side-icon-btn"
-                    title="Delete chat"
-                    aria-label="Delete chat"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      void onDeleteChat(c.chatSession_id, targetCode);
-                    }}
-                  >
-                    <Trash2 size={12} />
-                  </button>
-                </div>
+                <>
+                  <span className="rw-history-chat-time">{formatRelative(c.last_updated)}</span>
+                  <div className="hidden group-hover:flex items-center gap-1">
+                    <button
+                      type="button"
+                      className="rw-side-icon-btn"
+                      title="Rename chat"
+                      aria-label="Rename chat"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setRenamingRow({ id: c.chatSession_id, value: c.title ?? '' });
+                      }}
+                    >
+                      <Pencil size={12} />
+                    </button>
+                    <button
+                      type="button"
+                      className="rw-side-icon-btn"
+                      title="Delete chat"
+                      aria-label="Delete chat"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        void onDeleteChat(c.chatSession_id, targetCode);
+                      }}
+                    >
+                      <Trash2 size={12} />
+                    </button>
+                  </div>
+                </>
               )}
             </div>
           );

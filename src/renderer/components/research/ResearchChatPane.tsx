@@ -22,7 +22,10 @@ import { ChatHistoryPopover } from './ChatHistoryPopover';
 export interface ChatHistoryPopoverChat {
   chatSession_id: string;
   title?: string | null;
-  updated_at?: number | string;
+  /** ISO timestamp (or epoch ms) of the last update — used by the popover
+   * to render a relative timestamp next to each row. Matches
+   * ResearchChatSessionMeta.last_updated. */
+  last_updated?: number | string;
 }
 
 interface ResearchChatPaneProps {
@@ -60,6 +63,16 @@ interface ResearchChatPaneProps {
   onRenameChat: (chatSessionId: string, targetCode: string | null, title: string) => void | Promise<void>;
   /** Delete a chat session. */
   onDeleteChat: (chatSessionId: string, targetCode: string | null) => void | Promise<void>;
+  /** When true, the chat-history popover renders create entries at the top.
+   * Wired only in Workbench mode by the parent. */
+  showCreateActionsInHistory?: boolean;
+  /** Display name of the currently-selected target, used by the popover's
+   * "+ New chat for <name>" row. */
+  selectedTargetName?: string | null;
+  /** Popover "+ New chat for <target>" handler. */
+  onCreateTargetChatFromHistory?: () => void;
+  /** Popover "+ New global chat" handler. */
+  onCreateGlobalChatFromHistory?: () => void;
 }
 
 type QuickStartKind = 'intro' | 'task';
@@ -304,6 +317,10 @@ export const ResearchChatPane: React.FC<ResearchChatPaneProps> = ({
   onSelectChat,
   onRenameChat,
   onDeleteChat,
+  showCreateActionsInHistory,
+  selectedTargetName,
+  onCreateTargetChatFromHistory,
+  onCreateGlobalChatFromHistory,
 }) => {
   const messages = useMessages();
   /**
@@ -414,6 +431,10 @@ export const ResearchChatPane: React.FC<ResearchChatPaneProps> = ({
           onRenameChat={onRenameChat}
           onDeleteChat={onDeleteChat}
           onClose={() => setHistoryOpen(false)}
+          showCreateActions={showCreateActionsInHistory}
+          selectedTargetName={selectedTargetName}
+          onCreateTargetChat={onCreateTargetChatFromHistory}
+          onCreateGlobalChat={onCreateGlobalChatFromHistory}
         />
       )}
       <div className="flex-1 min-h-0 overflow-hidden relative">

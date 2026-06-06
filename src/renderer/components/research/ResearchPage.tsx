@@ -1654,6 +1654,26 @@ export const ResearchPage: React.FC = () => {
           onSelectChat={handleSelectChatFromPane}
           onRenameChat={handleRenameAnyChat}
           onDeleteChat={handleDeleteAnyChat}
+          showCreateActionsInHistory={activeMode === 'workspace'}
+          selectedTargetName={
+            selectedCode
+              ? (targets.find((t) => t.stock_code === selectedCode)?.name ?? selectedCode)
+              : null
+          }
+          onCreateTargetChatFromHistory={() => {
+            const code = selectedCodeRef.current;
+            if (!code) return;
+            const target = targetsRef.current.find((t) => t.stock_code === code);
+            void targetChats.createChatForTarget(code, target).then(() => {
+              void allChats.refresh();
+            });
+          }}
+          onCreateGlobalChatFromHistory={() => {
+            setActiveMode('stella');
+            void stella.createChat().then(() => {
+              void allChats.refresh();
+            });
+          }}
         />
       </div>
       <Dialog open={!!pendingDelete} onOpenChange={(open) => { if (!open && !deleteBusy) setPendingDelete(null); }}>

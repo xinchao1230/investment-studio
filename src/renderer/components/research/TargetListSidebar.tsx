@@ -894,7 +894,7 @@ export const TargetListSidebar: React.FC<TargetListSidebarProps> = ({
                           openRename({ kind: 'stella', sessionId: chat.chatSession_id, title: chat.title || '' });
                         }
                       }}
-                      className="ml-1 p-0.5 rounded opacity-0 group-hover:opacity-100 hover:bg-black/10 text-[var(--rw-text-3)] transition-opacity"
+                      className="ml-1 p-0.5 rounded hidden group-hover:inline-flex hover:bg-black/10 text-[var(--rw-text-3)]"
                       title="Rename"
                     >
                       <Pencil size={11} />
@@ -911,7 +911,7 @@ export const TargetListSidebar: React.FC<TargetListSidebarProps> = ({
                           setPendingDeleteChat({ kind: 'stella', sessionId: chat.chatSession_id, title: chat.title || 'Untitled' });
                         }
                       }}
-                      className="ml-1 p-0.5 rounded opacity-0 group-hover:opacity-100 hover:bg-black/10 text-[var(--rw-text-3)] hover:text-red-500 transition-opacity"
+                      className="ml-1 p-0.5 rounded hidden group-hover:inline-flex hover:bg-black/10 text-[var(--rw-text-3)] hover:text-red-500"
                       title="Delete chat"
                     >
                       <Trash2 size={11} />
@@ -994,7 +994,7 @@ export const TargetListSidebar: React.FC<TargetListSidebarProps> = ({
                 <button
                   type="button"
                   onClick={(e) => { e.stopPropagation(); onDeleteTarget(code, target.name); }}
-                  className="ml-1 p-0.5 rounded opacity-0 group-hover:opacity-100 hover:bg-black/10 text-[var(--rw-text-3)] hover:text-red-500 transition-opacity"
+                  className="ml-1 p-0.5 rounded hidden group-hover:inline-flex hover:bg-black/10 text-[var(--rw-text-3)] hover:text-red-500"
                   title="Delete target"
                 >
                   <Trash2 size={12} />
@@ -1038,7 +1038,7 @@ export const TargetListSidebar: React.FC<TargetListSidebarProps> = ({
                           <button
                             type="button"
                             onClick={(e) => { e.stopPropagation(); onNewChat(code); }}
-                            className="ml-1 p-0.5 rounded opacity-0 group-hover:opacity-100 hover:bg-black/10 text-[var(--rw-text-3)] transition-opacity"
+                            className="ml-1 p-0.5 rounded hidden group-hover:inline-flex hover:bg-black/10 text-[var(--rw-text-3)]"
                             title="New chat"
                           >
                             <Plus size={12} />
@@ -1067,7 +1067,7 @@ export const TargetListSidebar: React.FC<TargetListSidebarProps> = ({
                                 e.stopPropagation();
                                 openRename({ kind: 'workspace', code, sessionId: chat.chatSession_id, title: chat.title || '' });
                               }}
-                              className="ml-1 p-0.5 rounded opacity-0 group-hover:opacity-100 hover:bg-black/10 text-[var(--rw-text-3)] transition-opacity"
+                              className="ml-1 p-0.5 rounded hidden group-hover:inline-flex hover:bg-black/10 text-[var(--rw-text-3)]"
                               title="Rename"
                             >
                               <Pencil size={11} />
@@ -1080,7 +1080,7 @@ export const TargetListSidebar: React.FC<TargetListSidebarProps> = ({
                                 e.stopPropagation();
                                 setPendingDeleteChat({ kind: 'workspace', code, sessionId: chat.chatSession_id, title: chat.title || 'Untitled' });
                               }}
-                              className="ml-1 p-0.5 rounded opacity-0 group-hover:opacity-100 hover:bg-black/10 text-[var(--rw-text-3)] hover:text-red-500 transition-opacity"
+                              className="ml-1 p-0.5 rounded hidden group-hover:inline-flex hover:bg-black/10 text-[var(--rw-text-3)] hover:text-red-500"
                               title="Delete chat"
                             >
                               <Trash2 size={11} />
