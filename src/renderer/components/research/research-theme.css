@@ -104,9 +104,10 @@
    bottom border. Promote its hairline to --tabs-border so the seam reads as
    one continuous line across the two panes; --rw-border (#ebebeb) was a
    visibly lighter grey than --tabs-border (#d8d8d8). Scoped to direct
-   children of .rw-pane-left so other .rw-divider users (e.g. AddTargetSearch)
-   keep the lighter neutral border. */
-[data-theme="research"] .rw-pane-left > .rw-divider {
+   children of .rw-pane-left / .rw-pane-right so other .rw-divider users
+   (e.g. AddTargetSearch) keep the lighter neutral border. */
+[data-theme="research"] .rw-pane-left > .rw-divider,
+[data-theme="research"] .rw-pane-right > .rw-divider {
   border-bottom-color: var(--tabs-border);
 }
 /* Top hairline — used by the sidebar's bottom-left footer to separate it
@@ -291,21 +292,28 @@
   background: var(--rw-accent-soft, rgba(37, 99, 235, 0.08)) !important;
 }
 
-/* Chat / file rows: minimal selected state — no background block, ink color
-   + bolder weight. Inactive rows stay at the muted grey set on .rw-tree-row
-   above; the contrast between dark+bold (active) and grey (inactive) is what
-   signals selection. Rows are stacked vertically, so 500 -> 600 doesn't shift
-   sibling rows the way it does inside the horizontal content-tab strip. Only
-   the Target row keeps the filled-pill highlight so the sidebar shows at most
-   one strong selection block at a time. */
-[data-theme="research"] .rw-chat-row.is-active,
-[data-theme="research"] .rw-file-row.is-active {
+/* File rows always render in full ink — the open file is already signaled
+   by the center pane's tab strip, so the sidebar doesn't need a second
+   active-state treatment for files. Chat rows still use the muted-grey /
+   dark-bold contrast from .rw-tree-row + .rw-chat-row.is-active below. */
+[data-theme="research"] .rw-file-row {
+  color: var(--rw-text);
+}
+
+/* Chat rows: minimal selected state — no background block, ink color +
+   bolder weight. Inactive chat rows stay at the muted grey set on
+   .rw-tree-row above; the contrast between dark+bold (active) and grey
+   (inactive) is what signals selection. Rows are stacked vertically, so
+   500 -> 600 doesn't shift sibling rows the way it does inside the
+   horizontal content-tab strip. Only the Target row keeps the filled-pill
+   highlight so the sidebar shows at most one strong selection block at a
+   time. */
+[data-theme="research"] .rw-chat-row.is-active {
   background: transparent;
   color: var(--rw-text);
   font-weight: 600;
 }
-[data-theme="research"] .rw-chat-row.is-active:hover,
-[data-theme="research"] .rw-file-row.is-active:hover {
+[data-theme="research"] .rw-chat-row.is-active:hover {
   background: rgba(11, 46, 79, 0.05);
 }
 
@@ -770,16 +778,11 @@
   background: var(--tabs-border);
   pointer-events: none;
 }
-/* In Ask Stella mode the center workbench (and its tab strip) is hidden, so
-   there's nothing for the y=39 hairline to align with — it just orphans
-   the expand icon from blank space. Suppress it. */
-[data-theme="research"][data-active-mode="stella"]:not([data-os="darwin"]) .rw-pane-left--collapsed::after {
-  display: none;
-}
 [data-theme="research"] .rw-pane-left--collapsed:hover {
   background: rgba(0, 0, 0, 0.03);
 }
 [data-theme="research"] .rw-pane-right--collapsed {
+  position: relative;
   flex: 0 0 40px;
   width: 40px;
   min-width: 40px !important;
@@ -791,6 +794,21 @@
   background: var(--rw-bg-soft);
   /* Flush seam: soft background tint separates the icon strip; no hard line. */
   cursor: pointer;
+}
+/* 1px hairline at y=40 to match the center pane's tab-strip bottom border
+   and the left collapsed strip — so the horizontal seam reads as one
+   continuous line across all three panes when the right pane is collapsed.
+   Unlike the left, there are no macOS traffic-light controls on the right,
+   so this applies on every platform. */
+[data-theme="research"] .rw-pane-right--collapsed::after {
+  content: "";
+  position: absolute;
+  top: 39px;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: var(--tabs-border);
+  pointer-events: none;
 }
 [data-theme="research"] .rw-pane-right--collapsed:hover {
   background: rgba(0, 0, 0, 0.03);
