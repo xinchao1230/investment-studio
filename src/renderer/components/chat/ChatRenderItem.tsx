@@ -355,6 +355,7 @@ export interface ChatRenderItemProps {
   onStartEdit: (msg: UserMessage) => void;
   canEditUserMessage?: boolean;
   streamingMessageId?: string;
+  activeQuestionMessageId?: string;
   fileExistsCache: Record<string, boolean>;
   handleContentChange?: (newContent: string, heightChanged: boolean) => void;
 }
@@ -372,6 +373,7 @@ export function ChatRenderItemComponent(props: ChatRenderItemProps) {
     onStartEdit,
     canEditUserMessage,
     streamingMessageId,
+    activeQuestionMessageId,
     fileExistsCache,
     handleContentChange,
   } = props;
@@ -482,6 +484,7 @@ export function ChatRenderItemComponent(props: ChatRenderItemProps) {
         <MessageComponent
           chatId={chatId}
           message={item.message}
+          isActiveQuestion={activeQuestionMessageId === item.message.id}
           canEditUserMessage={!editingMessage && canEditUserMessage}
           onEditUserMessage={!editingMessage && canEditUserMessage ? onStartEdit : undefined}
         />
@@ -518,4 +521,3 @@ export function ChatRenderItemComponent(props: ChatRenderItemProps) {
 
   return null;
 }
-

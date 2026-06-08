@@ -4,9 +4,9 @@
 
 [data-theme="research"] {
   /* Palette: white sidebars, grey content, terracotta accent (Claude-style). */
-  --rw-bg: var(--si-paper);              /* warm grey center content */
-  --rw-bg-soft: var(--si-card);          /* white (left tree, right pane) */
-  --rw-bg-chat-header: var(--si-card);   /* white header strip */
+  --rw-bg: #fcfcfb;                      /* neutral grey center content (RGB 252,252,251) */
+  --rw-bg-soft: var(--si-card);          /* white cards/popovers */
+  --rw-bg-chat-header: #fffffe;          /* right chat header (RGB 255,255,254) */
   --rw-border: var(--si-border);
   --rw-text: var(--si-ink);              /* near-black text */
   --rw-text-1: var(--si-ink);
@@ -35,7 +35,7 @@
   /* Active tab + content share ONE color so the tab's bottom edge dissolves
      into the document surface below. That surface is the document header /
      body, which render on --rw-bg (paper), so we fuse to --rw-bg rather than
-     literal white — otherwise a faint seam shows where #fff meets #fdfdfc.
+     literal white — otherwise a faint seam shows where #fff meets #fcfcfb.
      The toolbar is pure white; the active card is paper — the 1px grey border
      does the separation, exactly like a native desktop tab strip. */
   --tabs-content-bg: var(--rw-bg);
@@ -89,12 +89,12 @@
 }
 
 [data-theme="research"] .rw-pane-left {
-  background: var(--rw-bg-soft);
+  background: #f6f6f6;
   /* No hard border: the seam stays flush at rest. The resizable divider's
      hover/drag accent (see .rw-resizable-divider) is the only visual cue. */
 }
 [data-theme="research"] .rw-pane-right {
-  background: var(--rw-bg-soft);
+  background: #fffffe;
   /* No hard border — see .rw-pane-left. */
 }
 [data-theme="research"] .rw-divider {
@@ -109,6 +109,20 @@
 [data-theme="research"] .rw-pane-left > .rw-divider,
 [data-theme="research"] .rw-pane-right > .rw-divider {
   border-bottom-color: var(--tabs-border);
+}
+[data-theme="research"] .rw-chat-header-title {
+  position: absolute;
+  left: 50%;
+  max-width: calc(100% - 144px);
+  transform: translateX(-50%);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  pointer-events: none;
+  color: var(--rw-text);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1;
 }
 /* In Stella mode the center workbench is hidden, so the right pane's chat
    header sits directly next to the left pane's tab row. The chat header's
@@ -308,9 +322,8 @@
    by the center pane's tab strip, so the sidebar doesn't need a second
    active-state treatment for files. The `.is-active` class is still set on
    the row (other code keys off it) but we strip the filled-pill background
-   so opening a file leaves only the hover affordance. Chat rows still use
-   the muted-grey / dark-bold contrast from .rw-tree-row + .rw-chat-row.is-active
-   below. */
+   so opening a file leaves only the hover affordance. Chat rows keep the
+   same filled-pill tint as target rows, plus bolder text. */
 [data-theme="research"] .rw-file-row {
   color: var(--rw-text);
 }
@@ -323,21 +336,16 @@
   background: rgba(11, 46, 79, 0.05);
 }
 
-/* Chat rows: minimal selected state — no background block, ink color +
-   bolder weight. Inactive chat rows stay at the muted grey set on
-   .rw-tree-row above; the contrast between dark+bold (active) and grey
-   (inactive) is what signals selection. Rows are stacked vertically, so
-   500 -> 600 doesn't shift sibling rows the way it does inside the
-   horizontal content-tab strip. Only the Target row keeps the filled-pill
-   highlight so the sidebar shows at most one strong selection block at a
-   time. */
+/* Chat rows: active chats use the same tint pill as target rows, plus bolder
+   text. Rows are stacked vertically, so 500 -> 600 doesn't shift sibling rows
+   the way it does inside the horizontal content-tab strip. */
 [data-theme="research"] .rw-chat-row.is-active {
-  background: transparent;
+  background: var(--rw-accent-soft);
   color: var(--rw-text);
   font-weight: 600;
 }
 [data-theme="research"] .rw-chat-row.is-active:hover {
-  background: rgba(11, 46, 79, 0.05);
+  background: var(--rw-accent-soft);
 }
 
 /* Sidebar header / tab styles */
@@ -775,7 +783,7 @@
   align-items: center;
   padding: 40px 0 10px;
   gap: 12px;
-  background: var(--rw-bg-soft);
+  background: #f6f6f6;
   /* Flush seam: the soft background tint separates the icon strip from the
      center pane without a hard border. */
   cursor: pointer;
@@ -814,7 +822,7 @@
   align-items: center;
   padding: 10px 0;
   gap: 12px;
-  background: var(--rw-bg-soft);
+  background: #fffffe;
   /* Flush seam: soft background tint separates the icon strip; no hard line. */
   cursor: pointer;
 }
@@ -866,14 +874,14 @@
   padding: 8px;
 }
 
-/* Chat pane background — pure white. The shared ContentView.css paints
+/* Chat pane background — right pane white. The shared ContentView.css paints
    .chat-content-wrapper with --si-paper (#fdfdfc, warm off-white) for the
-   full /agent page, but the research right pane (.rw-pane-right) is white,
-   so the wrapper's warm tint sat on top of it. Repaint it white here so the
-   conversation area matches its white pane. Scoped to the research theme —
+   full /agent page, but the research right pane has its own off-white surface,
+   so the wrapper's warm tint sat on top of it. Repaint it here so the
+   conversation area matches its right pane. Scoped to the research theme —
    the /agent page keeps its paper background. */
 [data-theme="research"] .chat-view--compact .chat-content-wrapper {
-  background: #ffffff;
+  background: #fffffe;
 }
 
 /* Align the message column gutters with the composer below it.

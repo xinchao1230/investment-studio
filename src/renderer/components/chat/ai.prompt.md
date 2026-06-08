@@ -1,4 +1,4 @@
-<!-- Last verified: 2026-05-17 -->
+<!-- Last verified: 2026-06-08 -->
 # Chat UI
 
 > The largest UI module (~84 files, ~32K LOC) providing the full chat interface: message rendering, rich input, agent selection, agent editing, tool call visualization, and workspace file browsing.
@@ -13,7 +13,7 @@
 | `ChatContainer.tsx` | Scroll container for the message list; owns auto-scroll logic (follow-latest, session-switch reset, jump-to-latest button), message editing entry, and delegates per-item rendering to `ChatRenderItemComponent` | ~590 LOC |
 | `InteractiveRequestCard.tsx` | Timeline-native renderer for pending `approval`, `choice`, and `form` interactions | — |
 | `InteractiveAuthCard.tsx` | Timeline-native renderer for interactive CLI auth prompts (device code, link, countdown) using the same card styling system | — |
-| `Message.tsx` | Renders a single completed message: markdown (remark-gfm + rehype-raw), syntax highlighting, Mermaid diagrams, say-hi cards, generated file cards, schedule cards inferred from referenced scheduler job IDs, and streaming via `StreamingV2Message` | ~1.1K LOC |
+| `Message.tsx` | Renders a single message body: markdown (remark-gfm + rehype-raw), syntax highlighting, Mermaid diagrams, say-hi cards, generated file cards, schedule cards inferred from referenced scheduler job IDs, and active-question styling for the user message currently being answered. Streaming content/typewriter rendering remains owned by `StreamingV2Message` | ~1.1K LOC |
 | `ChatInput.tsx` | Rich textarea with file/image/office attachments, voice input, screenshot attach, context @-mentions, skill @-mentions, `/buddy` slash commands, model selector, reasoning-effort selector, keyboard shortcuts, and inline retry state | ~920 LOC |
 | `chat-input/ReasoningEffortSelector.tsx` | Per-chat reasoning effort picker; renders only when the active model advertises ≥2 effort tiers; persists the choice to `chat.agent.reasoningEffort` via `useAgentConfig().updateConfig`; marks one tier `(default)` using a vendor-aware heuristic (Claude → `high`, GPT/others → `medium`) | small |
 | `ToolCallItem.tsx` / `ToolCallsSection.tsx` | Accordion wrappers that select the correct `toolCallViews/` component per tool type | — |
@@ -65,7 +65,7 @@ Messages flow through a clear pipeline:
 3. `ChatContainer` receives the final message list as props, converts them to `ChatRenderItem[]` via `useRenderItems()` from `ChatRenderItem.tsx`, manages auto-scroll
 4. `ChatRenderItemComponent` dispatches each item to the appropriate renderer by type
 
-Completed messages go through `Message.tsx` (static markdown pipeline), in-progress messages go through `StreamingV2Message` (RAF typewriter). Tool calls within a message are rendered inline via `ToolCallsSection` → per-type view components in `toolCallViews/`.
+Completed messages go through `Message.tsx` (static markdown pipeline). In-progress assistant content is rendered by `StreamingV2Message` (RAF typewriter), while the current user question highlight is passed separately as `isActiveQuestion`. Tool calls within a message are rendered inline via `ToolCallsSection` → per-type view components in `toolCallViews/`.
 
 ### Render Item System
 `ChatRenderItem.tsx` owns the transformation from flat `Message[]` to a typed discriminated union of render items. This centralizes the logic for:
@@ -109,7 +109,7 @@ The agent sidebar (`agent-area/`) is a sibling panel in `AgentPage`, not a child
 | New interactive request control type | `InteractiveRequestCard.tsx` + `@shared/types/interactiveRequestTypes` + `agentChatSessionCacheManager.ts` |
 | New agent editor tab | `agent-editor/Agent<Name>Tab.tsx` + `AppRoutes.tsx` (nested route) + editor shell nav |
 | Session scroll / layout changes | `ChatContainer.tsx` + `ChatContainer.css` — always verify `chatSessionId`-keyed resets, not `chatId`-keyed |
-| Streaming rendering changes | `src/renderer/components/streaming/StreamingV2Message.tsx` (never `Message.tsx`) |
+| Streaming content/typewriter changes | `src/renderer/components/streaming/StreamingV2Message.tsx` (not `Message.tsx`) |
 | Send-gate logic | `ChatInput.tsx` (explicit `chatStatus === 'idle'` guard) + renderer send entry point cache status re-check |
 | Agent Library back navigation | `agent-area/AddFromAgentLibraryView.tsx` reads `location.state.backTo`; any new caller must pass `{ state: { backTo } }` |
 
@@ -118,7 +118,7 @@ The agent sidebar (`agent-area/`) is a sibling panel in `AgentPage`, not a child
 - **Driving scroll resets from `chatId`**: history switches can swap sessions under the same chat identity. Always key scroll resets to `chatSessionId`.
 - **Treating `null`/`undefined` chatStatus as idle**: reopens the race where the composer fires before session state hydrates.
 - **Showing zero-state before session cache is ready**: use the "Opening chat history…" placeholder gate in `ChatViewContent`.
-- **Adding streaming logic to `Message.tsx`**: `Message.tsx` is for completed messages only. In-flight state belongs in `StreamingV2Message`.
+- **Adding streaming content/typewriter logic to `Message.tsx`**: content streaming belongs in `StreamingV2Message`. `Message.tsx` may only use explicit non-content props for wrapper-level visual state, such as `isActiveQuestion`.
 - **Adding render-item logic to `ChatContainer`**: item type definition and rendering dispatch belong in `ChatRenderItem.tsx`.
 - **Importing `mermaid` directly in chat files**: `MermaidDiagram` is a lazy async webpack chunk; a synchronous import breaks code splitting.
 - **Bypassing `installAndActivateSkill` for new skill flows**: all install paths must funnel through the single authoritative entry point.
@@ -136,7 +136,7 @@ After modifying components in this directory:
 ## Gotchas
 
 - `ChatInput.tsx` is large (~920 LOC). Read and understand the full component structure before making localized edits — state is densely threaded.
-- `StreamingV2Message` (in `src/renderer/components/streaming/`) handles in-flight messages; `Message.tsx` only renders completed messages. Do not add streaming-specific logic to `Message.tsx`.
+- `StreamingV2Message` (in `src/renderer/components/streaming/`) handles in-flight content rendering. Keep typewriter/stream parsing changes there; current-question highlighting belongs to the user message state passed from `ChatContainer`/`ChatRenderItem`.
 - Tool result messages are not always final. A `tool` message with `streamingComplete === false` is an in-progress snapshot and should still render as executing.
 - Interactive auth cards are intentionally ephemeral. Once the command ends, times out, or the user cancels it, the timeline card should disappear.
 - `ChatContainer` is not the source of truth for session messages. Message selection lives in `ChatViewContent` (or replay state); the active list is passed down as props.

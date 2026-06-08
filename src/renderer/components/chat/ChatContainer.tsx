@@ -447,6 +447,25 @@ const ChatContainerInner: React.FC<ChatContainerProps> = ({
   // Build render items directly from messages, with tool-call merging support
   const renderItems = useRenderItems(allMessages, chatSessionId, messages, pendingInteractiveRequest);
   const fileExistsCache = useFileExistsCache(renderItems, chatId);
+  const isAnsweringCurrentQuestion =
+    chatStatus === 'sending_response' ||
+    chatStatus === 'compressing_context' ||
+    chatStatus === 'compressed_context' ||
+    Boolean(streamingMessageId);
+  const activeQuestionMessageId = useMemo(() => {
+    if (!isAnsweringCurrentQuestion) {
+      return undefined;
+    }
+
+    for (let i = renderItems.length - 1; i >= 0; i--) {
+      const item = renderItems[i];
+      if (item.type === 'user') {
+        return item.message.id;
+      }
+    }
+
+    return undefined;
+  }, [isAnsweringCurrentQuestion, renderItems]);
   const {
     renderItemsWithActivity,
     shouldShowTopLevelLoading,
@@ -532,6 +551,7 @@ const ChatContainerInner: React.FC<ChatContainerProps> = ({
                 onStartEdit={handleStartEdit}
                 canEditUserMessage={canEditUserMessage}
                 streamingMessageId={streamingMessageId}
+                activeQuestionMessageId={activeQuestionMessageId}
                 fileExistsCache={fileExistsCache}
                 handleContentChange={handleContentChange}
               />
