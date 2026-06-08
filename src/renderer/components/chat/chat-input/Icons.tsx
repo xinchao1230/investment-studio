@@ -51,6 +51,32 @@ export const send_icon_spin = (
   </svg>
 );
 
+export const stop_generating_spinner_icon = (
+  <svg
+    className="stop-generating-spinner-icon"
+    fill="none"
+    stroke="currentColor"
+    viewBox="0 0 24 24"
+    aria-hidden="true"
+  >
+    <circle
+      cx="12"
+      cy="12"
+      r="8"
+      strokeWidth={2}
+      opacity="0.28"
+    />
+    <circle
+      cx="12"
+      cy="12"
+      r="8"
+      strokeLinecap="round"
+      strokeWidth={2}
+      strokeDasharray="28 50"
+    />
+  </svg>
+);
+
 export const send_icon = (
   <svg
     className="send-icon"

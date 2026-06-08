@@ -29,6 +29,9 @@
 .chat-container-reverse {
   flex: 1;
   overflow-y: auto;
+  /* Chat owns latest-position scrolling; browser scroll anchoring fights
+     content-visibility in long conversations and can pull the viewport upward. */
+  overflow-anchor: none;
   padding: 24px;
   /* Scrollbar styles - hidden by default */
   scrollbar-width: thin;
@@ -379,7 +382,7 @@
 .typing-indicator:not(.inline) .dots span {
   width: 8px;
   height: 8px;
-  background-color: #a3a3a3;
+  background-color: var(--app-tint-color, var(--si-gold, #a3a3a3));
   border-radius: 50%;
   animation: pulse 1.4s ease-in-out infinite;
 }

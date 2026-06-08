@@ -84,6 +84,11 @@
   white-space: normal;
 }
 
+.user-message.active-question-message {
+  background: var(--app-tint-color-bg, var(--si-accent-soft, rgba(122, 150, 193, 0.14)));
+  transition: background-color 180ms ease;
+}
+
 .assistant-message {
   background: rgba(255, 255, 255, 0.98);
   padding: 0;

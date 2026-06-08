@@ -36,7 +36,9 @@ vi.mock('../../../lib/chat/agentChatSessionCacheManager', () => ({
 
 vi.mock('../message/Message', () => ({
   default: (props: any) => (
-    <div data-testid={`message-${props.message.id}`}>{props.message.id}</div>
+    <div data-testid={`message-${props.message.id}`} data-active-question={String(Boolean(props.isActiveQuestion))}>
+      {props.message.id}
+    </div>
   ),
 }));
 
@@ -98,6 +100,46 @@ describe('ChatContainer — compressing_context loading indicator', () => {
     // No "Compressing…" text — just the dots
     expect(screen.queryByText(/Compressing/i)).not.toBeInTheDocument();
     expect(container.querySelector('.typing-indicator')).toBeInTheDocument();
+  });
+
+  it('marks the latest user message as active while waiting for a response', () => {
+    const userMsg: Message = {
+      id: 'user-1',
+      role: 'user',
+      timestamp: Date.now(),
+      streamingComplete: true,
+      content: [{ type: 'text', text: 'Question?' }],
+    };
+
+    render(
+      <ChatContainer
+        messages={[userMsg]}
+        allMessages={[userMsg]}
+        chatStatus="sending_response"
+      />,
+    );
+
+    expect(screen.getByTestId('message-user-1')).toHaveAttribute('data-active-question', 'true');
+  });
+
+  it('does not mark the latest user message as active when chat is idle', () => {
+    const userMsg: Message = {
+      id: 'user-1',
+      role: 'user',
+      timestamp: Date.now(),
+      streamingComplete: true,
+      content: [{ type: 'text', text: 'Question?' }],
+    };
+
+    render(
+      <ChatContainer
+        messages={[userMsg]}
+        allMessages={[userMsg]}
+        chatStatus="idle"
+      />,
+    );
+
+    expect(screen.getByTestId('message-user-1')).toHaveAttribute('data-active-question', 'false');
   });
 });
 

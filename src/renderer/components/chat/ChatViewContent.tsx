@@ -16,7 +16,7 @@ import { createLogger } from '../../lib/utilities/logger';
 import { sendUserMessage, sendUserPrompt } from '@renderer/lib/chat/sendUserMessageOptimistically';
 import { editMessageAtom } from './edit-message.atom';
 import ChatSide from './ChatSide';
-import { InlinePreviewAtom } from './chat-side.atom';
+import { InlinePreviewAtom, SubAgentTasksSidepaneAtom } from './chat-side.atom';
 
 const logger = createLogger('[ChatViewContent]');
 
@@ -98,9 +98,11 @@ const ChatViewContent: React.FC<ChatViewContentProps> = memo(({
 
   const currentChatSessionId = useCurrentChatSessionId();
   const InlinePreviewActions = InlinePreviewAtom.useChange();
+  const subAgentTasksSidepaneActions = SubAgentTasksSidepaneAtom.useChange();
   // Close preview when switching chat sessions
   useEffect(() => {
     InlinePreviewActions.cancel();
+    subAgentTasksSidepaneActions.hide();
     editMessageActions.cancel();
   }, [currentChatSessionId]);
 
