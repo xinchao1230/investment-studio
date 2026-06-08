@@ -826,6 +826,21 @@ export const ResearchPage: React.FC = () => {
     return [];
   }, [activeMode, selectedCode, targetChats.chatsByCode, stella.chats]);
 
+  const activeChatTitle = useMemo(() => {
+    if (!liveChatSessionId) return null;
+    const lists = [
+      allChats.chats ?? [],
+      contextualChatList,
+      stella.chats ?? [],
+      ...Object.values(targetChats.chatsByCode).filter((list): list is NonNullable<typeof list> => !!list),
+    ];
+    for (const list of lists) {
+      const title = list.find((chat) => chat.chatSession_id === liveChatSessionId)?.title?.trim();
+      if (title) return title;
+    }
+    return null;
+  }, [allChats.chats, contextualChatList, liveChatSessionId, stella.chats, targetChats.chatsByCode]);
+
   const handleDeleteChat = useCallback(
     async (code: string, chatSessionId: string) => {
       const target = targetsRef.current.find((t) => t.stock_code === code);
@@ -1650,6 +1665,7 @@ export const ResearchPage: React.FC = () => {
           onToggleCollapsed={activeMode === 'stella' ? undefined : toggleRightCollapsed}
           chats={contextualChatList}
           activeChatSessionId={liveChatSessionId}
+          activeChatTitle={activeChatTitle}
           onNewChat={handleNewChatFromPane}
           onSelectChat={handleSelectChatFromPane}
           onRenameChat={handleRenameAnyChat}

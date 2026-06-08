@@ -16,7 +16,7 @@ import { createAttachmentsAtom, AttachmentList, AttachmentsStatus } from './chat
 import { TextArea, createTextareaAtom } from './chat-input/Textarea';
 import { ModelSelector } from './chat-input/ModelSelector';
 import { ReasoningEffortSelector } from './chat-input/ReasoningEffortSelector';
-import { attachment_icon_1, attachment_icon_2, cancel_icon, send_icon, send_icon_disabled, send_icon_spin } from './chat-input/Icons';
+import { attachment_icon_1, attachment_icon_2, send_icon, send_icon_disabled, send_icon_spin, stop_generating_spinner_icon } from './chat-input/Icons';
 import { atom } from '@/atom';
 import { useToast } from '../ui/ToastProvider';
 import { agentChatIpc } from '@renderer/lib/chat/agentChatIpc';
@@ -890,9 +890,10 @@ const ChatInput: React.FC<ChatInputProps> = ({
               onClick={onCancelChat}
               disabled={shouldLockComposeUi}
               className="send-button cancel-button" // send-button as base style, cancel-button as modifier
-              title="Cancel Chat"
+              title="Stop generating"
+              aria-label="Stop generating"
             >
-              {cancel_icon}
+              {stop_generating_spinner_icon}
             </button>
           ) : (
             <button disabled className="send-button" title="Waiting for chat status" type="button">

@@ -650,24 +650,38 @@
   background: rgba(239, 68, 68, 0.9);
 }
 
-/* Cancel Button - mirrors send-button styles but uses alert red */
+/* Cancel Button - mirrors send-button styles and follows the app tint */
 .send-button.cancel-button,
 .send-button:is(.cancel-button) {
-  background: #dc2626; /* prominent alert red */
+  background: var(--app-tint-color, var(--si-gold));
   color: white;
 }
 
 .send-button.cancel-button:hover:not(:disabled),
 .send-button:is(.cancel-button):hover:not(:disabled) {
-  background: #b91c1c; /* deeper red for hover state */
+  background: var(--app-tint-color-muted, var(--si-accent-strong));
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(220, 38, 38, 0.35);
+  box-shadow: 0 4px 12px rgba(var(--app-tint-color-rgb, 122, 150, 193), 0.35);
 }
 
 .cancel-icon {
   width: 16px; /* consistent with send-icon */
   height: 16px;
   flex-shrink: 0;
+}
+
+.stop-generating-spinner-icon {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  transform-origin: center;
+  animation: stopGeneratingSpinnerRotate 1.8s linear infinite;
+}
+
+@keyframes stopGeneratingSpinnerRotate {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 /* Send Button */

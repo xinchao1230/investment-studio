@@ -18,6 +18,28 @@ import {
 import ChatView from '../chat/ChatView';
 import { useMessages } from '../../lib/chat/agentChatSessionCacheManager';
 import { ChatHistoryPopover } from './ChatHistoryPopover';
+import { useAuthContext } from '../auth/AuthProvider';
+import { SKIP_LOGIN_ALIAS } from '@shared/constants/auth';
+import type { AuthData } from '../../types/authTypes';
+
+const DEFAULT_CHAT_TITLE = 'New Chat';
+const EMPTY_CHAT_HEADER_TITLE = 'Hello, how can I help?';
+
+function firstNameFromProfileValue(value: string | null | undefined): string | null {
+  const trimmed = value?.trim();
+  if (!trimmed) return null;
+  return trimmed.split(/\s+/)[0]?.replace(/^@+/, '') || null;
+}
+
+function getEmptyChatHeaderTitle(user: AuthData['ghcAuth']['user'] | null): string {
+  if (!user || user.login === SKIP_LOGIN_ALIAS) {
+    return EMPTY_CHAT_HEADER_TITLE;
+  }
+
+  const firstName = firstNameFromProfileValue(user.name)
+    ?? firstNameFromProfileValue(user.login);
+  return firstName ? `Hey ${firstName}, how can I help?` : EMPTY_CHAT_HEADER_TITLE;
+}
 
 export interface ChatHistoryPopoverChat {
   chatSession_id: string;
@@ -55,6 +77,8 @@ interface ResearchChatPaneProps {
   chats: ChatHistoryPopoverChat[];
   /** Currently active chat session id. */
   activeChatSessionId: string | null;
+  /** Resolved title for the active live session, even when it is outside `chats`. */
+  activeChatTitle?: string | null;
   /** Create a new chat session. */
   onNewChat: () => void | Promise<void>;
   /** Switch to an existing chat session. */
@@ -313,6 +337,7 @@ export const ResearchChatPane: React.FC<ResearchChatPaneProps> = ({
   mode = 'workspace',
   chats,
   activeChatSessionId,
+  activeChatTitle,
   onNewChat,
   onSelectChat,
   onRenameChat,
@@ -322,6 +347,7 @@ export const ResearchChatPane: React.FC<ResearchChatPaneProps> = ({
   onCreateTargetChatFromHistory,
   onCreateGlobalChatFromHistory,
 }) => {
+  const { user } = useAuthContext();
   const messages = useMessages();
   /**
    * Empty-state check mirrors ChatViewContent.tsx: a chat is "empty" iff it
@@ -356,6 +382,19 @@ export const ResearchChatPane: React.FC<ResearchChatPaneProps> = ({
 
   const [historyOpen, setHistoryOpen] = useState(false);
   useEffect(() => { setHistoryOpen(false); }, [targetCode]);
+
+  const emptyHeaderTitle = React.useMemo(
+    () => getEmptyChatHeaderTitle(user),
+    [user?.login, user?.name],
+  );
+
+  const headerTitle = React.useMemo(() => {
+    const activeChat = activeChatSessionId
+      ? chats.find((chat) => chat.chatSession_id === activeChatSessionId)
+      : null;
+    const title = activeChatTitle?.trim() || activeChat?.title?.trim();
+    return title && title !== DEFAULT_CHAT_TITLE ? title : emptyHeaderTitle;
+  }, [activeChatSessionId, activeChatTitle, chats, emptyHeaderTitle]);
 
   const hasTarget = Boolean(targetName || targetCode);
 
@@ -409,6 +448,9 @@ export const ResearchChatPane: React.FC<ResearchChatPaneProps> = ({
         >
           <MessagesSquare size={14} />
         </button>
+        <div className="rw-chat-header-title" title={headerTitle}>
+          {headerTitle}
+        </div>
         <div className="flex-1" />
         {onToggleCollapsed && (
           <button

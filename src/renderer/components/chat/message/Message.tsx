@@ -34,6 +34,7 @@ interface MessageProps {
   presentedFiles?: PresentedFile[]; // Files from present tool to display
   canEditUserMessage?: boolean;
   onEditUserMessage?: (msg: UserMessage) => void;
+  isActiveQuestion?: boolean;
 }
 
 // 🆕 Check whether content contains the new image format (checks for IMAGE_REGISTRY tags)
@@ -474,14 +475,19 @@ const Message: React.FC<MessageProps> = ({
   presentedFiles = [],
   chatId,
   canEditUserMessage = false,
-  onEditUserMessage
+  onEditUserMessage,
+  isActiveQuestion = false,
 }) => {
   const [isCopied, setIsCopied] = useState(false);
 
   const getMessageClass = () => {
+    const activeQuestionClass = message.role === 'user' && isActiveQuestion
+      ? ' active-question-message'
+      : '';
+
     switch (message.role) {
       case 'user':
-        return 'message user-message';
+        return `message user-message${activeQuestionClass}`;
       case 'assistant':
         // If tool_calls are present, add the has-tool-calls class name
         return message.tool_calls && message.tool_calls.length > 0

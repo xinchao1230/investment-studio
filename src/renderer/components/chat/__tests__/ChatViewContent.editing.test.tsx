@@ -16,6 +16,8 @@ const {
   mockEditStart,
   mockEditCancel,
   mockEditSave,
+  mockInlinePreviewCancel,
+  mockSubAgentTasksHide,
 } = vi.hoisted(() => ({
   mockUseCurrentChatSessionId: vi.fn(() => 'chat-session-1'),
   mockCanEditUserMessage: vi.fn(),
@@ -25,6 +27,8 @@ const {
   mockEditStart: vi.fn(),
   mockEditCancel: vi.fn(),
   mockEditSave: vi.fn(),
+  mockInlinePreviewCancel: vi.fn(),
+  mockSubAgentTasksHide: vi.fn(),
 }));
 
 vi.mock('../../../styles/ContentView.css', async () => ({}));
@@ -96,6 +100,26 @@ vi.mock('../edit-message.atom', () => {
   };
 });
 
+vi.mock('../chat-side.atom', () => ({
+  InlinePreviewAtom: {
+    use: () => [null, { cancel: mockInlinePreviewCancel }],
+    useChange: () => ({ cancel: mockInlinePreviewCancel }),
+  },
+  SubAgentTasksSidepaneAtom: {
+    use: () => [
+      { visible: false, selectedTaskId: null },
+      {
+        hide: mockSubAgentTasksHide,
+        show: vi.fn(),
+        effectiveToggle: vi.fn(),
+        selectTask: vi.fn(),
+        backToList: vi.fn(),
+      },
+    ],
+    useChange: () => ({ hide: mockSubAgentTasksHide }),
+  },
+}));
+
 vi.mock('../ChatContainer', async () => {
   const { editMessageAtom } = await import('../edit-message.atom');
   return { default: (props: any) => {
@@ -147,6 +171,7 @@ const createTextMessage = MessageHelper.createTextMessage;
 describe('ChatViewContent user-message editing', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockUseCurrentChatSessionId.mockReturnValue('chat-session-1');
     mockCanEditUserMessage.mockResolvedValue({ canEdit: true });
     mockUseMessagesWithStream.mockReturnValue({ messages: [], streamingMessageId: undefined });
   });
@@ -236,6 +261,34 @@ describe('ChatViewContent user-message editing', () => {
     expect(screen.getByTestId('bottom-chat-input')).toHaveAttribute('data-locked', 'true');
     expect(screen.queryByTestId('zero-states')).not.toBeInTheDocument();
     expect(container.querySelector('.chat-content')?.classList.contains('empty-chat')).toBe(false);
+  });
+
+  it('closes sub-agent task sidepane when the current chat session changes', async () => {
+    const { rerender } = render(
+      <ChatViewContent
+        chatId="chat-1"
+        chatStatus="idle"
+        agentName="OpenKosmos"
+      />,
+    );
+
+    await waitFor(() => {
+      expect(mockSubAgentTasksHide).toHaveBeenCalled();
+    });
+    mockSubAgentTasksHide.mockClear();
+
+    mockUseCurrentChatSessionId.mockReturnValue('chat-session-2');
+    rerender(
+      <ChatViewContent
+        chatId="chat-2"
+        chatStatus="idle"
+        agentName="OpenKosmos"
+      />,
+    );
+
+    await waitFor(() => {
+      expect(mockSubAgentTasksHide).toHaveBeenCalledTimes(1);
+    });
   });
 
   it('keeps say-hi visible only while the current session has no real user or assistant messages', () => {

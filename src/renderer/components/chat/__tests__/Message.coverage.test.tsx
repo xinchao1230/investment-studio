@@ -221,6 +221,7 @@ describe('Message — streaming assistant message', () => {
       <MessageComponent message={makeAssistantMessage('Typing...')} isStreaming />,
     );
     expect(container.querySelector('.markdown-body.streaming')).toBeInTheDocument();
+    expect(container.querySelector('.active-question-message')).not.toBeInTheDocument();
   });
 
   it('does not add streaming class when isStreaming is false', () => {
@@ -228,6 +229,23 @@ describe('Message — streaming assistant message', () => {
       <MessageComponent message={makeAssistantMessage('Done.')} isStreaming={false} />,
     );
     expect(container.querySelector('.markdown-body.streaming')).not.toBeInTheDocument();
+    expect(container.querySelector('.active-question-message')).not.toBeInTheDocument();
+  });
+});
+
+describe('Message — active question message', () => {
+  it('adds active question class to user message when requested', () => {
+    const { container } = render(
+      <MessageComponent message={makeUserMessage([{ type: 'text', text: 'Question?' }])} isActiveQuestion />,
+    );
+    expect(container.querySelector('.user-message.active-question-message')).toBeInTheDocument();
+  });
+
+  it('does not add active question class to ordinary user message', () => {
+    const { container } = render(
+      <MessageComponent message={makeUserMessage([{ type: 'text', text: 'Question?' }])} />,
+    );
+    expect(container.querySelector('.user-message.active-question-message')).not.toBeInTheDocument();
   });
 });
 

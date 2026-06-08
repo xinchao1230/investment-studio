@@ -16,8 +16,10 @@ import type { Message } from '@shared/types/chatTypes';
 
 // Mock child components
 vi.mock('../message/Message', async () => ({
-  default: ({ message }: { message: Message }) => (
-    <div data-testid="message-component">{(message as any).id}</div>
+  default: ({ message, isActiveQuestion }: { message: Message; isActiveQuestion?: boolean }) => (
+    <div data-testid="message-component" data-active-question={String(Boolean(isActiveQuestion))}>
+      {(message as any).id}
+    </div>
   ),
 }));
 
@@ -311,14 +313,16 @@ const baseProps = {
 describe('ChatRenderItemComponent', () => {
   it('renders loading indicator for activity-loading', () => {
     const item: ChatRenderItem = { type: 'activity-loading', sectionKey: 'sk', index: 0 };
-    render(<ChatRenderItemComponent {...baseProps} item={item} />);
+    const { container } = render(<ChatRenderItemComponent {...baseProps} item={item} />);
     expect(screen.getByTestId('loading')).toBeInTheDocument();
+    expect(container.querySelector('.chat-activity-slot.active-question-message')).not.toBeInTheDocument();
   });
 
   it('renders loading indicator for activity-placeholder', () => {
     const item: ChatRenderItem = { type: 'activity-placeholder', sectionKey: 'sk', index: 0 };
-    render(<ChatRenderItemComponent {...baseProps} item={item} />);
+    const { container } = render(<ChatRenderItemComponent {...baseProps} item={item} />);
     expect(screen.getByTestId('loading')).toBeInTheDocument();
+    expect(container.querySelector('.chat-activity-slot.active-question-message')).not.toBeInTheDocument();
   });
 
   it('renders InteractiveRequestCard for interactive-request', () => {
@@ -417,6 +421,20 @@ describe('ChatRenderItemComponent', () => {
     const item: ChatRenderItem = { type: 'user', message: msg, index: 0 };
     render(<ChatRenderItemComponent {...baseProps} item={item} />);
     expect(screen.getByTestId('message-component')).toBeInTheDocument();
+  });
+
+  it('marks matching user message as the active question', () => {
+    const msg = makeMessage({ id: 'u-active', role: 'user' });
+    const item: ChatRenderItem = { type: 'user', message: msg, index: 0 };
+    render(<ChatRenderItemComponent {...baseProps} item={item} activeQuestionMessageId="u-active" />);
+    expect(screen.getByTestId('message-component')).toHaveAttribute('data-active-question', 'true');
+  });
+
+  it('does not mark non-matching user message as the active question', () => {
+    const msg = makeMessage({ id: 'u-inactive', role: 'user' });
+    const item: ChatRenderItem = { type: 'user', message: msg, index: 0 };
+    render(<ChatRenderItemComponent {...baseProps} item={item} activeQuestionMessageId="other-message" />);
+    expect(screen.getByTestId('message-component')).toHaveAttribute('data-active-question', 'false');
   });
 
   it('renders MessageComponent for assistant type', () => {
