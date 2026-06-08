@@ -91,6 +91,19 @@ describe('ResearchChatPane header — active title', () => {
 
     expect(screen.getByText('赛轮轮胎半年股份翻倍情景分析')).toBeInTheDocument();
   });
+
+  it('uses the resolved active title when the live chat is outside the visible list', () => {
+    render(
+      <ResearchChatPane
+        {...baseProps}
+        chats={[]}
+        activeChatSessionId="target-bound-session"
+        activeChatTitle="SH赛轮轮胎半年股份翻倍情景分析"
+      />,
+    );
+
+    expect(screen.getByText('SH赛轮轮胎半年股份翻倍情景分析')).toBeInTheDocument();
+  });
 });
 
 describe('ResearchChatPane header — history popover', () => {

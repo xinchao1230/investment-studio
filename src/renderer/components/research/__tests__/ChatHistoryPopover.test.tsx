@@ -35,6 +35,95 @@ describe('ChatHistoryPopover — basic rendering', () => {
     expect(inactiveRow?.getAttribute('aria-current')).toBe('false');
   });
 
+  it('does not render a leading chat icon for history rows', () => {
+    render(<ChatHistoryPopover {...baseProps} />);
+    const activeRow = screen.getByText('First chat').closest('[role="option"]');
+    const directSvg = Array.from(activeRow?.children ?? []).find(
+      (child) => child.tagName.toLowerCase() === 'svg',
+    );
+    expect(directSvg).toBeUndefined();
+  });
+
+  it('groups all-chat rows by stock code and routes target-bound rows with their targetCode', () => {
+    const onSelectChat = vi.fn();
+    render(
+      <ChatHistoryPopover
+        {...baseProps}
+        chats={[{
+          chatSession_id: 'target-chat',
+          title: '601058.SH赛轮轮胎半年股份翻倍情景分析',
+          targetCode: '601058.SH',
+          last_updated: Date.now(),
+        }]}
+        activeChatSessionId="target-chat"
+        onSelectChat={onSelectChat}
+      />,
+    );
+
+    expect(screen.getByText('601058.SH')).toBeInTheDocument();
+    expect(screen.getByText('赛轮轮胎半年股份翻倍情景分析').closest('[role="option"]')?.className)
+      .toContain('is-grouped');
+    fireEvent.click(screen.getByText('赛轮轮胎半年股份翻倍情景分析'));
+    expect(onSelectChat).toHaveBeenCalledWith('target-chat', '601058.SH');
+  });
+
+  it('includes stock names in all-chat group labels when a target name lookup is available', () => {
+    render(
+      <ChatHistoryPopover
+        {...baseProps}
+        chats={[{
+          chatSession_id: 'target-chat',
+          title: '601058.SH赛轮轮胎半年股份翻倍情景分析',
+          targetCode: '601058.SH',
+          last_updated: Date.now(),
+        }]}
+        activeChatSessionId="target-chat"
+        targetNameLookup={(code) => (code === '601058.SH' ? '赛轮轮胎' : null)}
+      />,
+    );
+
+    expect(screen.getByText('赛轮轮胎 601058.SH')).toBeInTheDocument();
+    expect(screen.getByText('赛轮轮胎半年股份翻倍情景分析')).toBeInTheDocument();
+  });
+
+  it('puts rows without a stock code in the General group', () => {
+    render(
+      <ChatHistoryPopover
+        {...baseProps}
+        chats={[{ chatSession_id: 'global-chat', title: 'Market overview', last_updated: Date.now() }]}
+        activeChatSessionId="global-chat"
+      />,
+    );
+
+    expect(screen.getByText('General')).toBeInTheDocument();
+    expect(screen.getByText('Market overview')).toBeInTheDocument();
+  });
+
+  it('does not render group labels when the popover is already scoped to a target', () => {
+    const onSelectChat = vi.fn();
+    render(
+      <ChatHistoryPopover
+        {...baseProps}
+        chats={[{
+          chatSession_id: 'target-chat',
+          title: 'New Chat',
+          targetCode: '601058.SH',
+          last_updated: Date.now(),
+        }]}
+        activeChatSessionId="target-chat"
+        targetCode="601058.SH"
+        onSelectChat={onSelectChat}
+      />,
+    );
+
+    expect(screen.getByText('New Chat')).toBeInTheDocument();
+    expect(screen.queryByText('601058.SH')).toBeNull();
+    expect(screen.getByText('New Chat').closest('[role="option"]')?.className)
+      .not.toContain('is-grouped');
+    fireEvent.click(screen.getByText('New Chat'));
+    expect(onSelectChat).toHaveBeenCalledWith('target-chat', '601058.SH');
+  });
+
   it('shows empty-state text when chats is []', () => {
     render(<ChatHistoryPopover {...baseProps} chats={[]} />);
     expect(screen.getByText(/no chats yet/i)).toBeInTheDocument();
@@ -157,11 +246,27 @@ describe('ChatHistoryPopover — row actions', () => {
     expect(screen.queryByDisplayValue('should not commit')).toBeNull();
   });
 
-  it('delete invokes onDeleteChat with no confirm dialog', () => {
+  it('delete asks for confirmation before deleting used chats', () => {
     const onDeleteChat = vi.fn();
     render(<ChatHistoryPopover {...baseProps} onDeleteChat={onDeleteChat} />);
     fireEvent.click(screen.getAllByRole('button', { name: /delete chat/i })[0]);
+    expect(onDeleteChat).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: /confirm delete/i }));
     expect(onDeleteChat).toHaveBeenCalledWith('s1', null);
+  });
+
+  it('delete skips confirmation for untouched new chats', () => {
+    const onDeleteChat = vi.fn();
+    render(
+      <ChatHistoryPopover
+        {...baseProps}
+        chats={[{ chatSession_id: 's-new', title: 'New Chat', last_updated: Date.now() }]}
+        activeChatSessionId="s-new"
+        onDeleteChat={onDeleteChat}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: /delete chat/i }));
+    expect(onDeleteChat).toHaveBeenCalledWith('s-new', null);
   });
 
   it('rename button click does NOT trigger row select+close', () => {
@@ -206,7 +311,22 @@ describe('ChatHistoryPopover — create entries (Workbench mode)', () => {
       />,
     );
     expect(screen.getByText(/^new chat$/i)).toBeInTheDocument();
-    expect(screen.getByText(/new global chat/i)).toBeInTheDocument();
+    expect(screen.getByText(/new general chat/i)).toBeInTheDocument();
+  });
+
+  it('includes the current target name and stock code in the target create row label', () => {
+    render(
+      <ChatHistoryPopover
+        {...baseProps}
+        showCreateActions
+        selectedTargetName="赛轮轮胎"
+        targetCode="601058.SH"
+        onCreateTargetChat={vi.fn()}
+        onCreateGlobalChat={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText('New chat for 赛轮轮胎 (601058.SH)')).toBeInTheDocument();
   });
 
   it('omits the target create row when selectedTargetName is null', () => {
@@ -220,7 +340,7 @@ describe('ChatHistoryPopover — create entries (Workbench mode)', () => {
       />,
     );
     expect(screen.queryByText(/^new chat$/i)).toBeNull();
-    expect(screen.getByText(/new global chat/i)).toBeInTheDocument();
+    expect(screen.getByText(/new general chat/i)).toBeInTheDocument();
   });
 
   it('omits the target create row when selectedTargetName is whitespace', () => {
@@ -239,7 +359,7 @@ describe('ChatHistoryPopover — create entries (Workbench mode)', () => {
   it('renders no create rows by default (Stella mode parity)', () => {
     render(<ChatHistoryPopover {...baseProps} />);
     expect(screen.queryByText(/^new chat$/i)).toBeNull();
-    expect(screen.queryByText(/new global chat/i)).toBeNull();
+    expect(screen.queryByText(/new general chat/i)).toBeNull();
   });
 
   it('clicking target create row calls handler then closes the popover', () => {
@@ -251,18 +371,19 @@ describe('ChatHistoryPopover — create entries (Workbench mode)', () => {
         {...baseProps}
         showCreateActions
         selectedTargetName="Tencent"
+        targetCode="0700.HK"
         onCreateTargetChat={onCreateTargetChat}
         onCreateGlobalChat={onCreateGlobalChat}
         onClose={onClose}
       />,
     );
-    fireEvent.click(screen.getByText(/^new chat$/i));
+    fireEvent.click(screen.getByText('New chat for Tencent (0700.HK)'));
     expect(onCreateTargetChat).toHaveBeenCalledTimes(1);
     expect(onCreateGlobalChat).not.toHaveBeenCalled();
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
-  it('clicking global create row calls handler then closes the popover', () => {
+  it('clicking general create row calls handler then closes the popover', () => {
     const onCreateTargetChat = vi.fn();
     const onCreateGlobalChat = vi.fn();
     const onClose = vi.fn();
@@ -276,7 +397,7 @@ describe('ChatHistoryPopover — create entries (Workbench mode)', () => {
         onClose={onClose}
       />,
     );
-    fireEvent.click(screen.getByText(/new global chat/i));
+    fireEvent.click(screen.getByText(/new general chat/i));
     expect(onCreateGlobalChat).toHaveBeenCalledTimes(1);
     expect(onCreateTargetChat).not.toHaveBeenCalled();
     expect(onClose).toHaveBeenCalledTimes(1);

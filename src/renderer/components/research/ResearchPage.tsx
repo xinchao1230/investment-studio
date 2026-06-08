@@ -230,6 +230,19 @@ export const ResearchPage: React.FC = () => {
   const targetChats = useTargetChats();
   const targetsRef = useRef(targets);
   targetsRef.current = targets;
+  const targetNameByCode = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const target of targets) {
+      const code = target.stock_code?.trim();
+      const name = target.name?.trim();
+      if (code && name) map.set(code.toUpperCase(), name);
+    }
+    return map;
+  }, [targets]);
+  const getTargetNameForCode = useCallback(
+    (code: string) => targetNameByCode.get(code.trim().toUpperCase()) ?? null,
+    [targetNameByCode],
+  );
   // Ref mirror of selectedCode so async effects can race-check it.
   const selectedCodeRef = useRef(selectedCode);
   selectedCodeRef.current = selectedCode;
@@ -803,9 +816,9 @@ export const ResearchPage: React.FC = () => {
   }, [activeMode, targetChats, stella, allChats]);
 
   const handleSelectChatFromPane = useCallback(
-    async (chatSessionId: string) => {
+    async (chatSessionId: string, rowTargetCode?: string | null) => {
       if (activeMode === 'stella') {
-        await stella.selectChat(chatSessionId);
+        await handleSelectAnyChat(chatSessionId, rowTargetCode ?? null);
         return;
       }
       const code = selectedCodeRef.current;
@@ -813,7 +826,7 @@ export const ResearchPage: React.FC = () => {
       const target = targetsRef.current.find((t) => t.stock_code === code);
       await targetChats.selectChatForTarget(code, target, chatSessionId);
     },
-    [activeMode, targetChats, stella],
+    [activeMode, handleSelectAnyChat, targetChats],
   );
 
   const contextualChatList = useMemo(() => {
@@ -825,6 +838,28 @@ export const ResearchPage: React.FC = () => {
     }
     return [];
   }, [activeMode, selectedCode, targetChats.chatsByCode, stella.chats]);
+
+  const chatHistoryList = useMemo(() => {
+    if (activeMode === 'stella') {
+      return allChats.chats ?? stella.chats ?? [];
+    }
+    return contextualChatList;
+  }, [activeMode, allChats.chats, contextualChatList, stella.chats]);
+
+  const activeChatTitle = useMemo(() => {
+    if (!liveChatSessionId) return null;
+    const lists = [
+      allChats.chats ?? [],
+      contextualChatList,
+      stella.chats ?? [],
+      ...Object.values(targetChats.chatsByCode).filter((list): list is NonNullable<typeof list> => !!list),
+    ];
+    for (const list of lists) {
+      const title = list.find((chat) => chat.chatSession_id === liveChatSessionId)?.title?.trim();
+      if (title) return title;
+    }
+    return null;
+  }, [allChats.chats, contextualChatList, liveChatSessionId, stella.chats, targetChats.chatsByCode]);
 
   const handleDeleteChat = useCallback(
     async (code: string, chatSessionId: string) => {
@@ -1509,7 +1544,14 @@ export const ResearchPage: React.FC = () => {
   return (
     <LayoutProvider>
     <PasteToWorkspaceProvider>
-    <div ref={setRootRef} data-theme="research" data-os={researchOs} data-active-mode={activeMode} className="flex h-full w-full">
+    <div
+      ref={setRootRef}
+      data-theme="research"
+      data-os={researchOs}
+      data-active-mode={activeMode}
+      data-left-collapsed={leftCollapsed ? 'true' : 'false'}
+      className="flex h-full w-full"
+    >
       {leftCollapsed ? (
         <div
           className="rw-pane-left rw-pane-left--collapsed"
@@ -1575,12 +1617,7 @@ export const ResearchPage: React.FC = () => {
             onSelectAnyChat={handleSelectAnyChat}
             onDeleteAnyChat={handleDeleteAnyChat}
             onRenameAnyChat={handleRenameAnyChat}
-            targetPillLookup={(code) => {
-              const t = targetsRef.current.find((tt) => tt.stock_code === code);
-              if (!t) return code;
-              // Unlisted targets store stock_code === name; collapse to one label.
-              return t.stock_code === t.name ? t.name : t.stock_code;
-            }}
+            targetNameLookup={getTargetNameForCode}
             width={leftWidth}
             onCollapse={toggleLeftCollapsed}
             topSlot={showAddForm ? (
@@ -1648,8 +1685,9 @@ export const ResearchPage: React.FC = () => {
           fill={activeMode === 'stella'}
           collapsed={activeMode === 'stella' ? false : rightCollapsed}
           onToggleCollapsed={activeMode === 'stella' ? undefined : toggleRightCollapsed}
-          chats={contextualChatList}
+          chats={chatHistoryList}
           activeChatSessionId={liveChatSessionId}
+          activeChatTitle={activeChatTitle}
           onNewChat={handleNewChatFromPane}
           onSelectChat={handleSelectChatFromPane}
           onRenameChat={handleRenameAnyChat}
@@ -1674,6 +1712,7 @@ export const ResearchPage: React.FC = () => {
               void allChats.refresh();
             });
           }}
+          targetNameLookup={getTargetNameForCode}
         />
       </div>
       <Dialog open={!!pendingDelete} onOpenChange={(open) => { if (!open && !deleteBusy) setPendingDelete(null); }}>

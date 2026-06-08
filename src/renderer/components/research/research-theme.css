@@ -125,16 +125,22 @@
   line-height: 1;
 }
 /* In Stella mode the center workbench is hidden, so the right pane's chat
-   header sits directly next to the left pane's tab row. The chat header's
-   default 12px left padding (px-3) then doubles up with the left pane's
-   12px right padding, producing a 24px void between the rightmost left-pane
-   button and the leftmost chat-header button (New chat) — about 3x the
-   inter-button gap. Drop the chat header's left padding to 0 in Stella mode
-   so the New chat / history buttons sit close to the inter-pane seam and the
-   horizontal button rhythm across the two panes reads as one continuous
-   group. Scoped via data-research-mode set on .rw-pane-right. */
+   header sits directly next to the left pane's tab row. On non-macOS, the
+   separate title bar keeps this area clear, so drop the chat header's left
+   padding to keep the New chat / history buttons close to the inter-pane seam.
+   macOS is handled below because the frameless traffic-light area needs inset. */
 [data-theme="research"] .rw-pane-right[data-research-mode="stella"] > .rw-divider {
   padding-left: 0;
+}
+/* macOS frameless windows float the traffic-light controls over the top-left
+   renderer area. Stella's chat header should keep a small default inset even
+   when the left pane is expanded, and a larger inset when the collapsed left
+   rail leaves the header near the traffic lights. */
+[data-theme="research"][data-os="darwin"] .rw-pane-right[data-research-mode="stella"] > .rw-divider {
+  padding-left: 12px;
+}
+[data-theme="research"][data-os="darwin"][data-left-collapsed="true"] .rw-pane-right[data-research-mode="stella"] > .rw-divider {
+  padding-left: 52px;
 }
 /* Top hairline — used by the sidebar's bottom-left footer to separate it
    from the scrollable body above. */
@@ -346,6 +352,15 @@
 }
 [data-theme="research"] .rw-chat-row.is-active:hover {
   background: var(--rw-accent-soft);
+}
+[data-theme="research"] .rw-chat-group-label {
+  padding: 10px 18px 4px;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--rw-text-3);
 }
 
 /* Sidebar header / tab styles */
@@ -657,27 +672,6 @@
 [data-theme="research"] .rw-welcome-card--intro {
   grid-column: 1 / -1;
 }
- * chat list. Compact and color-muted so it does not steal attention from
- * the chat title. */
-[data-theme="research"] .rw-chat-row-pill {
-  display: inline-flex;
-  align-items: center;
-  font-size: 10px;
-  line-height: 1;
-  padding: 2px 5px;
-  margin-right: 5px;
-  border-radius: 3px;
-  /* Accent-tinted to follow the brand palette. */
-  background: color-mix(in srgb, var(--si-gold) 10%, transparent);
-  color: var(--si-ink);
-  max-width: 84px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  flex-shrink: 0;
-  user-select: none;
-}
-
 /* Chat message bubble typography — research workspace uses a denser scale
    than the standalone /agent window (default 15px). Drop body text to 13px
    so a single screen shows more of the conversation. */
@@ -1678,11 +1672,17 @@
   font-size: 11px;
   color: var(--rw-text-3);
 }
-/* Chat-history popover chat row. Mirrors the create row's icon column + left
-   padding (12px), uses smaller vertical padding so the popover packs more
-   chats per viewport, and inlines the relative timestamp on the right. On
-   hover the timestamp hides so the rename/delete action buttons can take its
-   place without a layout jump from a wider button cluster. */
+[data-theme="research"] .rw-history-group-label {
+  padding: 8px 12px 4px;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--rw-text-3);
+}
+/* Chat-history popover chat row. Uses smaller vertical padding so the popover
+   packs more chats per viewport. */
 [data-theme="research"] .rw-history-chat-row {
   display: flex;
   align-items: center;
@@ -1692,12 +1692,17 @@
   font-size: 13px;
   cursor: pointer;
 }
+[data-theme="research"] .rw-history-chat-row.is-grouped {
+  padding-left: 28px;
+}
+[data-theme="research"] .rw-history-chat-row.is-active {
+  background: var(--rw-accent-soft);
+}
+[data-theme="research"] .rw-history-chat-row.is-active:hover {
+  background: var(--rw-accent-soft);
+}
 [data-theme="research"] .rw-history-chat-row:hover {
   background: #fafafa;
-}
-[data-theme="research"] .rw-history-chat-row > svg:first-child {
-  color: var(--rw-text-2);
-  flex-shrink: 0;
 }
 [data-theme="research"] .rw-history-chat-row .rw-side-icon-btn {
   width: 20px;
@@ -1709,10 +1714,4 @@
 [data-theme="research"] .rw-history-chat-row .rw-side-icon-btn.rw-history-confirm-yes:hover {
   background: rgba(220, 38, 38, 0.1);
   color: #dc2626;
-}
-[data-theme="research"] .rw-history-chat-time {
-  font-size: 11px;
-  color: #9ca3af;
-  flex-shrink: 0;
-  font-variant-numeric: tabular-nums;
 }

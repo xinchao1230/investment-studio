@@ -28,6 +28,12 @@ import { TargetTreeFileContextMenu } from './TargetTreeFileContextMenu';
 import { TargetTreeFolderContextMenu } from './TargetTreeFolderContextMenu';
 import { CreateItemDialog } from './CreateItemDialog';
 import { useToast } from '../ui/ToastProvider';
+import {
+  getChatHistoryDisplayTitle,
+  getChatHistoryGroupLabel,
+  groupChatHistory,
+  type ChatHistoryTargetNameLookup,
+} from './chatHistoryGrouping';
 
 export interface Target {
   stock_code: string;
@@ -116,7 +122,7 @@ interface TargetListSidebarProps {
    * The full chronological list of every chat session under the active
    * chat config. When present, the Ask tab renders this list instead of
    * the legacy Stella-only list. Each entry may carry a `targetCode`;
-   * rows with non-null targetCode get a small pill in front of the title.
+   * rows are grouped by stock code, with global rows grouped under "global".
    */
   allChats?: ResearchChatSessionMeta[];
   /** Active session id used for the Ask list's is-active highlight. */
@@ -127,12 +133,8 @@ interface TargetListSidebarProps {
   onDeleteAnyChat?: (chatSessionId: string, targetCode: string | null) => void;
   /** Rename handler — routed to the right hook by targetCode. */
   onRenameAnyChat?: (chatSessionId: string, targetCode: string | null, newTitle: string) => void;
-  /**
-   * Lookup display label for a target pill. The renderer needs to map
-   * `targetCode` to a short pill string (e.g. `00700.HK`, `海底捞`).
-   * Falls back to the raw targetCode when this map doesn't have an entry.
-   */
-  targetPillLookup?: (targetCode: string) => string;
+  /** Maps stock codes to display names for all-chat group labels. */
+  targetNameLookup?: ChatHistoryTargetNameLookup;
 }
 
 function fileIcon(relPath: string) {
@@ -183,7 +185,7 @@ export const TargetListSidebar: React.FC<TargetListSidebarProps> = ({
   onSelectAnyChat,
   onDeleteAnyChat,
   onRenameAnyChat,
-  targetPillLookup,
+  targetNameLookup,
 }) => {
   const { showError, showSuccess } = useToast();
   const clipboard = useTargetTreeClipboard();
@@ -857,84 +859,83 @@ export const TargetListSidebar: React.FC<TargetListSidebarProps> = ({
               ? list
               : [...list].sort((a, b) => a.chatSession_id.localeCompare(b.chatSession_id));
 
-            return sorted.map((chat) => {
-              const targetCode = chat.targetCode ?? null;
-              const pill = targetCode
-                ? (targetPillLookup ? targetPillLookup(targetCode) : targetCode)
-                : null;
-              const isActive = activeId === chat.chatSession_id;
-              return (
-                <div
-                  key={chat.chatSession_id}
-                  className={`rw-tree-row rw-chat-row group ${isActive ? 'is-active' : ''}`}
-                  style={{ paddingLeft: 12 }}
-                  onClick={() => {
-                    if (useUnified) {
-                      onSelectAnyChat?.(chat.chatSession_id, targetCode);
-                    } else {
-                      onSelectStellaChat?.(chat.chatSession_id);
-                    }
-                  }}
-                >
-                  <MessageSquare size={13} className="flex-shrink-0 mr-1 text-[var(--rw-text-3)]" />
-                  {pill && (
-                    <span className="rw-chat-row-pill" title={targetCode || ''}>
-                      {pill}
-                    </span>
-                  )}
-                  <span className="truncate flex-1">{chat.title || 'Untitled'}</span>
-                  {(useUnified ? onRenameAnyChat : onRenameStellaChat) && (
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        if (useUnified) {
-                          openRename({ kind: 'ask', targetCode, sessionId: chat.chatSession_id, title: chat.title || '' });
-                        } else {
-                          openRename({ kind: 'stella', sessionId: chat.chatSession_id, title: chat.title || '' });
-                        }
-                      }}
-                      className="ml-1 p-0.5 rounded hidden group-hover:inline-flex hover:bg-black/10 text-[var(--rw-text-3)]"
-                      title="Rename"
-                    >
-                      <Pencil size={11} />
-                    </button>
-                  )}
-                  {(useUnified ? onDeleteAnyChat : onDeleteStellaChat) && (
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        // Skip the confirm dialog for chats that have never
-                        // received a user message — the backend stamps such
-                        // sessions with the literal 'New Chat' title and
-                        // rewrites it on the first send (see
-                        // agentChatSessionService.ts), so an exact match is a
-                        // reliable "untouched" signal.
-                        const untouched = !chat.title || chat.title === 'New Chat';
-                        if (untouched) {
-                          if (useUnified) {
-                            void onDeleteAnyChat?.(chat.chatSession_id, targetCode);
-                          } else {
-                            void onDeleteStellaChat?.(chat.chatSession_id);
-                          }
-                          return;
-                        }
-                        if (useUnified) {
-                          setPendingDeleteChat({ kind: 'ask', targetCode, sessionId: chat.chatSession_id, title: chat.title || 'Untitled' });
-                        } else {
-                          setPendingDeleteChat({ kind: 'stella', sessionId: chat.chatSession_id, title: chat.title || 'Untitled' });
-                        }
-                      }}
-                      className="ml-1 p-0.5 rounded hidden group-hover:inline-flex hover:bg-black/10 text-[var(--rw-text-3)] hover:text-red-500"
-                      title="Delete chat"
-                    >
-                      <Trash2 size={11} />
-                    </button>
-                  )}
+            return groupChatHistory(sorted).map((chatGroup) => (
+              <React.Fragment key={chatGroup.key}>
+                <div className="rw-chat-group-label">
+                  {getChatHistoryGroupLabel(chatGroup.key, targetNameLookup)}
                 </div>
-              );
-            });
+                {chatGroup.chats.map((chat) => {
+                  const targetCode = chat.targetCode ?? null;
+                  const isActive = activeId === chat.chatSession_id;
+                  const displayTitle = getChatHistoryDisplayTitle(chat.title, chatGroup.key);
+                  return (
+                    <div
+                      key={chat.chatSession_id}
+                      className={`rw-tree-row rw-chat-row rw-chat-row--grouped group ${isActive ? 'is-active' : ''}`}
+                      style={{ paddingLeft: 28 }}
+                      onClick={() => {
+                        if (useUnified) {
+                          onSelectAnyChat?.(chat.chatSession_id, targetCode);
+                        } else {
+                          onSelectStellaChat?.(chat.chatSession_id);
+                        }
+                      }}
+                    >
+                      <span className="truncate flex-1">{displayTitle}</span>
+                      {(useUnified ? onRenameAnyChat : onRenameStellaChat) && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (useUnified) {
+                              openRename({ kind: 'ask', targetCode, sessionId: chat.chatSession_id, title: chat.title || '' });
+                            } else {
+                              openRename({ kind: 'stella', sessionId: chat.chatSession_id, title: chat.title || '' });
+                            }
+                          }}
+                          className="ml-1 p-0.5 rounded hidden group-hover:inline-flex hover:bg-black/10 text-[var(--rw-text-3)]"
+                          title="Rename"
+                        >
+                          <Pencil size={11} />
+                        </button>
+                      )}
+                      {(useUnified ? onDeleteAnyChat : onDeleteStellaChat) && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            // Skip the confirm dialog for chats that have never
+                            // received a user message — the backend stamps such
+                            // sessions with the literal 'New Chat' title and
+                            // rewrites it on the first send (see
+                            // agentChatSessionService.ts), so an exact match is a
+                            // reliable "untouched" signal.
+                            const untouched = !chat.title || chat.title === 'New Chat';
+                            if (untouched) {
+                              if (useUnified) {
+                                void onDeleteAnyChat?.(chat.chatSession_id, targetCode);
+                              } else {
+                                void onDeleteStellaChat?.(chat.chatSession_id);
+                              }
+                              return;
+                            }
+                            if (useUnified) {
+                              setPendingDeleteChat({ kind: 'ask', targetCode, sessionId: chat.chatSession_id, title: chat.title || 'Untitled' });
+                            } else {
+                              setPendingDeleteChat({ kind: 'stella', sessionId: chat.chatSession_id, title: chat.title || 'Untitled' });
+                            }
+                          }}
+                          className="ml-1 p-0.5 rounded hidden group-hover:inline-flex hover:bg-black/10 text-[var(--rw-text-3)] hover:text-red-500"
+                          title="Delete chat"
+                        >
+                          <Trash2 size={11} />
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+              </React.Fragment>
+            ));
           })()}
         </div>
       )}
