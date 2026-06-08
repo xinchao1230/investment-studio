@@ -248,6 +248,31 @@ export function useTargetChats(): UseTargetChatsApi {
     return () => { try { off(); } catch { /* ignore */ } };
   }, []);
 
+  useEffect(() => {
+    const api: any = (window as any).electronAPI?.profile;
+    if (!api?.onChatSessionStoreSessionDeleted) return;
+    const off = api.onChatSessionStoreSessionDeleted((data: { chatSessionId?: string }) => {
+      const deletedSessionId = data?.chatSessionId;
+      if (!deletedSessionId) return;
+      setChatsByCode((prev) => {
+        let mutated = false;
+        const next: typeof prev = {};
+        for (const [code, list] of Object.entries(prev)) {
+          if (!list) {
+            next[code] = list;
+            continue;
+          }
+          const filtered = list.filter((chat) => chat.chatSession_id !== deletedSessionId);
+          next[code] = filtered;
+          if (filtered.length !== list.length) mutated = true;
+        }
+        return mutated ? next : prev;
+      });
+      setActive((prev) => (prev?.chatSessionId === deletedSessionId ? null : prev));
+    });
+    return () => { try { off(); } catch { /* ignore */ } };
+  }, []);
+
   return {
     chatsByCode,
     active,

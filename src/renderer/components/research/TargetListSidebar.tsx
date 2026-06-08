@@ -8,6 +8,7 @@ import {
   FolderClosed,
   FileText,
   FileCode,
+  BookOpenText,
   Trash2,
   Search,
   MessageSquare,
@@ -138,7 +139,8 @@ interface TargetListSidebarProps {
 }
 
 function fileIcon(relPath: string) {
-  if (/\.(md|yaml|txt)$/i.test(relPath)) return FileText;
+  if (/\.(md|markdown|mdx)$/i.test(relPath)) return BookOpenText;
+  if (/\.(yaml|txt)$/i.test(relPath)) return FileText;
   if (/\.json$/i.test(relPath)) return FileCode;
   return FileText;
 }
@@ -872,7 +874,7 @@ export const TargetListSidebar: React.FC<TargetListSidebarProps> = ({
                     <div
                       key={chat.chatSession_id}
                       className={`rw-tree-row rw-chat-row rw-chat-row--grouped group ${isActive ? 'is-active' : ''}`}
-                      style={{ paddingLeft: 28 }}
+                      style={{ paddingLeft: 20 }}
                       onClick={() => {
                         if (useUnified) {
                           onSelectAnyChat?.(chat.chatSession_id, targetCode);
@@ -1070,11 +1072,10 @@ export const TargetListSidebar: React.FC<TargetListSidebarProps> = ({
                         <div
                           key={chat.chatSession_id}
                           className={`rw-tree-row rw-chat-row group ${activeChatSessionId === chat.chatSession_id ? 'is-active' : ''}`}
-                          style={{ paddingLeft: 24 }}
+                          style={{ paddingLeft: 30 }}
                           onClick={() => onSelectChat(code, chat.chatSession_id)}
                         >
                           <span style={{ width: 13 }} className="flex-shrink-0" />
-                          <MessageSquare size={12} className="flex-shrink-0 mr-1 text-[var(--rw-text-3)]" />
                           <span className="truncate flex-1">{chat.title || 'Untitled'}</span>
                           {onRenameChat && (
                             <button

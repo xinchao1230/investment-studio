@@ -137,7 +137,7 @@
    when the left pane is expanded, and a larger inset when the collapsed left
    rail leaves the header near the traffic lights. */
 [data-theme="research"][data-os="darwin"] .rw-pane-right[data-research-mode="stella"] > .rw-divider {
-  padding-left: 12px;
+  padding-left: 16px;
 }
 [data-theme="research"][data-os="darwin"][data-left-collapsed="true"] .rw-pane-right[data-research-mode="stella"] > .rw-divider {
   padding-left: 52px;
