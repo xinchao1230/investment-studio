@@ -21,6 +21,7 @@ import { ChatHistoryPopover } from './ChatHistoryPopover';
 import { useAuthContext } from '../auth/AuthProvider';
 import { SKIP_LOGIN_ALIAS } from '@shared/constants/auth';
 import type { AuthData } from '../../types/authTypes';
+import type { ChatHistoryTargetNameLookup } from './chatHistoryGrouping';
 
 const DEFAULT_CHAT_TITLE = 'New Chat';
 const EMPTY_CHAT_HEADER_TITLE = 'Hello, how can I help?';
@@ -44,6 +45,7 @@ function getEmptyChatHeaderTitle(user: AuthData['ghcAuth']['user'] | null): stri
 export interface ChatHistoryPopoverChat {
   chatSession_id: string;
   title?: string | null;
+  targetCode?: string | null;
   /** ISO timestamp (or epoch ms) of the last update — used by the popover
    * to render a relative timestamp next to each row. Matches
    * ResearchChatSessionMeta.last_updated. */
@@ -77,10 +79,12 @@ interface ResearchChatPaneProps {
   chats: ChatHistoryPopoverChat[];
   /** Currently active chat session id. */
   activeChatSessionId: string | null;
+  /** Resolved title for the active live session, even when it is outside `chats`. */
+  activeChatTitle?: string | null;
   /** Create a new chat session. */
   onNewChat: () => void | Promise<void>;
   /** Switch to an existing chat session. */
-  onSelectChat: (chatSessionId: string) => void | Promise<void>;
+  onSelectChat: (chatSessionId: string, targetCode?: string | null) => void | Promise<void>;
   /** Rename a chat session. */
   onRenameChat: (chatSessionId: string, targetCode: string | null, title: string) => void | Promise<void>;
   /** Delete a chat session. */
@@ -95,6 +99,8 @@ interface ResearchChatPaneProps {
   onCreateTargetChatFromHistory?: () => void;
   /** Popover "+ New global chat" handler. */
   onCreateGlobalChatFromHistory?: () => void;
+  /** Maps stock codes to display names for all-chat group labels. */
+  targetNameLookup?: ChatHistoryTargetNameLookup;
 }
 
 type QuickStartKind = 'intro' | 'task';
@@ -335,6 +341,7 @@ export const ResearchChatPane: React.FC<ResearchChatPaneProps> = ({
   mode = 'workspace',
   chats,
   activeChatSessionId,
+  activeChatTitle,
   onNewChat,
   onSelectChat,
   onRenameChat,
@@ -343,6 +350,7 @@ export const ResearchChatPane: React.FC<ResearchChatPaneProps> = ({
   selectedTargetName,
   onCreateTargetChatFromHistory,
   onCreateGlobalChatFromHistory,
+  targetNameLookup,
 }) => {
   const { user } = useAuthContext();
   const messages = useMessages();
@@ -389,9 +397,9 @@ export const ResearchChatPane: React.FC<ResearchChatPaneProps> = ({
     const activeChat = activeChatSessionId
       ? chats.find((chat) => chat.chatSession_id === activeChatSessionId)
       : null;
-    const title = activeChat?.title?.trim();
+    const title = activeChatTitle?.trim() || activeChat?.title?.trim();
     return title && title !== DEFAULT_CHAT_TITLE ? title : emptyHeaderTitle;
-  }, [activeChatSessionId, chats, emptyHeaderTitle]);
+  }, [activeChatSessionId, activeChatTitle, chats, emptyHeaderTitle]);
 
   const hasTarget = Boolean(targetName || targetCode);
 
@@ -474,6 +482,7 @@ export const ResearchChatPane: React.FC<ResearchChatPaneProps> = ({
           selectedTargetName={selectedTargetName}
           onCreateTargetChat={onCreateTargetChatFromHistory}
           onCreateGlobalChat={onCreateGlobalChatFromHistory}
+          targetNameLookup={targetNameLookup}
         />
       )}
       <div className="flex-1 min-h-0 overflow-hidden relative">

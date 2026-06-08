@@ -146,6 +146,22 @@ export function useStellaChats(): UseStellaChatsApi {
     }
   }, []);
 
+  useEffect(() => {
+    const api: any = (window as any).electronAPI?.profile;
+    if (!api?.onChatSessionStoreSessionDeleted) return;
+    const off = api.onChatSessionStoreSessionDeleted((data: { chatSessionId?: string }) => {
+      const deletedSessionId = data?.chatSessionId;
+      if (!deletedSessionId) return;
+      setChats((prev) => {
+        if (!prev) return prev;
+        const filtered = prev.filter((chat) => chat.chatSession_id !== deletedSessionId);
+        return filtered.length === prev.length ? prev : filtered;
+      });
+      setActive((prev) => (prev?.chatSessionId === deletedSessionId ? null : prev));
+    });
+    return () => { try { off(); } catch { /* ignore */ } };
+  }, []);
+
   // Refresh title/last_updated when main pushes metadata updates (e.g.
   // async-generated title after first user message). The previous
   // `onChatSessionUpdated` event was never wired in preload, so this

@@ -1,6 +1,12 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Check, MessageSquare, Pencil, Plus, Trash2, X } from 'lucide-react';
 import type { ChatHistoryPopoverChat } from './ResearchChatPane';
+import {
+  getChatHistoryDisplayTitle,
+  getChatHistoryGroupLabel,
+  groupChatHistory,
+  type ChatHistoryTargetNameLookup,
+} from './chatHistoryGrouping';
 
 export interface ChatHistoryPopoverProps {
   chats: ChatHistoryPopoverChat[];
@@ -8,7 +14,7 @@ export interface ChatHistoryPopoverProps {
   /** Null when in Stella (no-target) context. Passed back to rename/delete
    * callbacks so the parent can route to the right hook. */
   targetCode: string | null;
-  onSelectChat: (chatSessionId: string) => void | Promise<void>;
+  onSelectChat: (chatSessionId: string, targetCode?: string | null) => void | Promise<void>;
   onRenameChat: (chatSessionId: string, targetCode: string | null, title: string) => void | Promise<void>;
   onDeleteChat: (chatSessionId: string, targetCode: string | null) => void | Promise<void>;
   onClose: () => void;
@@ -24,21 +30,8 @@ export interface ChatHistoryPopoverProps {
   /** Workbench mode: create a global chat. Parent is expected to also
    * switch the sidebar to Stella mode so the new chat is visible. */
   onCreateGlobalChat?: () => void;
-}
-
-function formatRelative(ts?: number | string): string {
-  if (ts == null) return '';
-  const n = typeof ts === 'string' ? new Date(ts).getTime() : ts;
-  if (!Number.isFinite(n)) return '';
-  const delta = Date.now() - n;
-  const min = Math.round(delta / 60_000);
-  if (min < 1) return 'just now';
-  if (min < 60) return `${min}m ago`;
-  const hr = Math.round(min / 60);
-  if (hr < 24) return `${hr}h ago`;
-  const day = Math.round(hr / 24);
-  if (day < 7) return `${day}d ago`;
-  return new Date(n).toLocaleDateString();
+  /** Maps stock codes to display names for all-chat group labels. */
+  targetNameLookup?: ChatHistoryTargetNameLookup;
 }
 
 export const ChatHistoryPopover: React.FC<ChatHistoryPopoverProps> = ({
@@ -53,12 +46,17 @@ export const ChatHistoryPopover: React.FC<ChatHistoryPopoverProps> = ({
   selectedTargetName = null,
   onCreateTargetChat,
   onCreateGlobalChat,
+  targetNameLookup,
 }) => {
   const trimmedTargetName = selectedTargetName && selectedTargetName.trim()
     ? selectedTargetName.trim()
     : null;
   const showTargetCreateRow = showCreateActions && !!trimmedTargetName;
   const showGlobalCreateRow = showCreateActions;
+  const targetCreateLabel = trimmedTargetName && targetCode && targetCode !== trimmedTargetName
+    ? `New chat for ${trimmedTargetName} (${targetCode})`
+    : 'New chat';
+  const grouped = targetCode ? [{ key: '', chats }] : groupChatHistory(chats);
   const ref = useRef<HTMLDivElement>(null);
   const [renamingRow, setRenamingRow] = useState<{ id: string; value: string } | null>(null);
   // Inline confirm for delete on chats the user has actually used. Untouched
@@ -112,7 +110,7 @@ export const ChatHistoryPopover: React.FC<ChatHistoryPopoverProps> = ({
               }}
             >
               <Plus size={14} />
-              <span className="truncate">New chat</span>
+              <span className="truncate">{targetCreateLabel}</span>
             </button>
           )}
           {showGlobalCreateRow && (
@@ -125,7 +123,7 @@ export const ChatHistoryPopover: React.FC<ChatHistoryPopoverProps> = ({
               }}
             >
               <Plus size={14} />
-              <span>New global chat</span>
+              <span>New general chat</span>
             </button>
           )}
           <div className="rw-history-create-divider" />
@@ -144,125 +142,139 @@ export const ChatHistoryPopover: React.FC<ChatHistoryPopoverProps> = ({
           )}
         </div>
       ) : (
-        chats.map((c) => {
-          const isActive = c.chatSession_id === activeChatSessionId;
-          const isRenaming = renamingRow?.id === c.chatSession_id;
-          const displayTitle = c.title && c.title.trim() ? c.title : 'Untitled chat';
-          return (
-            <div
-              key={c.chatSession_id}
-              role="option"
-              aria-selected={isActive}
-              aria-current={isActive ? 'true' : 'false'}
-              className={`group rw-history-chat-row ${isActive ? 'is-active' : ''}`}
-              onClick={() => {
-                if (isRenaming) return;
-                void onSelectChat(c.chatSession_id);
-                onClose();
-              }}
-            >
-              <MessageSquare size={14} aria-hidden />
-              <div className="min-w-0 flex-1">
-                {isRenaming ? (
-                  <input
-                    autoFocus
-                    className="w-full px-1 py-0.5 text-[13px] border rounded"
-                    value={renamingRow!.value}
-                    onChange={(e) => setRenamingRow({ id: c.chatSession_id, value: e.target.value })}
-                    onClick={(e) => e.stopPropagation()}
-                    onMouseDown={(e) => e.stopPropagation()}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        const newTitle = renamingRow!.value.trim();
-                        if (newTitle) void onRenameChat(c.chatSession_id, targetCode, newTitle);
-                        setRenamingRow(null);
-                      } else if (e.key === 'Escape') {
-                        e.stopPropagation();
-                        setRenamingRow(null);
-                      }
-                    }}
-                  />
-                ) : (
-                  <div
-                    className="truncate"
-                    style={{
-                      color: isActive ? 'var(--rw-text)' : 'var(--rw-text-2)',
-                      fontWeight: isActive ? 600 : 500,
-                    }}
-                  >
-                    {displayTitle}
-                  </div>
-                )}
+        grouped.map((chatGroup) => (
+          <React.Fragment key={chatGroup.key || 'scoped'}>
+            {!targetCode && (
+              <div className="rw-history-group-label" role="presentation">
+                {getChatHistoryGroupLabel(chatGroup.key, targetNameLookup)}
               </div>
-              {!isRenaming && (
-                <>
-                  <span className="rw-history-chat-time">{formatRelative(c.last_updated)}</span>
-                  {confirmingDeleteId === c.chatSession_id ? (
-                    <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-                      <button
-                        type="button"
-                        className="rw-side-icon-btn rw-history-confirm-yes"
-                        title="Confirm delete"
-                        aria-label="Confirm delete"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          void onDeleteChat(c.chatSession_id, targetCode);
-                          setConfirmingDeleteId(null);
-                        }}
-                      >
-                        <Check size={12} />
-                      </button>
-                      <button
-                        type="button"
-                        className="rw-side-icon-btn"
-                        title="Cancel"
-                        aria-label="Cancel delete"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setConfirmingDeleteId(null);
-                        }}
-                      >
-                        <X size={12} />
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="hidden group-hover:flex items-center gap-1">
-                      <button
-                        type="button"
-                        className="rw-side-icon-btn"
-                        title="Rename chat"
-                        aria-label="Rename chat"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setRenamingRow({ id: c.chatSession_id, value: c.title ?? '' });
-                        }}
-                      >
-                        <Pencil size={12} />
-                      </button>
-                      <button
-                        type="button"
-                        className="rw-side-icon-btn"
-                        title="Delete chat"
-                        aria-label="Delete chat"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          const untouched = !c.title || c.title === 'New Chat';
-                          if (untouched) {
-                            void onDeleteChat(c.chatSession_id, targetCode);
-                          } else {
-                            setConfirmingDeleteId(c.chatSession_id);
+            )}
+            {chatGroup.chats.map((c) => {
+              const isActive = c.chatSession_id === activeChatSessionId;
+              const isRenaming = renamingRow?.id === c.chatSession_id;
+              const rowTargetCode = c.targetCode ?? targetCode;
+              const displayTitle = getChatHistoryDisplayTitle(c.title, targetCode ? null : chatGroup.key);
+              return (
+                <div
+                  key={c.chatSession_id}
+                  role="option"
+                  aria-selected={isActive}
+                  aria-current={isActive ? 'true' : 'false'}
+                  className={`group rw-history-chat-row ${!targetCode ? 'is-grouped' : ''} ${isActive ? 'is-active' : ''}`}
+                  onClick={() => {
+                    if (isRenaming) return;
+                    if (c.targetCode !== undefined) {
+                      void onSelectChat(c.chatSession_id, c.targetCode);
+                    } else {
+                      void onSelectChat(c.chatSession_id);
+                    }
+                    onClose();
+                  }}
+                >
+                  <div className="min-w-0 flex-1">
+                    {isRenaming ? (
+                      <input
+                        autoFocus
+                        className="w-full px-1 py-0.5 text-[13px] border rounded"
+                        value={renamingRow!.value}
+                        onChange={(e) => setRenamingRow({ id: c.chatSession_id, value: e.target.value })}
+                        onClick={(e) => e.stopPropagation()}
+                        onMouseDown={(e) => e.stopPropagation()}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            const newTitle = renamingRow!.value.trim();
+                            if (newTitle) void onRenameChat(c.chatSession_id, rowTargetCode, newTitle);
+                            setRenamingRow(null);
+                          } else if (e.key === 'Escape') {
+                            e.stopPropagation();
+                            setRenamingRow(null);
                           }
                         }}
-                      >
-                        <Trash2 size={12} />
-                      </button>
-                    </div>
+                      />
+                    ) : (
+                      <div className="flex items-center min-w-0">
+                        <div
+                          className="truncate"
+                          style={{
+                            color: isActive ? 'var(--rw-text)' : 'var(--rw-text-2)',
+                            fontWeight: isActive ? 600 : 500,
+                          }}
+                        >
+                          {displayTitle}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  {!isRenaming && (
+                    <>
+                      {confirmingDeleteId === c.chatSession_id ? (
+                        <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                          <button
+                            type="button"
+                            className="rw-side-icon-btn rw-history-confirm-yes"
+                            title="Confirm delete"
+                            aria-label="Confirm delete"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              void onDeleteChat(c.chatSession_id, rowTargetCode);
+                              setConfirmingDeleteId(null);
+                            }}
+                          >
+                            <Check size={12} />
+                          </button>
+                          <button
+                            type="button"
+                            className="rw-side-icon-btn"
+                            title="Cancel"
+                            aria-label="Cancel delete"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setConfirmingDeleteId(null);
+                            }}
+                          >
+                            <X size={12} />
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="hidden group-hover:flex items-center gap-1">
+                          <button
+                            type="button"
+                            className="rw-side-icon-btn"
+                            title="Rename chat"
+                            aria-label="Rename chat"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setRenamingRow({ id: c.chatSession_id, value: c.title ?? '' });
+                            }}
+                          >
+                            <Pencil size={12} />
+                          </button>
+                          <button
+                            type="button"
+                            className="rw-side-icon-btn"
+                            title="Delete chat"
+                            aria-label="Delete chat"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              const untouched = !c.title || c.title === 'New Chat';
+                              if (untouched) {
+                                void onDeleteChat(c.chatSession_id, rowTargetCode);
+                              } else {
+                                setConfirmingDeleteId(c.chatSession_id);
+                              }
+                            }}
+                          >
+                            <Trash2 size={12} />
+                          </button>
+                        </div>
+                      )}
+                    </>
                   )}
-                </>
-              )}
-            </div>
-          );
-        })
+                </div>
+              );
+            })}
+          </React.Fragment>
+        ))
       )}
     </div>
   );

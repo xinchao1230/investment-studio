@@ -15,8 +15,15 @@ import { chatSessionStore } from '../lib/chat/chatSessionStore';
 import { mcpClientManager } from '../lib/mcpRuntime/mcpClientManager';
 import { seedResearchMcpIfMissing } from '../lib/mcpRuntime/seedResearchMcp';
 import { RuntimeManager } from '../lib/runtime/RuntimeManager';
+import { createLogger, type UnifiedLogger } from '../lib/unifiedLogger';
 import { updateChatSessionFile } from '../lib/userDataADO/chatSessionFileOps';
+import { profileCacheManager } from '../lib/userDataADO/profileCacheManager';
 import { generateChatSessionId } from '../lib/userDataADO/pathUtils';
+import {
+  findReusableEmptyResearchChatSession,
+  isDefaultEmptyResearchChatSession,
+  type ResearchChatSessionMetadata,
+} from './researchChatCleanup';
 import {
   ensureResearchApiTokenFile,
   getResearchApiStatus,
@@ -33,9 +40,162 @@ export interface InvestmentStudioDeps {
 }
 
 const BRAND_INVESTMENT_STUDIO = 'investment-studio';
+const startupResearchChatCleanupByAlias = new Set<string>();
+let seedLogger: UnifiedLogger | null = null;
+
+function getSeedLogger(): UnifiedLogger {
+  if (!seedLogger) {
+    seedLogger = createLogger();
+  }
+  return seedLogger;
+}
 
 function seedLog(msg: string): void {
   console.log(`[investment-studio] ${msg}`);
+  try {
+    getSeedLogger().info(msg, 'investment-studio');
+  } catch {
+    // Keep post-login seeders non-fatal even if logging is not initialized yet.
+  }
+}
+
+type ProfileCacheManagerLike = {
+  getCachedProfile: (alias: string) => any;
+  getChatSessionsAsync: (alias: string, chatId: string) => Promise<ResearchChatSessionMetadata[]>;
+  getChatSessionFile: (alias: string, chatId: string, chatSessionId: string) => Promise<any>;
+};
+
+function resolveResearchChatIdFromCache(
+  pcManager: ProfileCacheManagerLike,
+  alias: string,
+): string | null {
+  const profile = pcManager.getCachedProfile(alias) as any;
+  if (!profile || !Array.isArray(profile.chats) || profile.chats.length === 0) return null;
+  return profile.chats[0]?.chat_id || null;
+}
+
+async function waitForResearchChatIdFromCache(
+  pcManager: ProfileCacheManagerLike,
+  alias: string,
+): Promise<string | null> {
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    const chatId = resolveResearchChatIdFromCache(pcManager, alias);
+    if (chatId) return chatId;
+    if (pcManager.getCachedProfile(alias)) return null;
+    await new Promise((resolve) => setTimeout(resolve, 500));
+  }
+  return null;
+}
+
+async function collectDefaultEmptySessionIds(
+  pcManager: ProfileCacheManagerLike,
+  alias: string,
+  chatId: string,
+  sessions: ResearchChatSessionMetadata[],
+): Promise<Set<string>> {
+  const emptyIds = new Set<string>();
+  await Promise.all(sessions.map(async (session) => {
+    const sessionId = String(session?.chatSession_id || '');
+    if (!sessionId) return;
+    try {
+      const file = await pcManager.getChatSessionFile(alias, chatId, sessionId);
+      if (isDefaultEmptyResearchChatSession(session, file)) {
+        emptyIds.add(sessionId);
+      }
+    } catch (error) {
+      seedLog(`[research-chat] failed to inspect ${sessionId}: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }));
+  return emptyIds;
+}
+
+async function cleanupDefaultEmptyResearchChats(
+  alias: string,
+  pcManager: ProfileCacheManagerLike,
+  chatId: string,
+  source: string,
+): Promise<{ inspectedCount: number; candidateCount: number; deletedCount: number; failedCount: number; skippedActiveCount: number }> {
+  await agentChatManager.initialize(alias);
+  const activeSessionId = agentChatManager.getCurrentActiveChatSessionId();
+  const sessions = await pcManager.getChatSessionsAsync(alias, chatId);
+  const candidates: ResearchChatSessionMetadata[] = [];
+  let skippedActiveCount = 0;
+  let deletedCount = 0;
+  let failedCount = 0;
+
+  seedLog(`[research-chat] cleanup start source=${source} alias=${alias} chatId=${chatId} activeSessionId=${activeSessionId ?? 'none'} sessions=${sessions.length}`);
+
+  for (const session of sessions) {
+    const sessionId = String(session?.chatSession_id || '');
+    if (!sessionId) continue;
+    if (sessionId === activeSessionId) {
+      skippedActiveCount += 1;
+      continue;
+    }
+    try {
+      const file = await pcManager.getChatSessionFile(alias, chatId, sessionId);
+      if (!isDefaultEmptyResearchChatSession(session, file)) continue;
+      candidates.push(session);
+    } catch (error) {
+      failedCount += 1;
+      seedLog(`[research-chat] cleanup inspect failed source=${source} sessionId=${sessionId}: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  if (candidates.length === 0) {
+    seedLog(`[research-chat] cleanup found no default empty New Chat candidates source=${source}`);
+  } else {
+    seedLog(`[research-chat] cleanup found default empty New Chat candidates source=${source} count=${candidates.length}`);
+  }
+
+  for (const session of candidates) {
+    const sessionId = session.chatSession_id;
+    const targetCode = session.targetCode ?? 'general';
+    const latestActiveSessionId = agentChatManager.getCurrentActiveChatSessionId();
+    if (latestActiveSessionId === sessionId) {
+      skippedActiveCount += 1;
+      seedLog(`[research-chat] cleanup skipped active candidate source=${source} sessionId=${sessionId}`);
+      continue;
+    }
+    try {
+      seedLog(`[research-chat] cleanup deleting source=${source} sessionId=${sessionId} targetCode=${targetCode}`);
+      const result = await agentChatManager.deleteChatSession(chatId, sessionId);
+      if (result.success) {
+        deletedCount += 1;
+        seedLog(`[research-chat] cleanup deleted source=${source} sessionId=${sessionId}`);
+      } else {
+        failedCount += 1;
+        seedLog(`[research-chat] cleanup delete skipped source=${source} sessionId=${sessionId}: ${result.error ?? 'delete failed'}`);
+      }
+    } catch (error) {
+      failedCount += 1;
+      seedLog(`[research-chat] cleanup delete failed source=${source} sessionId=${sessionId}: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  seedLog(`[research-chat] cleanup end source=${source} inspected=${sessions.length} candidates=${candidates.length} deleted=${deletedCount} failed=${failedCount} skippedActive=${skippedActiveCount}`);
+
+  return {
+    inspectedCount: sessions.length,
+    candidateCount: candidates.length,
+    deletedCount,
+    failedCount,
+    skippedActiveCount,
+  };
+}
+
+async function runStartupResearchChatCleanup(alias: string): Promise<void> {
+  if (startupResearchChatCleanupByAlias.has(alias)) return;
+  startupResearchChatCleanupByAlias.add(alias);
+
+  seedLog(`[research-chat] startup cleanup scheduled alias=${alias}`);
+  const chatId = await waitForResearchChatIdFromCache(profileCacheManager, alias);
+  if (!chatId) {
+    seedLog(`[research-chat] startup cleanup skipped alias=${alias}: no research chat config`);
+    return;
+  }
+
+  await cleanupDefaultEmptyResearchChats(alias, profileCacheManager, chatId, 'startup');
 }
 
 // ---------------------------------------------------------------------------
@@ -99,7 +259,16 @@ export async function runPostLoginSeeders(
     }
   }
 
-  // 5) Auto-install research-mcp Python venv in background
+  // 5) Remove leftover default empty research chats once per app process.
+  if (brand === BRAND_INVESTMENT_STUDIO) {
+    setImmediate(() => {
+      runStartupResearchChatCleanup(userLogin).catch((e) => {
+        seedLog(`[research-chat] startup cleanup EXCEPTION: ${e instanceof Error ? e.message : String(e)}`);
+      });
+    });
+  }
+
+  // 6) Auto-install research-mcp Python venv in background
   if (brand === BRAND_INVESTMENT_STUDIO) {
     setImmediate(() => { void autoInstallResearchMcpVenv(); });
   }
@@ -405,10 +574,7 @@ function registerResearchChatIpc(deps: InvestmentStudioDeps): void {
     const alias = deps.getCurrentUserAlias();
     if (!alias) return null;
     const pcManager = await deps.getProfileCacheManager();
-    const profile = pcManager.getCachedProfile(alias) as any;
-    if (!profile || !Array.isArray(profile.chats) || profile.chats.length === 0) return null;
-    // Use the first chat (primary agent) as the research chat
-    return profile.chats[0]?.chat_id || null;
+    return resolveResearchChatIdFromCache(pcManager, alias);
   };
 
   ipcMain.handle('researchChat:listByTarget', async (_event, targetCode: string | null) => {
@@ -457,6 +623,22 @@ function registerResearchChatIpc(deps: InvestmentStudioDeps): void {
       const chatId = await resolveResearchChatId();
       if (!chatId) return { success: false, error: 'No chat config found' };
 
+      const pcManager = await deps.getProfileCacheManager();
+      const sessions = await pcManager.getChatSessionsAsync(alias, chatId) as ResearchChatSessionMetadata[];
+      const scopedSessions = sessions.filter((session) => {
+        const sessionTargetCode = session.targetCode === undefined ? null : session.targetCode;
+        return sessionTargetCode === targetCode;
+      });
+      const emptySessionIds = await collectDefaultEmptySessionIds(pcManager, alias, chatId, scopedSessions);
+      const reusable = findReusableEmptyResearchChatSession(scopedSessions, targetCode, emptySessionIds);
+      if (reusable) {
+        const sessionId = reusable.chatSession_id;
+        if (opts?.targetDir && reusable.targetDir !== opts.targetDir) {
+          await updateChatSessionFile(alias, sessionId, { targetCode, targetDir: opts.targetDir });
+        }
+        return { success: true, data: { chatId, chatSessionId: sessionId } };
+      }
+
       const sessionId = generateChatSessionId();
       const nowIso = new Date().toISOString();
       const title = (opts?.title?.trim()) || 'New Chat';
@@ -480,6 +662,21 @@ function registerResearchChatIpc(deps: InvestmentStudioDeps): void {
 
       await chatSessionStore.createSession(alias, chatId, metadata as any, file as any);
       return { success: true, data: { chatId, chatSessionId: sessionId } };
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+    }
+  });
+
+  ipcMain.handle('researchChat:cleanupEmpty', async () => {
+    try {
+      const alias = deps.getCurrentUserAlias();
+      if (!alias) return { success: false, error: 'No current user session' };
+      const chatId = await resolveResearchChatId();
+      if (!chatId) return { success: true, data: { deletedCount: 0, failedCount: 0 } };
+
+      const pcManager = await deps.getProfileCacheManager();
+      const result = await cleanupDefaultEmptyResearchChats(alias, pcManager, chatId, 'ipc');
+      return { success: true, data: result };
     } catch (error) {
       return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
     }
